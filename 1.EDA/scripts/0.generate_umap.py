@@ -19,7 +19,8 @@ import sys
 
 import pandas as pd
 import umap
-from pycytominer.cyto_utils import drop_outlier_features, infer_cp_features
+from pycytominer import feature_select
+from pycytominer.cyto_utils import infer_cp_features
 
 cwd = pathlib.Path.cwd()
 
@@ -142,15 +143,21 @@ for projection_key in pooled_profile_paths:
 
         # Drop any other features with extreme/blown-up values (e.g. from
         # near-zero-variance StandardScaler denominators upstream) using
-        # pycytominer's magnitude-based outlier feature filter.
-        outlier_columns = drop_outlier_features(
-            profile_df, features=feature_columns, outlier_cutoff=OUTLIER_CUTOFF
+        # pycytominer's feature_select, with its magnitude-based outlier
+        # operation.
+        profile_df = feature_select(
+            profile_df,
+            features=feature_columns,
+            operation=["drop_outliers"],
+            outlier_cutoff=OUTLIER_CUTOFF,
         )
-        feature_columns = [c for c in feature_columns if c not in outlier_columns]
+        selected_feature_columns = [c for c in feature_columns if c in profile_df.columns]
+        n_outlier_dropped = len(feature_columns) - len(selected_feature_columns)
+        feature_columns = selected_feature_columns
 
         print(
             f"{projection_key}/{profile_variant}: {n_features_total} features -> "
-            f"-{len(texture_columns)} texture -> -{len(outlier_columns)} outlier "
+            f"-{len(texture_columns)} texture -> -{n_outlier_dropped} outlier "
             f"(|value| > {OUTLIER_CUTOFF}) -> {len(feature_columns)} remaining"
         )
 
@@ -301,11 +308,17 @@ for patient in patient_profile_paths:
 
             # Drop any other features with extreme/blown-up values (e.g. from
             # near-zero-variance StandardScaler denominators upstream) using
-            # pycytominer's magnitude-based outlier feature filter.
-            outlier_columns = drop_outlier_features(
-                profile_df, features=feature_columns, outlier_cutoff=OUTLIER_CUTOFF
+            # pycytominer's feature_select, with its magnitude-based outlier
+            # operation.
+            profile_df = feature_select(
+                profile_df,
+                features=feature_columns,
+                operation=["drop_outliers"],
+                outlier_cutoff=OUTLIER_CUTOFF,
             )
-            feature_columns = [c for c in feature_columns if c not in outlier_columns]
+            selected_feature_columns = [c for c in feature_columns if c in profile_df.columns]
+            n_outlier_dropped = len(feature_columns) - len(selected_feature_columns)
+            feature_columns = selected_feature_columns
 
             feature_drop_summary.append(
                 {
@@ -313,7 +326,7 @@ for patient in patient_profile_paths:
                     "variant": profile_variant,
                     "total": n_features_total,
                     "texture_dropped": len(texture_columns),
-                    "outlier_dropped": len(outlier_columns),
+                    "outlier_dropped": n_outlier_dropped,
                     "remaining": len(feature_columns),
                 }
             )
