@@ -169,7 +169,6 @@ data/*
 1.EDA/figures/correlation_heatmaps/
 1.EDA/figures/distance_metrics/
 1.EDA/figures/heatmaps/
-1.EDA/figures/pca/
 1.EDA/figures/linear_modeling/
 2.2d_vs_3d_analysis/results/
 3.viability_prediction_models/logs/
