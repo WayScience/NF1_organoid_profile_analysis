@@ -31,6 +31,6 @@ for patient in "${patient_array[@]}"; do
     conda run -n gff_figure_env Rscript "$git_root"/1.EDA/scripts/4.consensus_profiles.r --patient "$patient"
 done
 conda run -n GFF_analysis python "$git_root"/1.EDA/scripts/5.calculate_correlation_matrix.py
-conda run -n gff_figure_env Rscript "$git_root"/1.EDA/scripts/6.plot_correlation_matrix.r
+conda run -n gff_figure_env Rscript "$git_root"/1.EDA/scripts/6.plot_correlation_heatmaps.r
 conda run -n GFF_analysis python "$git_root"/1.EDA/scripts/7.generate_cell_counts.py
-conda run -n gff_figure_env Rscript "$git_root"/1.EDA/scripts/8.plot_cell_counts.r
+conda run -n gff_figure_env Rscript "$git_root"/1.EDA/scripts/8.plot_single_cell_counts.r
