@@ -1,4 +1,4 @@
-packages <- c("ggplot2", "dplyr", "arrow", "ComplexHeatmap", "circlize", "scales","RColorBrewer")
+packages <- c("ggplot2", "dplyr", "arrow", "ComplexHeatmap", "circlize", "scales", "RColorBrewer")
 for (pkg in packages) {
     suppressPackageStartupMessages(
         suppressWarnings(
@@ -6,6 +6,7 @@ for (pkg in packages) {
         )
     )
 }
+
 # Get the current working directory and find Git root
 find_git_root <- function() {
     # Get current working directory
@@ -32,19 +33,17 @@ find_git_root <- function() {
 
 # Find the Git root directory
 root_dir <- find_git_root()
+cat("Git root directory:", root_dir, "\n")
 source(file.path(root_dir, "utils", "r_plot_themes.r"))
-
 
 correlation_dir <- file.path(root_dir, "1.EDA", "results", "correlation")
 figures_dir <- file.path(root_dir, "1.EDA", "figures", "correlation_heatmaps")
-if (!dir.exists(figures_dir)) {
-    dir.create(figures_dir, recursive = TRUE)
-}
+dir.create(figures_dir, recursive = TRUE, showWarnings = FALSE)
 
-correlation_files <- list.files(correlation_dir, full.names = TRUE)
+correlation_files <- sort(list.files(correlation_dir, full.names = TRUE))
 length(correlation_files)
 
-plot_correlation_heatmap <- function(file_path, figures_dir) {
+build_correlation_heatmap <- function(file_path) {
     df <- arrow::read_parquet(file_path)
 
     metadata_cols <- grep("^Metadata_", colnames(df), value = TRUE)
@@ -132,6 +131,8 @@ plot_correlation_heatmap <- function(file_path, figures_dir) {
         cluster_columns = TRUE,
         clustering_distance_rows = na_safe_dist,
         clustering_distance_columns = na_safe_dist,
+        use_raster = TRUE,
+        raster_quality = 2,
         top_annotation = top_annotation,
         left_annotation = left_annotation,
         column_title = tools::file_path_sans_ext(basename(file_path)),
@@ -139,22 +140,32 @@ plot_correlation_heatmap <- function(file_path, figures_dir) {
         heatmap_legend_param = list(title = "Pearson\ncorrelation")
     )
 
-    output_path <- file.path(
-        figures_dir,
-        paste0(tools::file_path_sans_ext(basename(file_path)), "_heatmap.png")
-    )
-
-    plot_width <- max(8, min(24, nrow(mat) / 40 + 3))
-    plot_height <- max(6, min(20, nrow(mat) / 40))
-    png(output_path, width = plot_width, height = plot_height, units = "in", res = 300)
-    draw(heatmap_plot, merge_legend = TRUE)
-    dev.off()
-
-    output_path
+    list(heatmap = heatmap_plot, n_samples = nrow(mat))
 }
 
-saved_paths <- character(length(correlation_files))
-for (i in seq_along(correlation_files)) {
-    saved_paths[i] <- plot_correlation_heatmap(correlation_files[i], figures_dir)
-    cat("Saved:", saved_paths[i], "\n")
+save_heatmaps_pdf <- function(files, output_path) {
+    # Build every heatmap in the group up front so a single shared page
+    # size (sized to the largest matrix) can be picked before opening the
+    # PDF device -- a single pdf() device can't vary its page size per page.
+    built <- lapply(files, build_correlation_heatmap)
+    max_n <- max(vapply(built, function(b) b$n_samples, numeric(1)))
+    width <- max(8, min(24, max_n / 40 + 3))
+    height <- max(6, min(20, max_n / 40))
+
+    pdf(output_path, width = width, height = height)
+    on.exit(dev.off(), add = TRUE)
+    for (b in built) {
+        draw(b$heatmap, merge_legend = TRUE)
+    }
+}
+
+dimensions <- c("2D", "3D")
+for (dimension in dimensions) {
+    dimension_files <- correlation_files[startsWith(basename(correlation_files), paste0(dimension, "_"))]
+    if (length(dimension_files) == 0) {
+        next
+    }
+    pdf_path <- file.path(figures_dir, paste0(dimension, "_all_patients_correlation_heatmaps.pdf"))
+    save_heatmaps_pdf(dimension_files, pdf_path)
+    cat("Saved:", pdf_path, "(", length(dimension_files), "pages)\n")
 }

@@ -15,17 +15,18 @@ for (package in list_of_packages) {
 plot_pca <- function(data, explained_variance_df, title,
                       color_by, palette, legend_title = NULL,
                       facet_by = NULL, facet_nrow = 3,
-                      alpha = 0.15, point_size = 0.5,
+                      alpha = 0.3, point_size = 0.5, background_alpha = 0.15,
                       width = 8, height = 8,
                       base_size = 8, rasterize_dpi = NULL) {
   # Build a single PC0 vs PC1 scatterplot in a consistent style.
   #
-  # Unlike plot_umap()'s faceted mode (grey background + highlight matching
-  # the facet variable), faceting here is a plain small-multiples split:
-  # facet_by only controls which panel a point falls into, while color_by is
-  # independent and keeps its own legend in every panel. This matches this
-  # notebook's actual use case (e.g. one panel per patient, colored by
-  # treatment, to compare treatment effects across patients).
+  # Faceting is a plain small-multiples split: facet_by only controls which
+  # panel a point falls into, while color_by is independent and keeps its
+  # own legend in every panel (unlike plot_umap()'s faceted mode, where
+  # facet_by and color_by are the same variable and the legend is dropped).
+  # Faceted panels additionally show the full point cloud dimmed grey as
+  # context, matching plot_umap()'s background layer -- background_data has
+  # the facet column removed so it repeats unchanged in every panel.
   #
   # Parameters
   # ----------
@@ -48,9 +49,13 @@ plot_pca <- function(data, explained_variance_df, title,
   # facet_nrow : int, optional
   #     Number of rows to use when faceting (ignored if facet_by is None).
   # alpha : float, optional
-  #     Point transparency, in [0, 1].
+  #     Point transparency, in [0, 1]. In faceted mode, this applies to the
+  #     highlighted (foreground) points only.
   # point_size : float, optional
   #     Point size.
+  # background_alpha : float, optional
+  #     Transparency of the grey context points in faceted mode (ignored if
+  #     facet_by is None).
   # width, height : float, optional
   #     Plot dimensions in inches, used for the inline render size.
   # base_size : int, optional
@@ -71,9 +76,12 @@ plot_pca <- function(data, explained_variance_df, title,
   x_label <- sprintf("PCA 1 (var explained %.0f%%)", var_pc0 * 100)
   y_label <- sprintf("PCA 2 (var explained %.0f%%)", var_pc1 * 100)
 
-  point_layer <- geom_point(alpha = alpha, size = point_size)
-  if (!is.null(rasterize_dpi)) {
-    point_layer <- ggrastr::rasterise(point_layer, dpi = rasterize_dpi)
+  point_layer <- function(...) {
+    layer <- geom_point(...)
+    if (!is.null(rasterize_dpi)) {
+      layer <- ggrastr::rasterise(layer, dpi = rasterize_dpi)
+    }
+    layer
   }
 
   # Compact legend styling: smaller key swatches and tighter spacing so
@@ -91,21 +99,35 @@ plot_pca <- function(data, explained_variance_df, title,
     guide_args$title <- legend_title
   }
 
-  p <- ggplot(data, aes(x = PC0, y = PC1, color = .data[[color_by]])) +
-    point_layer +
-    scale_color_manual(values = palette) +
-    labs(title = title, x = x_label, y = y_label) +
-    theme_manuscript(base_size = base_size) +
-    # PC0/PC1 carry different explained-variance scales, so coord_fixed()
-    # (equal data-unit scaling) would often look badly non-square. Forcing
-    # the panel aspect ratio to 1 instead keeps the rendered plot close to
-    # square without distorting either axis's data range.
-    theme(aspect.ratio = 1) +
-    compact_legend_theme +
-    guides(color = do.call(guide_legend, guide_args))
-
   if (!is.null(facet_by)) {
-    p <- p + facet_wrap(as.formula(paste0("~", facet_by)), nrow = facet_nrow)
+    # Full point cloud, minus the facet column, so this layer repeats
+    # unchanged in every panel instead of being split by facet.
+    background_data <- data
+    background_data[[facet_by]] <- NULL
+
+    p <- ggplot(data, aes(x = PC0, y = PC1, color = .data[[color_by]])) +
+      point_layer(data = background_data, color = "grey80", alpha = background_alpha, size = point_size) +
+      point_layer(alpha = alpha, size = point_size) +
+      scale_color_manual(values = palette) +
+      labs(title = title, x = x_label, y = y_label) +
+      theme_manuscript(base_size = base_size) +
+      # PC0/PC1 carry different explained-variance scales, so coord_fixed()
+      # (equal data-unit scaling) would often look badly non-square. Forcing
+      # the panel aspect ratio to 1 instead keeps the rendered plot close to
+      # square without distorting either axis's data range.
+      theme(aspect.ratio = 1) +
+      compact_legend_theme +
+      guides(color = do.call(guide_legend, guide_args)) +
+      facet_wrap(as.formula(paste0("~", facet_by)), nrow = facet_nrow)
+  } else {
+    p <- ggplot(data, aes(x = PC0, y = PC1, color = .data[[color_by]])) +
+      point_layer(alpha = alpha, size = point_size) +
+      scale_color_manual(values = palette) +
+      labs(title = title, x = x_label, y = y_label) +
+      theme_manuscript(base_size = base_size) +
+      theme(aspect.ratio = 1) +
+      compact_legend_theme +
+      guides(color = do.call(guide_legend, guide_args))
   }
 
   p
@@ -247,12 +269,12 @@ for (slice in slice_specs) {
             pca_plots_2D[[paste0(page_key, "_by_treatment")]] <- plot_pca(
                 data = df, explained_variance_df = explained_variance_df, title = title,
                 color_by = "Metadata_Experiment_Treatment", palette = custom_treatment_palette,
-                legend_title = "Treatment", alpha = 0.15, rasterize_dpi = 150
+                legend_title = "Treatment", alpha = 0.3, rasterize_dpi = 150
             )
             pca_plots_2D[[paste0(page_key, "_by_tumor_type")]] <- plot_pca(
                 data = df, explained_variance_df = explained_variance_df, title = title,
                 color_by = "Metadata_Biology_TumorType", palette = tumor_type_palette,
-                legend_title = "Tumor type", alpha = 0.08, rasterize_dpi = 150
+                legend_title = "Tumor type", alpha = 0.18, rasterize_dpi = 150
             )
 
             if (profile$facet) {
@@ -260,20 +282,20 @@ for (slice in slice_specs) {
                     data = df, explained_variance_df = explained_variance_df, title = title,
                     color_by = "Metadata_Experiment_Treatment", palette = custom_treatment_palette,
                     legend_title = "Treatment", facet_by = "Metadata_Biology_PatientTumor", facet_nrow = 3,
-                    alpha = 0.3, point_size = 0.3, width = 10, height = 10, rasterize_dpi = 150
+                    alpha = 0.5, point_size = 0.3, rasterize_dpi = 150
                 )
                 pca_plots_2D[[paste0(page_key, "_facet_by_tumor_type")]] <- plot_pca(
                     data = df, explained_variance_df = explained_variance_df, title = title,
                     color_by = "Metadata_Experiment_Treatment", palette = custom_treatment_palette,
                     legend_title = "Treatment", facet_by = "Metadata_Biology_TumorType", facet_nrow = 2,
-                    alpha = 0.15, point_size = 0.15, width = 10, height = 10, rasterize_dpi = 150
+                    alpha = 0.3, point_size = 0.15, rasterize_dpi = 150
                 )
             }
         }
     }
 }
 
-save_plots_pdf(pca_plots_2D, file.path(figures_path, "2D_all_patients_pca.pdf"), width = 10, height = 10)
+save_plots_pdf(pca_plots_2D, file.path(figures_path, "2D_all_patients_pca.pdf"), width = 7, height = 7)
 
 # normalized profiles
 normalized_profiles <- c(
@@ -320,12 +342,12 @@ for (norm_profile in normalized_profiles) {
         pca_plots_3D[[paste0(page_key, "_by_treatment")]] <- plot_pca(
             data = df, explained_variance_df = explained_variance_df, title = title,
             color_by = "Metadata_Experiment_Treatment", palette = custom_treatment_palette,
-            legend_title = "Treatment", alpha = 0.15, rasterize_dpi = 150
+            legend_title = "Treatment", alpha = 0.3, rasterize_dpi = 150
         )
         pca_plots_3D[[paste0(page_key, "_by_tumor_type")]] <- plot_pca(
             data = df, explained_variance_df = explained_variance_df, title = title,
             color_by = "Metadata_Biology_TumorType", palette = tumor_type_palette,
-            legend_title = "Tumor type", alpha = 0.08, rasterize_dpi = 150
+            legend_title = "Tumor type", alpha = 0.18, rasterize_dpi = 150
         )
 
         if (profile$facet) {
@@ -333,19 +355,19 @@ for (norm_profile in normalized_profiles) {
                 data = df, explained_variance_df = explained_variance_df, title = title,
                 color_by = "Metadata_Experiment_Treatment", palette = custom_treatment_palette,
                 legend_title = "Treatment", facet_by = "Metadata_Biology_PatientTumor", facet_nrow = 3,
-                alpha = 0.3, point_size = 0.3, width = 10, height = 10, rasterize_dpi = 150
+                alpha = 0.5, point_size = 0.3, rasterize_dpi = 150
             )
             pca_plots_3D[[paste0(page_key, "_facet_by_tumor_type")]] <- plot_pca(
                 data = df, explained_variance_df = explained_variance_df, title = title,
                 color_by = "Metadata_Experiment_Treatment", palette = custom_treatment_palette,
                 legend_title = "Treatment", facet_by = "Metadata_Biology_TumorType", facet_nrow = 2,
-                alpha = 0.15, point_size = 0.15, width = 10, height = 10, rasterize_dpi = 150
+                alpha = 0.3, point_size = 0.15, rasterize_dpi = 150
             )
         }
     }
 }
 
-save_plots_pdf(pca_plots_3D, file.path(figures_path, "3D_all_patients_pca.pdf"), width = 10, height = 10)
+save_plots_pdf(pca_plots_3D, file.path(figures_path, "3D_all_patients_pca.pdf"), width = 7, height = 7)
 
 # Reuses normalized_profiles from the 3D PCA section above.
 scree_df_list <- list()
