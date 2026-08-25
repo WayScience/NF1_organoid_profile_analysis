@@ -118,7 +118,7 @@ plot_umap <- function(data, output_path = NULL, title,
       point_layer(alpha = alpha, size = point_size) +
       scale_color_manual(values = palette) +
       guides(color = "none") +
-      labs(title = title, x = "UMAP 0", y = "UMAP 1") +
+      labs(title = title, x = "UMAP 1", y = "UMAP 2") +
       theme_manuscript(base_size = base_size) +
       facet_wrap(as.formula(paste0("~", facet_by)), nrow = facet_nrow)
   } else {
@@ -130,7 +130,7 @@ plot_umap <- function(data, output_path = NULL, title,
     p <- ggplot(data, aes(x = UMAP1, y = UMAP2, color = .data[[color_by]])) +
       point_layer(alpha = alpha, size = point_size) +
       scale_color_manual(values = palette) +
-      labs(title = title, x = "UMAP 0", y = "UMAP 1") +
+      labs(title = title, x = "UMAP 1", y = "UMAP 2") +
       theme_manuscript(base_size = base_size) +
       compact_legend_theme +
       guides(color = do.call(guide_legend, guide_args))
@@ -163,10 +163,13 @@ save_plots_pdf <- function(plots, output_path, width = 10, height = 5) {
   # width, height : float, optional
   #     Page dimensions in inches.
   pdf(output_path, width = width, height = height)
+  # Guarantees the device closes even if print(p) errors partway through,
+  # so a failure stays local to this PDF instead of leaving the device open
+  # for whatever gets plotted next.
+  on.exit(dev.off(), add = TRUE)
   for (p in plots) {
     print(p)
   }
-  dev.off()
 }
 
 # Get the current working directory and find Git root
