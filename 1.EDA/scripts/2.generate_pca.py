@@ -1,6 +1,17 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+# # Generate PCA embeddings
+# 
+# This notebook computes PCA embeddings for every pooled (all-patient) profile file under `data/profiles_2D/all_patients/` and `data/profiles_3D/all_patients/` whose filename contains `fs`, `agg`, or `consensus` — covering single-cell, organoid-level, aggregated, and consensus profiles across all 2D slice strategies and 3D normalization variants. 
+# 
+# All of these profile levels were feature-selected (`fs`) file at the same entity/normalization level — `agg`
+# and `consensus` are aggregated/replicate-summarized *from* the feature-selected single-cell (or organoid-level) data, not from a separate unselected feature set.
+# 
+# `NF0037_T1_CQ1` rows are excluded (matching `0.generate_umap.ipynb`) — this is a separate analysis and should not be included anywhere in this EDA.
+# 
+# The notebook saves PCA coordinates (`PC0`...`PC{N_COMPONENTS-1}`) plus per-component explained variance ratios as parquet files under `1.EDA/results/pca/`.
+
 # In[1]:
 
 
@@ -10,6 +21,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from notebook_init_utils import init_notebook
+from pycytominer import feature_select
 from sklearn.decomposition import PCA
 
 root_dir, in_notebook = init_notebook()
@@ -25,7 +37,8 @@ else:
 
 # PCA parameters
 N_COMPONENTS = 50
-OVERWRITE_EXISTING = False
+OVERWRITE_EXISTING = True
+OUTLIER_CUTOFF = 100
 
 
 # In[3]:
@@ -43,6 +56,7 @@ all_patient_3D_dirs = [x for x in all_patients_3D_dir.iterdir() if x.is_dir()]
 all_patient_2D_dirs = [y for x in all_patient_2D_dirs for y in x.glob("*.parquet")]
 all_patient_3D_dirs = [y for x in all_patient_3D_dirs for y in x.glob("*.parquet")]
 all_patients_2D_and_3D_dirs = all_patient_2D_dirs + all_patient_3D_dirs
+
 # filter for only fs, agg, consensus
 all_patients_2D_and_3D_dirs = [
     x
@@ -76,6 +90,8 @@ for profile_path in all_patients_2D_and_3D_dirs:
     data_dict["dimension"].append(dimension)
     data_dict["input_path"].append(profile_path)
 
+feature_drop_summary = []
+
 for i, (
     profile_type,
     profile_strategy,
@@ -106,31 +122,66 @@ for i, (
     ):
         continue
     df = pd.read_parquet(input_path)
-    # Separate metadata columns from feature columns
-    # Metadata columns start with "Metadata_"
+
+    # Exclude NF0037_T1_CQ1: this is a separate analysis and should not be
+    # included anywhere in this EDA (matches 0.generate_umap.ipynb).
+    patient_tumor_column = (
+        "Metadata_Biology_PatientTumor" if dimension == "3D" else "Metadata_patient_tumor"
+    )
+    if patient_tumor_column in df.columns:
+        df = df[df[patient_tumor_column] != "NF0037_T1_CQ1"]
+
+    # Separate metadata columns from feature columns. Feature naming varies
+    # across profile levels in this dataset (Cells/Nuclei/Cytoplasm for
+    # single-cell, Organoid for organoid-level), so a plain "Metadata_"
+    # prefix check is used instead of pycytominer's compartment-based
+    # inference, which would fail outright on non-CellProfiler-style
+    # prefixes like "Organoid".
     metadata_columns = [col for col in df.columns if "Metadata_" in col]
+    feature_columns = [col for col in df.columns if col not in metadata_columns]
+    n_features_total = len(feature_columns)
 
-    # Keep a copy of metadata for later merging with PCA results
-    metadata_df = df[metadata_columns].copy()
+    # Drop Texture features: this feature family is prone to extreme
+    # outlier values (see 0.generate_umap.ipynb for the same issue and its
+    # root cause: near-zero-variance StandardScaler denominators upstream).
+    texture_columns = [c for c in feature_columns if "_Texture_" in c]
+    feature_columns = [c for c in feature_columns if "_Texture_" not in c]
 
-    # Extract only feature columns (drop all metadata)
-    features_df = df.drop(columns=metadata_columns, errors="ignore")
+    # Coerce all feature columns to numeric, treating infs as missing
+    df[feature_columns] = df[feature_columns].apply(pd.to_numeric, errors="coerce")
+    df[feature_columns] = df[feature_columns].replace([np.inf, -np.inf], np.nan)
 
-    # Coerce all feature columns to numeric before PCA
-    features_df = features_df.apply(pd.to_numeric, errors="coerce")
+    # Drop any other features with extreme/blown-up values using
+    # pycytominer's feature_select, with its magnitude-based outlier
+    # operation.
+    df = feature_select(
+        df,
+        features=feature_columns,
+        operation=["drop_outliers"],
+        outlier_cutoff=OUTLIER_CUTOFF,
+    )
+    selected_feature_columns = [c for c in feature_columns if c in df.columns]
+    n_outlier_dropped = len(feature_columns) - len(selected_feature_columns)
+    feature_columns = selected_feature_columns
 
-    # Treat extreme sentinel values as missing before PCA
-    # These are far beyond the scale of the normalized features in this dataset.
-    max_abs_feature_value = 1e1
-    features_df = features_df.mask(features_df.abs() > max_abs_feature_value, np.nan)
+    # Remove rows with NaN values in the feature columns
+    df = df.dropna(subset=feature_columns, axis=0)
 
-    # Replace infs with NaN, then drop rows with any missing values
-    features_df = features_df.replace([np.inf, -np.inf], np.nan)
-    features_df = features_df.dropna(axis=0)
+    feature_drop_summary.append(
+        {
+            "dimension": dimension,
+            "profile_strategy": profile_strategy,
+            "profile_type": profile_type,
+            "total": n_features_total,
+            "texture_dropped": len(texture_columns),
+            "outlier_dropped": n_outlier_dropped,
+            "remaining": len(feature_columns),
+            "rows_remaining": len(df),
+        }
+    )
 
-    # Update metadata to match cleaned features
-    metadata_df = metadata_df.loc[features_df.index].reset_index(drop=True)
-    features_df = features_df.reset_index(drop=True)
+    metadata_df = df[metadata_columns].reset_index(drop=True)
+    features_df = df[feature_columns].reset_index(drop=True)
 
     # Skip files with too few rows/features to fit the requested number of components
     n_components = min(N_COMPONENTS, features_df.shape[0], features_df.shape[1])
@@ -138,8 +189,11 @@ for i, (
         print(f"Skipping {input_path}: not enough valid data after cleaning.")
         continue
 
-    # Initialize and fit PCA model
-    pca_model = PCA(n_components=n_components, svd_solver="full")
+    # Initialize and fit PCA model. randomized (rather than full) SVD is
+    # used since we only keep the top n_components out of up to ~2000
+    # features — full SVD would compute the entire decomposition before
+    # truncating, which is far more expensive for no benefit here.
+    pca_model = PCA(n_components=n_components, svd_solver="randomized", random_state=0)
     features_array = features_df.to_numpy(dtype=np.float64, copy=False)
     pca_embeddings = pca_model.fit_transform(features_array)
 
@@ -166,3 +220,8 @@ for i, (
         explained_variance_output_file_path,
         index=False,
     )
+
+# Summarize feature/row dropping across all processed files
+feature_drop_summary_df = pd.DataFrame(feature_drop_summary)
+print(feature_drop_summary_df.to_string(index=False))
+
