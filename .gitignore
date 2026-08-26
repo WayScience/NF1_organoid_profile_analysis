@@ -171,6 +171,7 @@ data/*
 1.EDA/figures/heatmaps/
 1.EDA/figures/pca/
 1.EDA/figures/linear_modeling/
+1.EDA/figures/montages/
 2.2d_vs_3d_analysis/results/
 3.viability_prediction_models/logs/
 3.viability_prediction_models/model_results/
