@@ -190,3 +190,27 @@ tab20_palette_for_patients <- c(
     "#e377c2", "#f7b6d2", "#7f7f7f", "#c7c7c7", "#bcbd22", "#dbdb8d",
     "#17becf", "#9edae5"
 )
+
+tumor_type_palette <- c(
+    "cNF" = "#1B9E77",
+    "pNF" = "#D95F02",
+    "MPNST" = "#7570B3",
+    "Other" = "#999999"
+)
+
+# Short display labels for the 3D normalization variants, for use in plot
+# titles/legends instead of the raw snake_case identifiers (e.g.
+# "nucleocentric_morphem_norm" -> "Nucleocentric (MorphEm)"). First-pass
+# scheme: level (Organoid / Single-cell / Nucleocentric) + a parenthetical
+# naming the feature-extraction method (ZEDProfiler, MorphEm/CHAMMI, or
+# SAM-Med3D). See
+# https://github.com/WayScience/NF1_organoid_profile_analysis/issues/33 for
+# expanding this to a full cross-notebook labeling standard.
+normalization_variant_labels <- c(
+    organoid_norm = "Organoid (ZEDProfiler)",
+    sammed_organoid_norm = "Organoid (SAM-med)",
+    sc_norm = "Single-cell (ZEDProfiler)",
+    sammed_sc_norm = "Single-cell (SAM-med)",
+    nucleocentric_morphem_norm = "Nucleocentric (MorphEm)",
+    sammed_nucleocentric_norm = "Nucleocentric (SAM-med)"
+)
