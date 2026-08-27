@@ -362,20 +362,15 @@ build_tumor_type_count_plots <- function(
 }
 
 build_diagonal_distance_grid <- function(data, x_col, y_col, facet_col = NULL, res = 120) {
-    #' Build a fine regular (x, y, dist, dist_norm) grid -- one per facet
-    #' group if facet_col is given, otherwise a single grid for the whole
+    #' Build a fine regular (x, y, signed_dist) grid -- one per facet group
+    #' if facet_col is given, otherwise a single grid for the whole
     #' dataset -- spanning each group's own observed x/y range, with
-    #' dist = the perpendicular Euclidean distance from (x, y) to the line
-    #' y = x (i.e. |y - x| / sqrt(2)), and dist_norm = dist rescaled to
-    #' [0, 1] *within that group* (dist / max(dist) in the group, 0 if the
-    #' group's max distance is 0). Groups vary hugely in how far their own
-    #' visible range sits from the diagonal -- a free-scaled facet whose
-    #' panel never gets near x == y would, under one dataset-wide color
-    #' scale, render as a single near-saturated block with no visible
-    #' gradient. dist_norm keeps every panel's shading spanning its own
-    #' full white-to-red range, which is exactly the panels (no visible
-    #' y = x reference line in view) where showing *some* gradient matters
-    #' most. Feeds geom_raster() in plot_2d_vs_3d_scatter()'s
+    #' signed_dist = the signed perpendicular distance from (x, y) to the
+    #' line y = x (i.e. (y - x) / sqrt(2): 0 exactly on the line, positive
+    #' above it -- y > x -- negative below it -- y < x). Signed (not
+    #' absolute) so the diverging blue/white/red color scale in
+    #' plot_2d_vs_3d_scatter() reads which side of parity a region falls
+    #' on, not just how far. Feeds geom_raster() in that function's
     #' diagonal-distance background shading.
     build_one <- function(df) {
         x_range <- range(df[[x_col]], na.rm = TRUE)
@@ -387,9 +382,7 @@ build_diagonal_distance_grid <- function(data, x_col, y_col, facet_col = NULL, r
             x = seq(x_range[1], x_range[2], length.out = res),
             y = seq(y_range[1], y_range[2], length.out = res)
         )
-        grid$dist <- abs(grid$y - grid$x) / sqrt(2)
-        max_dist <- max(grid$dist)
-        grid$dist_norm <- if (max_dist > 0) grid$dist / max_dist else 0
+        grid$signed_dist <- (grid$y - grid$x) / sqrt(2)
         grid
     }
     if (is.null(facet_col)) {
@@ -407,25 +400,29 @@ plot_2d_vs_3d_scatter <- function(
     data, x_col, y_col, color_col, shape_col, color_palette,
     x_lab, y_lab, color_lab = "Treatment", shape_lab = "Dose",
     facet_formula = NULL, facet_ncol = 3, facet_col = NULL, base_size = 18,
-    diagonal_shading = TRUE, diagonal_shading_max_alpha = 0.35, diagonal_shading_res = 120
+    diagonal_shading = TRUE, diagonal_shading_max_alpha = 0.55, diagonal_shading_res = 120,
+    diagonal_shading_lab = "3D vs. 2D\n(distance from y = x)"
 ) {
     #' Scatter comparison of a 2D vs 3D count metric with a reference y=x
     #' line. diagonal_shading = TRUE (default) additionally fills the
-    #' panel background with a continuous white-to-red gradient by
-    #' perpendicular Euclidean distance to y = x, normalized *within each
-    #' panel* to its own 0-to-max range (transparent/white nearest the
-    #' line that panel actually gets to, subtly reddening with distance --
-    #' alpha capped at diagonal_shading_max_alpha so the panel gridlines
-    #' stay visible through it). Per-panel normalization (rather than one
-    #' dataset-wide color scale) matters specifically for free-scaled
-    #' facets whose visible range never gets near x == y: under a shared
-    #' scale those panels would render as a single near-saturated block
-    #' with no visible gradient, which is exactly backwards, since those
-    #' are the panels where geom_abline's y = x line falls outside the
-    #' panel and never draws, so the shading is the only diagonal cue
-    #' available at all. facet_col (the same grouping variable as
-    #' facet_formula, as a string) computes and normalizes the shading per
-    #' facet instead of once for the whole dataset.
+    #' panel background with a diverging blue-white-red gradient by the
+    #' *signed* perpendicular distance to y = x -- white exactly on the
+    #' line (y = x, the midpoint), reddening where y > x (3D over 2D),
+    #' bluening where y < x (2D over 3D) -- with a colorbar legend
+    #' (diagonal_shading_lab). The color scale's limits are the dataset-
+    #' wide (not per-panel) max absolute signed distance, so panels stay
+    #' comparable: a panel that's uniformly far from parity reads as
+    #' uniformly saturated, and a panel that only partly strays reads with
+    #' visible internal gradient -- both true to the data, unlike a
+    #' per-panel-rescaled version where every panel would look equally
+    #' "extreme" regardless of its actual distance. This keeps the
+    #' diagonal reference legible even in free-scaled facets where a
+    #' panel's visible range may not actually include any point where
+    #' x == y, which leaves geom_abline's line outside the panel and never
+    #' drawn. facet_col (the same grouping variable as facet_formula, as a
+    #' string) computes the shading grid per facet (needed so each free-
+    #' scaled panel's raster covers its own x/y range) while the color
+    #' scale itself stays the one dataset-wide scale described above.
     p <- ggplot(
         data,
         aes(
@@ -440,15 +437,20 @@ plot_2d_vs_3d_scatter <- function(
         shading_df <- build_diagonal_distance_grid(
             data, x_col, y_col, facet_col = facet_col, res = diagonal_shading_res
         )
+        max_abs_dist <- max(abs((data[[y_col]] - data[[x_col]]) / sqrt(2)), na.rm = TRUE)
         p <- (
             p
             + geom_raster(
-                data = shading_df, aes(x = x, y = y, fill = dist_norm),
+                data = shading_df, aes(x = x, y = y, fill = signed_dist),
                 inherit.aes = FALSE, interpolate = TRUE
             )
-            + scale_fill_gradient(
-                low = scales::alpha("white", 0), high = scales::alpha("red", diagonal_shading_max_alpha),
-                limits = c(0, 1), oob = scales::squish, guide = "none"
+            + scale_fill_gradient2(
+                low = scales::alpha("blue", diagonal_shading_max_alpha),
+                mid = scales::alpha("white", 0),
+                high = scales::alpha("red", diagonal_shading_max_alpha),
+                midpoint = 0, limits = c(-max_abs_dist, max_abs_dist), oob = scales::squish,
+                name = diagonal_shading_lab,
+                guide = guide_colorbar(order = 3)
             )
         )
     }
@@ -457,7 +459,8 @@ plot_2d_vs_3d_scatter <- function(
         p
         + geom_point(size = 4, alpha = 0.7)
         + geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "black")
-        + scale_color_manual(values = color_palette)
+        + scale_color_manual(values = color_palette, guide = guide_legend(order = 1))
+        + guides(shape = guide_legend(order = 2))
         + labs(x = x_lab, y = y_lab, color = color_lab, shape = shape_lab)
         + theme_manuscript(base_size = base_size)
     )
