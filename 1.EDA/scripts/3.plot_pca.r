@@ -335,7 +335,7 @@ for (norm_profile in normalized_profiles) {
         df$Metadata_Biology_TumorType <- tumor_type_lookup[df$Metadata_Biology_PatientTumor]
 
         explained_variance_df <- arrow::read_parquet(explained_variance_file_path)
-        title <- paste0("All patients: 3D (", norm_profile, ") ", profile$label, " Profiles")
+        title <- paste0("All patients: 3D ", normalization_variant_labels[[norm_profile]], " ", profile$label, " Profiles")
 
         page_key <- paste0(norm_profile, "_", profile$suffix)
 
@@ -385,7 +385,7 @@ for (norm_profile in normalized_profiles) {
     scree_df_list[[norm_profile]] <- data.frame(
         component = seq_len(n_components),
         variance_explained = as.numeric(ev_df[1, ]) * 100,
-        norm_profile = norm_profile
+        norm_profile = normalization_variant_labels[[norm_profile]]
     )
 }
 scree_df <- do.call(rbind, scree_df_list)
