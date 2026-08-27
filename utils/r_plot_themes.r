@@ -191,6 +191,26 @@ tab20_palette_for_patients <- c(
     "#17becf", "#9edae5"
 )
 
+# cNF = cutaneous/subcutaneous neurofibroma, pNF = plexiform neurofibroma,
+# MPNST = malignant peripheral nerve sheath tumor. NF0030_T1 (myopericytoma),
+# NF0040_T1 (schwannoma), and SARCO361_T1 (sarcoma) are not NF1 nerve-sheath
+# tumors and are grouped as "Other".
+# Source: https://github.com/WayScience/NF1_3D_organoid_profiling_pipeline/blob/4072be16543851063df9bcd16500498f269f45fd/figures/table1_patients_and_counts/results/table1_patients_and_counts_results.tsv
+tumor_type_lookup <- c(
+    "NF0014_T1" = "cNF",
+    "NF0014_T2" = "pNF",
+    "NF0016_T1" = "pNF",
+    "NF0018_T6" = "cNF",
+    "NF0021_T1" = "cNF",
+    "NF0030_T1" = "Other",
+    "NF0035_T1" = "cNF",
+    "NF0037_T1" = "cNF",
+    "NF0040_T1" = "Other",
+    "NF0055_T1" = "pNF",
+    "SARCO219_T2" = "MPNST",
+    "SARCO361_T1" = "Other"
+)
+
 tumor_type_palette <- c(
     "cNF" = "#1B9E77",
     "pNF" = "#D95F02",
