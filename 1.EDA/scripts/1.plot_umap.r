@@ -201,8 +201,8 @@ root_dir <- find_git_root()
 cat("Git root directory:", root_dir, "\n")
 
 # Shared color palettes/themes (e.g. custom_treatment_palette, custom_MOA_palette,
-# tab20_palette_for_patients, theme_manuscript) live in utils/r_plot_themes.r so
-# that colors stay consistent across notebooks.
+# tab20_palette_for_patients, tumor_type_palette, theme_manuscript) live in
+# utils/r_plot_themes.r so that colors stay consistent across notebooks.
 source(file.path(root_dir, "utils/r_plot_themes.r"))
 
 figures_path <- file.path(root_dir, "1.EDA/figures/umaps")
@@ -272,6 +272,8 @@ patient_color_palette <- master_patient_palette[
 # NF0030_T1 (myopericytoma), NF0040_T1 (schwannoma), and SARCO361_T1
 # (sarcoma) are not NF1 nerve-sheath tumors and are grouped as "Other".
 # Source: https://github.com/WayScience/NF1_3D_organoid_profiling_pipeline/blob/4072be16543851063df9bcd16500498f269f45fd/figures/table1_patients_and_counts/results/table1_patients_and_counts_results.tsv
+# tumor_type_palette lives in utils/r_plot_themes.r alongside the other
+# shared color palettes.
 tumor_type_lookup <- c(
   "NF0014_T1" = "cNF",
   "NF0014_T2" = "pNF",
@@ -285,13 +287,6 @@ tumor_type_lookup <- c(
   "NF0055_T1" = "pNF",
   "SARCO219_T2" = "MPNST",
   "SARCO361_T1" = "Other"
-)
-
-tumor_type_palette <- c(
-  "cNF" = "#1B9E77",
-  "pNF" = "#D95F02",
-  "MPNST" = "#7570B3",
-  "Other" = "#999999"
 )
 
 sc_3D_umap_results$Metadata_Biology_TumorType <- tumor_type_lookup[sc_3D_umap_results$Metadata_Biology_PatientTumor]

@@ -190,3 +190,10 @@ tab20_palette_for_patients <- c(
     "#e377c2", "#f7b6d2", "#7f7f7f", "#c7c7c7", "#bcbd22", "#dbdb8d",
     "#17becf", "#9edae5"
 )
+
+tumor_type_palette <- c(
+    "cNF" = "#1B9E77",
+    "pNF" = "#D95F02",
+    "MPNST" = "#7570B3",
+    "Other" = "#999999"
+)
