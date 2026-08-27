@@ -13,10 +13,8 @@ Notebooks are numbered in the order they should be run; `run_all_eda_local.sh` c
 | `1.plot_umap.ipynb` | Plots UMAPs for organoid and single-cell datasets across 2D (max projection, middle slice, middle-N slice) profiles, faceted/colored by patient and treatment. |
 | `2.generate_pca.ipynb` | Generates PCA embeddings and explained-variance tables for every profile type. |
 | `3.plot_pca.ipynb` | Plots PCA embeddings for every profile type in `results/pca`, for both 2D and 3D pipelines. |
-| `3.heatmap.ipynb` | Generates single-cell and organoid heatmaps of consensus and feature-selected profiles. |
-| `4.consensus_profiles.ipynb` | Computes per-patient consensus profiles (single-cell and organoid level), producing the consensus heatmaps in `figures/consensus_heatmaps`. |
-| `5.calculate_correlation_matrix.ipynb` | Computes correlation matrices across patients/treatments for each 2D and 3D profile type (organoid and single-cell, aggregated and consensus). |
-| `6.plot_correlation_heatmaps.ipynb` | Plots the correlation matrices from notebook 5 as heatmaps. |
+| `4.calculate_correlation_matrix.ipynb` | Computes correlation matrices across patients/treatments for each 2D and 3D profile type (aggregated and consensus). |
+| `5.plot_correlation_heatmaps.ipynb` | Plots each correlation matrix as a heatmap, grouped into per-dimension PDFs. |
 | `7.generate_cell_counts.ipynb` | Computes cell counts per organoid and identifies single cells without a parent organoid. |
 | `8.plot_single_cell_counts.ipynb` | Plots cell count distributions (by patient, by treatment, and 2D vs. 3D comparisons). |
 
@@ -25,8 +23,7 @@ Notebooks are numbered in the order they should be run; `run_all_eda_local.sh` c
 - `results/pca/` — PCA embeddings and explained variance per profile type.
 - `results/correlation/` — Correlation matrices per profile type.
 - `results/cell_counts/` — Cell count and organoid count tables.
-- `figures/consensus_heatmaps/` — Per-patient consensus heatmaps (single-cell and organoid).
-- `figures/correlation_heatmaps/` — Correlation heatmaps per profile type.
+- `figures/correlation_heatmaps/` — Correlation heatmaps, grouped into a 2D and a 3D PDF.
 - `figures/cell_counts/` — Cell/organoid count plots (bar, box, and density plots).
 
 ## Running
@@ -35,4 +32,4 @@ Notebooks are numbered in the order they should be run; `run_all_eda_local.sh` c
 ./run_all_eda_local.sh
 ```
 
-This converts all notebooks to scripts and runs them in order, iterating per-patient where applicable (e.g., consensus profile generation), using the `GFF_analysis` conda environment for Python steps and the `gff_figure_env` conda environment for R steps.
+This converts all notebooks to scripts and runs them in order, using the `GFF_analysis` conda environment for Python steps and the `gff_figure_env` conda environment for R steps.
