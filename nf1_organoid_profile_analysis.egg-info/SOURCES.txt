@@ -1,8 +1,0 @@
-LICENSE
-README.md
-pyproject.toml
-nf1_organoid_profile_analysis.egg-info/PKG-INFO
-nf1_organoid_profile_analysis.egg-info/SOURCES.txt
-nf1_organoid_profile_analysis.egg-info/dependency_links.txt
-nf1_organoid_profile_analysis.egg-info/requires.txt
-nf1_organoid_profile_analysis.egg-info/top_level.txt

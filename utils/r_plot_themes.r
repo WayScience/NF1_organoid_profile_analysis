@@ -191,6 +191,13 @@ tab20_palette_for_patients <- c(
     "#17becf", "#9edae5"
 )
 
+tumor_type_palette <- c(
+    "cNF" = "#1B9E77",
+    "pNF" = "#D95F02",
+    "MPNST" = "#7570B3",
+    "Other" = "#999999"
+)
+
 # Short display labels for the 3D normalization variants, for use in plot
 # titles/legends instead of the raw snake_case identifiers (e.g.
 # "nucleocentric_morphem_norm" -> "Nucleocentric (MorphEm)"). First-pass
