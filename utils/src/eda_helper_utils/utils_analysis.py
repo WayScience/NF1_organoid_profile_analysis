@@ -24,6 +24,7 @@ HARMONIZE_2D_MAP = {
     "Metadata_class": "Metadata_Experiment_Class",
     "Metadata_therapeutic_categories": "Metadata_Experiment_TherapeuticCategories",
     "Metadata_Well": "Metadata_Experiment_Well",
+    "Metadata_patient_tumor": "Metadata_Biology_PatientTumor",
 }
 
 
@@ -82,9 +83,8 @@ def harmonize_metadata(
     rename_map = HARMONIZE_2D_MAP if modality == "2D" else HARMONIZE_3D_MAP
     df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
     patient, timepoint = patient_timepoint(patient_dir_name)
-    df["Metadata_patient"] = patient
     df["Metadata_timepoint"] = timepoint
-    df["Metadata_patient_tumor"] = patient_dir_name
+    df["Metadata_Biology_PatientTumor"] = patient_dir_name
     df["Metadata_modality"] = modality
     return df
 
