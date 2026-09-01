@@ -31,4 +31,5 @@ dependencies:
   - conda-forge::r-ggbreak
   - conda-forge::r-ggrastr
   - conda-forge::r-argparse
+  - conda-forge::r-ggrastr
 
