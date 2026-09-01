@@ -127,9 +127,10 @@ fov_lookup = pd.concat(fov_lookup_frames)
 fov_lookup.reset_index(drop=True, inplace=True)
 
 
-# In[5]:
+# In[ ]:
 
 
+# --- Pass 2: backfill 2D FOV counts from the 3D lookup, then merge every profile type into one counts_df ---
 for profile_type, entry in dict_of_count_dfs.items():
     df = entry["df"]
     if entry["is_2d"]:
@@ -159,11 +160,10 @@ for profile_type, entry in dict_of_count_dfs.items():
         merged_df = pd.concat([merged_df, entry["df"]], ignore_index=True)
 
 
-# In[6]:
+# In[ ]:
 
 
-# --- Pass 3: normalize the n_cells column by the number of FOVs, to get a per-FOV cell count ---
-# annotate unique treatments
+# --- Pass 3: normalize the n_cells column by the number of FOVs, to get a per-FOV cell count, and add a treatment+dose grouping column ---
 
 merged_df["Metadata_n_cells_norm_by_well_fov"] = (
     merged_df["Metadata_n_cells"] / merged_df["Metadata_n_fovs"]
@@ -183,7 +183,7 @@ merged_df.head()
 
 
 # ## From the organoid profiles get the number of cells per organoid
-# ## From the single-cell profiles get the number cells without a parent organoid
+# ## From the single-cell profiles get the number of cells without a parent organoid
 
 # In[8]:
 
@@ -278,3 +278,4 @@ merged_organoid_count_information = pd.merge(
     how="outer",
 )
 merged_organoid_count_information.to_parquet(organoid_counts_output_path, index=False)
+
