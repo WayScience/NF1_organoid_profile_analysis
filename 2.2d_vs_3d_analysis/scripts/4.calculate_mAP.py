@@ -69,31 +69,45 @@ results_dir = pathlib.Path(f"{root_dir}/2.2d_vs_3d_analysis/results/mAP").resolv
 results_dir.mkdir(parents=True, exist_ok=True)
 
 
-def load_and_harmonize(path: pathlib.Path) -> pd.DataFrame:
-    """Load a profile parquet and harmonize 2D/3D metadata column names."""
-    df = pd.read_parquet(path)
-    if "Metadata_Biology_PatientTumor" in df.columns:
+def load_profile(path: pathlib.Path) -> pd.DataFrame:
+    """Load a profile parquet."""
+    return pd.read_parquet(path)
+
+
+def harmonize_metadata(df: pd.DataFrame) -> pd.DataFrame:
+    """Harmonize 2D/3D metadata column names and derive analysis columns.
+
+    The 3D pipeline's naming convention (Metadata_Biology_PatientTumor,
+    Metadata_Experiment_{Well,Treatment,Dose}) is the canonical one; 2D data
+    is renamed up to match it here rather than the other way around.
+    """
+    if "Metadata_patient_tumor" in df.columns:
         df = df.rename(
             columns={
-                "Metadata_Biology_PatientTumor": "Metadata_patient_tumor",
-                "Metadata_Experiment_Well": "Metadata_Well",
-                "Metadata_Experiment_Treatment": "Metadata_treatment",
-                "Metadata_Experiment_Dose": "Metadata_dose",
+                "Metadata_patient_tumor": "Metadata_Biology_PatientTumor",
+                "Metadata_Well": "Metadata_Experiment_Well",
+                "Metadata_treatment": "Metadata_Experiment_Treatment",
+                "Metadata_dose": "Metadata_Experiment_Dose",
             }
         )
     # Keep the full patient_tumor value: some patients (e.g. NF0014) have multiple
     # tumor samples, so stripping to bare patient would merge distinct tumors together.
-    df["Metadata_patient"] = df["Metadata_patient_tumor"]
+    df["Metadata_patient"] = df["Metadata_Biology_PatientTumor"]
     df["Metadata_treatment_dose"] = (
-        df["Metadata_treatment"]
+        df["Metadata_Experiment_Treatment"]
         + "_"
-        + df["Metadata_dose"].fillna(0).astype(float).astype(int).astype(str)
+        + df["Metadata_Experiment_Dose"].fillna(0).astype(float).astype(int).astype(str)
     )
     # Some upstream Texture features contain corrupted inf values; treat like NaN
     # so the existing NaN-handling in calculate_mAP covers them too.
     feature_cols = [c for c in df.columns if not c.startswith("Metadata_")]
     df[feature_cols] = df[feature_cols].replace([np.inf, -np.inf], np.nan)
     return df
+
+
+def load_and_harmonize(path: pathlib.Path) -> pd.DataFrame:
+    """Load a profile parquet and harmonize its metadata columns."""
+    return harmonize_metadata(load_profile(path))
 
 
 # In[ ]:
@@ -112,7 +126,7 @@ def temporary_clean_and_aggregate(df: pd.DataFrame) -> pd.DataFrame:
     df[feature_cols] = df[feature_cols].mask(df[feature_cols].abs() > 1e10)
 
     # No-op if already 1 row per well; kept as a safety net.
-    group_keys = ["Metadata_patient_tumor", "Metadata_Well"]
+    group_keys = ["Metadata_Biology_PatientTumor", "Metadata_Experiment_Well"]
     agg_dict = {c: "first" for c in meta_cols if c not in group_keys}
     agg_dict.update({c: "mean" for c in feature_cols})
     return df.groupby(group_keys, as_index=False).agg(agg_dict)
@@ -124,7 +138,7 @@ def temporary_clean_and_aggregate(df: pd.DataFrame) -> pd.DataFrame:
 def calculate_mAP(
     df: pd.DataFrame,
     metadata_columns: list,
-    col_for_reference: str = "Metadata_treatment",
+    col_for_reference: str = "Metadata_Experiment_Treatment",
     reference_group: str = "DMSO",
 ) -> Union[None, pd.DataFrame]:
     """
@@ -189,7 +203,7 @@ def calculate_mAP(
 def calculate_intra_patient_mAP(
     df: pd.DataFrame,
     metadata_columns: list,
-    col_for_reference: str = "Metadata_treatment",
+    col_for_reference: str = "Metadata_Experiment_Treatment",
     reference_group: str = "DMSO",
     output_path: Union[None, pathlib.Path] = None,
 ) -> Union[None, pd.DataFrame]:
@@ -250,7 +264,7 @@ def calculate_intra_patient_mAP(
 def calculate_inter_patient_mAP(
     df: pd.DataFrame,
     metadata_columns: list,
-    col_for_reference: str = "Metadata_treatment",
+    col_for_reference: str = "Metadata_Experiment_Treatment",
     reference_group: str = "DMSO",
     output_path: Union[None, pathlib.Path] = None,
 ) -> Union[None, pd.DataFrame]:

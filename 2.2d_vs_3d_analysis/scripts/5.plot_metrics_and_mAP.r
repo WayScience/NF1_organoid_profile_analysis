@@ -1,4 +1,4 @@
-list_of_packages <- c("ggplot2", "dplyr", "tidyr", "arrow")
+list_of_packages <- c("ggplot2", "dplyr", "tidyr", "arrow", "RColorBrewer")
 for (package in list_of_packages) {
     suppressPackageStartupMessages(
         suppressWarnings(
@@ -31,12 +31,14 @@ find_git_root <- function() {
 root_dir <- find_git_root()
 cat("Git root directory:", root_dir, "\n")
 
+# custom_treatment_palette lives in utils/r_plot_themes.r so it isn't
+# redefined (and potentially drift out of sync) in every plotting script.
+source(file.path(root_dir, "utils/r_plot_themes.r"))
+
 mAP_results_dir <- file.path(root_dir, "2.2d_vs_3d_analysis", "results", "mAP")
 dist_results_dir <- file.path(root_dir, "2.2d_vs_3d_analysis", "results", "distance_metrics")
-mAP_figures_dir <- file.path(root_dir, "2.2d_vs_3d_analysis", "figures", "mAP")
-dist_figures_dir <- file.path(root_dir, "2.2d_vs_3d_analysis", "figures", "distance_metrics")
-dir.create(mAP_figures_dir, recursive = TRUE, showWarnings = FALSE)
-dir.create(dist_figures_dir, recursive = TRUE, showWarnings = FALSE)
+figures_dir <- file.path(root_dir, "2.2d_vs_3d_analysis", "figures", "mAP_and_distance_metrics")
+dir.create(figures_dir, recursive = TRUE, showWarnings = FALSE)
 
 # Every profile type from notebooks 3/4, and the 2D-vs-3D pairs for cross-modality plots
 profile_types <- tibble::tribble(
@@ -61,38 +63,8 @@ pairs_2d_3d <- tibble::tribble(
     "Single-cell - Nucleocentric DL (MorphEM)", "2D_sc", "3D_sc_nucleocentric_morphem"
 )
 
-# Drugs are colored by identity; dose is encoded as point shape (1 = circle, 10 = triangle)
-custom_treatment_palette <- c(
-    'DMSO' = "#A6A6A6",           # Control
-
-    'Staurosporine' = "#3F468C",  # Broad-spectrum kinase inhibitor
-
-    'Fimepinostat' = "#3DCCA8",   # HDAC/PI3K inhibitor (dual)
-    'Copanlisib' = "#3DCACC",     # PI3K inhibitor
-    'Everolimus' = "#3DA4CC",     # mTOR inhibitor
-    'Rapamycin' = "#3D7DCC",      # mTOR inhibitor
-    'Sapanisertib' = "#3D57CC",   # mTOR inhibitor
-    'Vistusertib' = "#493DCC",    # mTOR inhibitor
-
-    'Panobinostat' = "#CC8029",   # HDAC inhibitor
-    'ARV-825' = "#CCAB29",        # BRD4 inhibitor
-
-    'Imatinib' = "#6047CC",       # BCR-ABL/KIT inhibitor
-    'Nilotinib' = "#8347CC",      # BCR-ABL/KIT inhibitor
-    'Cabozantinib' = "#A647CC",   # Multi-kinase inhibitor
-    'Linsitinib' = "#CA47CC",     # IGF-1R inhibitor
-
-    'Binimetinib' = "#D92B7F",    # MEK inhibitor
-    'Mirdametinib' = "#D92B51",   # MEK inhibitor
-    'Trametinib' = "#D9342B",     # MEK inhibitor
-    'Selumetinib' = "#D9622B",    # MEK inhibitor
-
-    'Onalespib' = "#6CA642",      # HSP90 inhibitor
-    'Digoxin' = "#BF3078",        # Na/K-ATPase inhibitor
-    'Ketotifen' = "#238C83",      # Antihistamine
-    'Trabectedin' = "#388C5B"     # DNA-binding agent
-)
-
+# Dose is encoded as point shape (1 = circle, 10 = triangle); drug colors
+# come from custom_treatment_palette in utils/r_plot_themes.r (sourced above).
 dose_shape_palette <- c("1" = 16, "10" = 17)  # 16 = circle, 17 = triangle
 
 # Results only carry the combined "Drug_Dose" string; split it into bare drug
@@ -114,11 +86,28 @@ plot_theme <- theme(
     legend.text  = element_text(size = 10)
 )
 
-# mAP volcano-style scatter (mAP vs -log10(p)), one intra + one inter plot per profile type
+# Rasterizes the point layer (via ggrastr) while everything else in the plot
+# (axes, text, legend) stays vector, so combined multi-page PDFs with many
+# points per page don't balloon in file size.
+point_layer <- function(..., rasterize_dpi = 300) {
+    layer <- geom_point(...)
+    ggrastr::rasterise(layer, dpi = rasterize_dpi)
+}
+
+# Saves a list of ggplot objects as a single multi-page PDF, one page per plot.
+save_plots_pdf <- function(plots, output_path, width = 10, height = 6) {
+    pdf(output_path, width = width, height = height)
+    on.exit(dev.off(), add = TRUE)
+    for (p in plots) {
+        print(p)
+    }
+}
+
+# mAP volcano-style scatter (mAP vs -log10(p))
 make_mAP_plot <- function(df, title, faceted) {
     p <- (
         ggplot(df, aes(x = mean_average_precision, y = `-log10(p-value)`, color = Metadata_treatment, shape = Metadata_dose))
-        + geom_point(size = 3, alpha = 0.7)
+        + point_layer(size = 3, alpha = 0.7)
         + scale_color_manual(name = "Treatment", values = custom_treatment_palette,
                               guide = guide_legend(title.position = "top", title.hjust = 0.5, order = 1))
         + scale_shape_manual(name = "Dose", values = dose_shape_palette,
@@ -135,25 +124,59 @@ make_mAP_plot <- function(df, title, faceted) {
     p
 }
 
+# mAP vs cosine distance scatter
+make_mAP_vs_distance_plot <- function(df, title, faceted) {
+    p <- (
+        ggplot(df, aes(x = cosine_distance_mean, y = mean_average_precision, color = Metadata_treatment, shape = Metadata_dose))
+        + point_layer(size = 3, alpha = 0.7)
+        + scale_color_manual(name = "Treatment", values = custom_treatment_palette,
+                              guide = guide_legend(title.position = "top", title.hjust = 0.5, order = 1))
+        + scale_shape_manual(name = "Dose", values = dose_shape_palette,
+                              guide = guide_legend(title.position = "top", title.hjust = 0.5, order = 2))
+        + labs(x = "Cosine Distance", y = "Mean Average Precision", title = title)
+        + theme_bw()
+        + plot_theme
+        + ylim(0, 1)
+    )
+    if (faceted) {
+        p <- p + facet_wrap(~Metadata_patient, ncol = 4)
+    }
+    p
+}
+
+intra_plots <- list()
+inter_plots <- list()
+cross_plots <- list()
+
+# mAP-vs-p and mAP-vs-distance, one intra + one inter pair of plots per profile type
 for (i in seq_len(nrow(profile_types))) {
     label <- profile_types$label[i]
     slug  <- profile_types$slug[i]
 
-    intra_df <- split_treatment_dose(arrow::read_parquet(file.path(mAP_results_dir, paste0(slug, "_intra_patient_mAP_by_dose.parquet"))))
-    inter_df <- split_treatment_dose(arrow::read_parquet(file.path(mAP_results_dir, paste0(slug, "_inter_patient_mAP_by_dose.parquet"))))
+    intra_mAP <- split_treatment_dose(arrow::read_parquet(file.path(mAP_results_dir, paste0(slug, "_intra_patient_mAP_by_dose.parquet"))))
+    inter_mAP <- split_treatment_dose(arrow::read_parquet(file.path(mAP_results_dir, paste0(slug, "_inter_patient_mAP_by_dose.parquet"))))
+    intra_dist <- split_treatment_dose(arrow::read_parquet(file.path(dist_results_dir, paste0(slug, "_intra_patient_cosine_distance.parquet"))))
+    inter_dist <- split_treatment_dose(arrow::read_parquet(file.path(dist_results_dir, paste0(slug, "_inter_patient_cosine_distance.parquet"))))
 
-    intra_plot <- make_mAP_plot(intra_df, paste0("Intra-patient mAP - ", label), faceted = TRUE)
-    ggsave(file.path(mAP_figures_dir, paste0(slug, "_intra_patient_mAP.png")),
-           plot = intra_plot, width = 12, height = 8, dpi = 600)
-    print(intra_plot)
+    intra_plots[[length(intra_plots) + 1]] <- make_mAP_plot(intra_mAP, paste0("Intra-patient mAP - ", label), faceted = TRUE)
+    inter_plots[[length(inter_plots) + 1]] <- make_mAP_plot(inter_mAP, paste0("Inter-patient mAP - ", label), faceted = FALSE)
 
-    inter_plot <- make_mAP_plot(inter_df, paste0("Inter-patient mAP - ", label), faceted = FALSE)
-    ggsave(file.path(mAP_figures_dir, paste0(slug, "_inter_patient_mAP.png")),
-           plot = inter_plot, width = 10, height = 6, dpi = 600)
-    print(inter_plot)
+    intra_mAP_dist <- inner_join(
+        intra_mAP,
+        intra_dist %>% select(Metadata_treatment_dose, Metadata_patient, cosine_distance_mean),
+        by = c("Metadata_treatment_dose", "Metadata_patient")
+    )
+    inter_mAP_dist <- inner_join(
+        inter_mAP,
+        inter_dist %>% select(Metadata_treatment_dose, cosine_distance_mean),
+        by = "Metadata_treatment_dose"
+    )
+
+    intra_plots[[length(intra_plots) + 1]] <- make_mAP_vs_distance_plot(intra_mAP_dist, paste0("Intra-patient mAP vs Distance - ", label), faceted = TRUE)
+    inter_plots[[length(inter_plots) + 1]] <- make_mAP_vs_distance_plot(inter_mAP_dist, paste0("Inter-patient mAP vs Distance - ", label), faceted = FALSE)
 }
 
-# Ratio bar chart + inter-vs-intra scatter, one pair of plots per profile type
+# Ratio bar chart + inter-vs-intra mAP scatter, one pair of plots per profile type
 for (i in seq_len(nrow(profile_types))) {
     label <- profile_types$label[i]
     slug  <- profile_types$slug[i]
@@ -186,13 +209,11 @@ for (i in seq_len(nrow(profile_types))) {
         + theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 10), legend.position = "none")
         + geom_hline(yintercept = 1, linetype = "dashed", color = "red")
     )
-    ggsave(file.path(mAP_figures_dir, paste0(slug, "_intra_to_inter_mAP_ratio_bar.png")),
-           plot = ratio_plot, width = 8, height = 6, dpi = 600)
-    print(ratio_plot)
+    cross_plots[[length(cross_plots) + 1]] <- ratio_plot
 
     scatter_plot <- (
         ggplot(merged_df, aes(x = inter_patient_mAP, y = intra_patient_mAP, color = Metadata_treatment, shape = Metadata_dose))
-        + geom_point(size = 2, alpha = 0.7)
+        + point_layer(size = 2, alpha = 0.7)
         + scale_color_manual(name = "Treatment", values = custom_treatment_palette,
                               guide = guide_legend(title.position = "top", title.hjust = 0.5, order = 1))
         + scale_shape_manual(name = "Dose", values = dose_shape_palette,
@@ -203,9 +224,7 @@ for (i in seq_len(nrow(profile_types))) {
         + plot_theme
         + xlim(0, 1)
     )
-    ggsave(file.path(mAP_figures_dir, paste0(slug, "_mAP_inter_vs_intra.png")),
-           plot = scatter_plot, width = 10, height = 6, dpi = 600)
-    print(scatter_plot)
+    cross_plots[[length(cross_plots) + 1]] <- scatter_plot
 }
 
 # 2D vs 3D mAP scatter, one intra (faceted by patient) + one inter plot per pair
@@ -232,9 +251,9 @@ for (i in seq_len(nrow(pairs_2d_3d))) {
     intra_merged <- split_treatment_dose(intra_merged)
     inter_merged <- split_treatment_dose(inter_merged)
 
-    intra_plot <- (
+    intra_plots[[length(intra_plots) + 1]] <- (
         ggplot(intra_merged, aes(x = mAP_2D, y = mAP_3D, color = Metadata_treatment, shape = Metadata_dose))
-        + geom_point(size = 3, alpha = 0.7)
+        + point_layer(size = 3, alpha = 0.7)
         + scale_color_manual(name = "Treatment", values = custom_treatment_palette,
                               guide = guide_legend(title.position = "top", title.hjust = 0.5, order = 1))
         + scale_shape_manual(name = "Dose", values = dose_shape_palette,
@@ -246,13 +265,10 @@ for (i in seq_len(nrow(pairs_2d_3d))) {
         + xlim(0, 1) + ylim(0, 1)
         + facet_wrap(~Metadata_patient, ncol = 4)
     )
-    ggsave(file.path(mAP_figures_dir, paste0(slug_3d, "_vs_", slug_2d, "_intra_mAP.png")),
-           plot = intra_plot, width = 12, height = 8, dpi = 600)
-    print(intra_plot)
 
-    inter_plot <- (
+    inter_plots[[length(inter_plots) + 1]] <- (
         ggplot(inter_merged, aes(x = mAP_2D, y = mAP_3D, color = Metadata_treatment, shape = Metadata_dose))
-        + geom_point(size = 4, alpha = 0.7)
+        + point_layer(size = 4, alpha = 0.7)
         + scale_color_manual(name = "Treatment", values = custom_treatment_palette,
                               guide = guide_legend(title.position = "top", title.hjust = 0.5, order = 1))
         + scale_shape_manual(name = "Dose", values = dose_shape_palette,
@@ -263,9 +279,6 @@ for (i in seq_len(nrow(pairs_2d_3d))) {
         + plot_theme
         + xlim(0, 1) + ylim(0, 1)
     )
-    ggsave(file.path(mAP_figures_dir, paste0(slug_3d, "_vs_", slug_2d, "_inter_mAP.png")),
-           plot = inter_plot, width = 10, height = 8, dpi = 600)
-    print(inter_plot)
 }
 
 # 2D vs 3D cosine distance scatter, one intra (faceted by patient) + one inter plot per pair
@@ -292,9 +305,9 @@ for (i in seq_len(nrow(pairs_2d_3d))) {
     intra_merged <- split_treatment_dose(intra_merged)
     inter_merged <- split_treatment_dose(inter_merged)
 
-    intra_plot <- (
+    intra_plots[[length(intra_plots) + 1]] <- (
         ggplot(intra_merged, aes(x = cosine_2D, y = cosine_3D, color = Metadata_treatment, shape = Metadata_dose))
-        + geom_point(size = 3, alpha = 0.7)
+        + point_layer(size = 3, alpha = 0.7)
         + scale_color_manual(name = "Treatment", values = custom_treatment_palette,
                               guide = guide_legend(title.position = "top", title.hjust = 0.5, order = 1))
         + scale_shape_manual(name = "Dose", values = dose_shape_palette,
@@ -306,13 +319,10 @@ for (i in seq_len(nrow(pairs_2d_3d))) {
         + plot_theme
         + facet_wrap(~Metadata_patient, ncol = 4)
     )
-    ggsave(file.path(dist_figures_dir, paste0(slug_3d, "_vs_", slug_2d, "_intra_cosine_distance.png")),
-           plot = intra_plot, width = 12, height = 8, dpi = 600)
-    print(intra_plot)
 
-    inter_plot <- (
+    inter_plots[[length(inter_plots) + 1]] <- (
         ggplot(inter_merged, aes(x = cosine_2D, y = cosine_3D, color = Metadata_treatment, shape = Metadata_dose))
-        + geom_point(size = 4, alpha = 0.7)
+        + point_layer(size = 4, alpha = 0.7)
         + scale_color_manual(name = "Treatment", values = custom_treatment_palette,
                               guide = guide_legend(title.position = "top", title.hjust = 0.5, order = 1))
         + scale_shape_manual(name = "Dose", values = dose_shape_palette,
@@ -323,7 +333,9 @@ for (i in seq_len(nrow(pairs_2d_3d))) {
         + theme_bw()
         + plot_theme
     )
-    ggsave(file.path(dist_figures_dir, paste0(slug_3d, "_vs_", slug_2d, "_inter_cosine_distance.png")),
-           plot = inter_plot, width = 10, height = 8, dpi = 600)
-    print(inter_plot)
 }
+
+# One multi-page, rasterized-point PDF per category, instead of a PNG per plot
+save_plots_pdf(intra_plots, file.path(figures_dir, "intra_patient_metrics.pdf"), width = 12, height = 8)
+save_plots_pdf(inter_plots, file.path(figures_dir, "inter_patient_metrics.pdf"), width = 10, height = 6)
+save_plots_pdf(cross_plots, file.path(figures_dir, "intra_vs_inter_metrics.pdf"), width = 9, height = 6)
