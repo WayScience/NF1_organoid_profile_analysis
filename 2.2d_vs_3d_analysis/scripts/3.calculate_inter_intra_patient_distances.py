@@ -37,54 +37,119 @@ if root_dir is None:
 
 # ## Load Data / Set Paths
 
-# In[2]:
+# In[ ]:
 
 
-# Define input paths
 path_2d_organoid = pathlib.Path(
-    f"{root_dir}/data/2D_profiles/all_patient_profiles/max_projection/organoid_agg_profiles.parquet"
+    f"{root_dir}/data/profiles_2D/all_patients/max_projection/organoid_agg_profiles.parquet"
 ).resolve(strict=True)
 path_2d_sc = pathlib.Path(
-    f"{root_dir}/data/2D_profiles/all_patient_profiles/max_projection/sc_agg_profiles.parquet"
+    f"{root_dir}/data/profiles_2D/all_patients/max_projection/sc_agg_profiles.parquet"
 ).resolve(strict=True)
-path_3d_organoid = pathlib.Path(
-    f"{root_dir}/data/3D_profiles/all_patient_profiles/organoid_agg_profiles.parquet"
-).resolve(strict=True)
-path_3d_sc = pathlib.Path(
-    f"{root_dir}/data/3D_profiles/all_patient_profiles/sc_agg_profiles.parquet"
+dir_3d_agg = pathlib.Path(
+    f"{root_dir}/data/profiles_3D/all_patients/2.aggregated_profiles"
 ).resolve(strict=True)
 
-# Define output paths
-results_dir = pathlib.Path(f"{root_dir}/2.2d_vs_3d_analysis/results/mAP").resolve()
-results_dir.mkdir(parents=True, exist_ok=True)
+# (label, slug, path) for every profile type in the 2D + 3D combinatorics
+profile_types = [
+    ("2D Organoid", "2D_organoid", path_2d_organoid),
+    ("2D Single-cell", "2D_sc", path_2d_sc),
+    (
+        "3D Organoid - Handcrafted",
+        "3D_organoid_handcrafted",
+        dir_3d_agg / "organoid_norm_sc_agg_profiles.parquet",
+    ),
+    (
+        "3D Organoid - DL (SAM-Med3D)",
+        "3D_organoid_sammed",
+        dir_3d_agg / "sammed_organoid_norm_sc_agg_profiles.parquet",
+    ),
+    (
+        "3D Single-cell - Handcrafted",
+        "3D_sc_handcrafted",
+        dir_3d_agg / "sc_norm_sc_agg_profiles.parquet",
+    ),
+    (
+        "3D Single-cell - DL (SAM-Med3D)",
+        "3D_sc_sammed",
+        dir_3d_agg / "sammed_sc_norm_sc_agg_profiles.parquet",
+    ),
+    (
+        "3D Single-cell - Nucleocentric DL (SAM-Med3D)",
+        "3D_sc_sammed_nucleocentric",
+        dir_3d_agg / "sammed_nucleocentric_norm_sc_agg_profiles.parquet",
+    ),
+    (
+        "3D Single-cell - Nucleocentric DL (MorphEM)",
+        "3D_sc_nucleocentric_morphem",
+        dir_3d_agg / "nucleocentric_morphem_norm_sc_agg_profiles.parquet",
+    ),
+]
+
 dist_results_dir = pathlib.Path(
     f"{root_dir}/2.2d_vs_3d_analysis/results/distance_metrics"
 ).resolve()
 dist_results_dir.mkdir(parents=True, exist_ok=True)
 
-# Load data
-df_2d_organoid = pd.read_parquet(path_2d_organoid)
-df_2d_sc = pd.read_parquet(path_2d_sc)
-df_3d_organoid = pd.read_parquet(path_3d_organoid)
-df_3d_sc = pd.read_parquet(path_3d_sc)
 
-# Create treatment_dose column (combines treatment name and dose for dose-specific analysis)
-for df in [df_2d_organoid, df_3d_organoid, df_2d_sc, df_3d_sc]:
+def load_profile(path: pathlib.Path) -> pd.DataFrame:
+    """Load a profile parquet."""
+    return pd.read_parquet(path)
+
+
+def harmonize_metadata(df: pd.DataFrame) -> pd.DataFrame:
+    """Harmonize 2D/3D metadata column names and derive analysis columns.
+
+    The 3D pipeline's naming convention (Metadata_Biology_PatientTumor,
+    Metadata_Experiment_{Well,Treatment,Dose}) is the canonical one; 2D data
+    is renamed up to match it here rather than the other way around.
+    """
+    if "Metadata_patient_tumor" in df.columns:
+        df = df.rename(
+            columns={
+                "Metadata_patient_tumor": "Metadata_Biology_PatientTumor",
+                "Metadata_Well": "Metadata_Experiment_Well",
+                "Metadata_treatment": "Metadata_Experiment_Treatment",
+                "Metadata_dose": "Metadata_Experiment_Dose",
+            }
+        )
+    # Keep the full patient_tumor value: some patients (e.g. NF0014) have multiple
+    # tumor samples, so stripping to bare patient would merge distinct tumors together.
+    df["Metadata_patient"] = df["Metadata_Biology_PatientTumor"]
     df["Metadata_treatment_dose"] = (
-        df["Metadata_treatment"]
+        df["Metadata_Experiment_Treatment"]
         + "_"
-        + df["Metadata_dose"].fillna(0).astype(float).astype(int).astype(str)
+        + df["Metadata_Experiment_Dose"].fillna(0).astype(float).astype(int).astype(str)
     )
+    # Some upstream Texture features contain corrupted inf values; treat like NaN
+    # so the existing NaN-handling in the distance functions covers them too.
+    feature_cols = [c for c in df.columns if not c.startswith("Metadata_")]
+    df[feature_cols] = df[feature_cols].replace([np.inf, -np.inf], np.nan)
+    return df
 
-# Define metadata columns
-metadata_cols_2d_organoid = [
-    col for col in df_2d_organoid.columns if col.startswith("Metadata_")
-]
-metadata_cols_3d_organoid = [
-    col for col in df_3d_organoid.columns if col.startswith("Metadata_")
-]
-metadata_cols_2d_sc = [col for col in df_2d_sc.columns if col.startswith("Metadata_")]
-metadata_cols_3d_sc = [col for col in df_3d_sc.columns if col.startswith("Metadata_")]
+
+def load_and_harmonize(path: pathlib.Path) -> pd.DataFrame:
+    """Load a profile parquet and harmonize its metadata columns."""
+    return harmonize_metadata(load_profile(path))
+
+
+# TEMPORARY - remove once ZedProfiler's Texture-feature computation is fixed
+# upstream. Aggregation is already fixed (all types are 1 row/well now), but
+# ZedProfiler (organoid_handcrafted, sc_handcrafted) still has astronomically
+# large corrupted values in a subset of Texture features. This masks those as
+# NaN so the existing NaN-handling in the distance functions covers them too;
+# for every other profile type this is a no-op.
+def temporary_clean_and_aggregate(df: pd.DataFrame) -> pd.DataFrame:
+    feature_cols = [c for c in df.columns if not c.startswith("Metadata_")]
+    meta_cols = [c for c in df.columns if c.startswith("Metadata_")]
+
+    df[feature_cols] = df[feature_cols].mask(df[feature_cols].abs() > 1e10)
+
+    # No-op if already 1 row per well; kept as a safety net.
+    group_keys = ["Metadata_Biology_PatientTumor", "Metadata_Experiment_Well"]
+    agg_dict = {c: "first" for c in meta_cols if c not in group_keys}
+    agg_dict.update({c: "mean" for c in feature_cols})
+    return df.groupby(group_keys, as_index=False).agg(agg_dict)
 
 
 # ## Define the functions
@@ -95,7 +160,7 @@ metadata_cols_3d_sc = [col for col in df_3d_sc.columns if col.startswith("Metada
 def calculate_intra_patient_distance_metrics(
     df: pd.DataFrame,
     metadata_columns: list,
-    col_for_reference: str = "Metadata_treatment",
+    col_for_reference: str = "Metadata_Experiment_Treatment",
     reference_group: str = "DMSO",
     output_path: pathlib.Path = None,
 ) -> Union[None, pd.DataFrame]:
@@ -168,7 +233,7 @@ def calculate_intra_patient_distance_metrics(
 def calculate_inter_patient_distance_metrics(
     df: pd.DataFrame,
     metadata_columns: list,
-    col_for_reference: str = "Metadata_treatment",
+    col_for_reference: str = "Metadata_Experiment_Treatment",
     reference_group: str = "DMSO",
     output_path: pathlib.Path = None,
 ) -> Union[None, pd.DataFrame]:
@@ -235,77 +300,29 @@ def calculate_inter_patient_distance_metrics(
 
 # ## Run the functions
 
-# In[4]:
+# In[ ]:
 
 
-# Distance metrics output directory
-dist_results_dir = pathlib.Path(
-    f"{root_dir}/2.2d_vs_3d_analysis/results/distance_metrics"
-).resolve()
-dist_results_dir.mkdir(parents=True, exist_ok=True)
+# Inter and intra patient distances for every profile type, saved with a slug prefix
+for label, slug, path in profile_types:
+    print("===", label, "===")
+    df = load_and_harmonize(path)
+    df = temporary_clean_and_aggregate(
+        df
+    )  # TEMPORARY - remove once upstream data is fixed
+    metadata_cols = [c for c in df.columns if c.startswith("Metadata_")]
 
-# Intra-patient distance metrics
-dist_2d_organoid_intra = calculate_intra_patient_distance_metrics(
-    df_2d_organoid,
-    metadata_columns=metadata_cols_2d_organoid,
-    col_for_reference="Metadata_treatment_dose",
-    reference_group="DMSO_1",
-    output_path=dist_results_dir / "2d_organoid_intra_patient_cosine_distance.parquet",
-)
-
-dist_3d_organoid_intra = calculate_intra_patient_distance_metrics(
-    df_3d_organoid,
-    metadata_columns=metadata_cols_3d_organoid,
-    col_for_reference="Metadata_treatment_dose",
-    reference_group="DMSO_1",
-    output_path=dist_results_dir / "3d_organoid_intra_patient_cosine_distance.parquet",
-)
-
-dist_2d_sc_intra = calculate_intra_patient_distance_metrics(
-    df_2d_sc,
-    metadata_columns=metadata_cols_2d_sc,
-    col_for_reference="Metadata_treatment_dose",
-    reference_group="DMSO_1",
-    output_path=dist_results_dir / "2d_sc_intra_patient_cosine_distance.parquet",
-)
-
-dist_3d_sc_intra = calculate_intra_patient_distance_metrics(
-    df_3d_sc,
-    metadata_columns=metadata_cols_3d_sc,
-    col_for_reference="Metadata_treatment_dose",
-    reference_group="DMSO_1",
-    output_path=dist_results_dir / "3d_sc_intra_patient_cosine_distance.parquet",
-)
-
-# Inter-patient distance metrics
-dist_2d_organoid_inter = calculate_inter_patient_distance_metrics(
-    df_2d_organoid,
-    metadata_columns=metadata_cols_2d_organoid,
-    col_for_reference="Metadata_treatment_dose",
-    reference_group="DMSO_1",
-    output_path=dist_results_dir / "2d_organoid_inter_patient_cosine_distance.parquet",
-)
-
-dist_3d_organoid_inter = calculate_inter_patient_distance_metrics(
-    df_3d_organoid,
-    metadata_columns=metadata_cols_3d_organoid,
-    col_for_reference="Metadata_treatment_dose",
-    reference_group="DMSO_1",
-    output_path=dist_results_dir / "3d_organoid_inter_patient_cosine_distance.parquet",
-)
-
-dist_2d_sc_inter = calculate_inter_patient_distance_metrics(
-    df_2d_sc,
-    metadata_columns=metadata_cols_2d_sc,
-    col_for_reference="Metadata_treatment_dose",
-    reference_group="DMSO_1",
-    output_path=dist_results_dir / "2d_sc_inter_patient_cosine_distance.parquet",
-)
-
-dist_3d_sc_inter = calculate_inter_patient_distance_metrics(
-    df_3d_sc,
-    metadata_columns=metadata_cols_3d_sc,
-    col_for_reference="Metadata_treatment_dose",
-    reference_group="DMSO_1",
-    output_path=dist_results_dir / "3d_sc_inter_patient_cosine_distance.parquet",
-)
+    calculate_intra_patient_distance_metrics(
+        df,
+        metadata_columns=metadata_cols,
+        col_for_reference="Metadata_treatment_dose",
+        reference_group="DMSO_1",
+        output_path=dist_results_dir / f"{slug}_intra_patient_cosine_distance.parquet",
+    )
+    calculate_inter_patient_distance_metrics(
+        df,
+        metadata_columns=metadata_cols,
+        col_for_reference="Metadata_treatment_dose",
+        reference_group="DMSO_1",
+        output_path=dist_results_dir / f"{slug}_inter_patient_cosine_distance.parquet",
+    )

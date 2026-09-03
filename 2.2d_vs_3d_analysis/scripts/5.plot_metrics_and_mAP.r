@@ -1,4 +1,4 @@
-list_of_packages <- c("ggplot2", "dplyr", "tidyr", "circlize","arrow", "ggrepel")
+list_of_packages <- c("ggplot2", "dplyr", "tidyr", "arrow", "RColorBrewer")
 for (package in list_of_packages) {
     suppressPackageStartupMessages(
         suppressWarnings(
@@ -12,452 +12,69 @@ for (package in list_of_packages) {
     )
 }
 
-# Get the current working directory and find Git root
 find_git_root <- function() {
-    # Get current working directory
     cwd <- getwd()
-
-    # Check if current directory has .git
     if (dir.exists(file.path(cwd, ".git"))) {
         return(cwd)
     }
-
-    # If not, search parent directories
     current_path <- cwd
-    while (dirname(current_path) != current_path) {  # While not at root
+    while (dirname(current_path) != current_path) {
         parent_path <- dirname(current_path)
         if (dir.exists(file.path(parent_path, ".git"))) {
             return(parent_path)
         }
         current_path <- parent_path
     }
-
-    # If no Git root found, stop with error
     stop("No Git root directory found.")
 }
 
-# Find the Git root directory
 root_dir <- find_git_root()
 cat("Git root directory:", root_dir, "\n")
 
+# custom_treatment_palette lives in utils/r_plot_themes.r so it isn't
+# redefined (and potentially drift out of sync) in every plotting script.
+source(file.path(root_dir, "utils/r_plot_themes.r"))
 
+mAP_results_dir <- file.path(root_dir, "2.2d_vs_3d_analysis", "results", "mAP")
+dist_results_dir <- file.path(root_dir, "2.2d_vs_3d_analysis", "results", "distance_metrics")
+figures_dir <- file.path(root_dir, "2.2d_vs_3d_analysis", "figures", "mAP_and_distance_metrics")
+dir.create(figures_dir, recursive = TRUE, showWarnings = FALSE)
 
-# Figure path
-figures_path <- file.path("../figures/mAP")
-if (!dir.exists(figures_path)) {
-  dir.create(figures_path, recursive = TRUE)
+# Every profile type from notebooks 3/4, and the 2D-vs-3D pairs for cross-modality plots
+profile_types <- tibble::tribble(
+    ~label, ~slug,
+    "2D Organoid", "2D_organoid",
+    "2D Single-cell", "2D_sc",
+    "3D Organoid - Handcrafted", "3D_organoid_handcrafted",
+    "3D Organoid - DL (SAM-Med3D)", "3D_organoid_sammed",
+    "3D Single-cell - Handcrafted", "3D_sc_handcrafted",
+    "3D Single-cell - DL (SAM-Med3D)", "3D_sc_sammed",
+    "3D Single-cell - Nucleocentric DL (SAM-Med3D)", "3D_sc_sammed_nucleocentric",
+    "3D Single-cell - Nucleocentric DL (MorphEM)", "3D_sc_nucleocentric_morphem"
+)
+
+pairs_2d_3d <- tibble::tribble(
+    ~label, ~slug_2d, ~slug_3d,
+    "Organoid - Handcrafted", "2D_organoid", "3D_organoid_handcrafted",
+    "Organoid - DL (SAM-Med3D)", "2D_organoid", "3D_organoid_sammed",
+    "Single-cell - Handcrafted", "2D_sc", "3D_sc_handcrafted",
+    "Single-cell - DL (SAM-Med3D)", "2D_sc", "3D_sc_sammed",
+    "Single-cell - Nucleocentric DL (SAM-Med3D)", "2D_sc", "3D_sc_sammed_nucleocentric",
+    "Single-cell - Nucleocentric DL (MorphEM)", "2D_sc", "3D_sc_nucleocentric_morphem"
+)
+
+# Dose is encoded as point shape (1 = circle, 10 = triangle); drug colors
+# come from custom_treatment_palette in utils/r_plot_themes.r (sourced above).
+dose_shape_palette <- c("1" = 16, "10" = 17)  # 16 = circle, 17 = triangle
+
+# Results only carry the combined "Drug_Dose" string; split it into bare drug
+# (for color) and bare dose (for shape) before plotting.
+split_treatment_dose <- function(df) {
+    df$Metadata_treatment <- sub("_[0-9]+$", "", df$Metadata_treatment_dose)
+    df$Metadata_dose <- sub(".*_([0-9]+)$", "\\1", df$Metadata_treatment_dose)
+    df
 }
 
-#Load Data
-mAP_2d_organoid_intra <- arrow::read_parquet(file.path(
-    root_dir, "2.2d_vs_3d_analysis/results/mAP/2d_organoid_intra_patient_mAP_by_dose.parquet"
-))
-mAP_3d_organoid_intra <- arrow::read_parquet(file.path(
-    root_dir, "2.2d_vs_3d_analysis/results/mAP/3d_organoid_intra_patient_mAP_by_dose.parquet"
-))
-mAP_2d_sc_intra <- arrow::read_parquet(file.path(
-    root_dir, "2.2d_vs_3d_analysis/results/mAP/2d_sc_intra_patient_mAP_by_dose.parquet"
-))
-mAP_3d_sc_intra <- arrow::read_parquet(file.path(
-    root_dir, "2.2d_vs_3d_analysis/results/mAP/3d_sc_intra_patient_mAP_by_dose.parquet"
-))
-mAP_2d_organoid_inter <- arrow::read_parquet(file.path(
-    root_dir, "2.2d_vs_3d_analysis/results/mAP/2d_organoid_inter_patient_mAP_by_dose.parquet"
-))
-mAP_3d_organoid_inter <- arrow::read_parquet(file.path(
-    root_dir, "2.2d_vs_3d_analysis/results/mAP/3d_organoid_inter_patient_mAP_by_dose.parquet"
-))
-mAP_2d_sc_inter <- arrow::read_parquet(file.path(
-    root_dir, "2.2d_vs_3d_analysis/results/mAP/2d_sc_inter_patient_mAP_by_dose.parquet"
-))
-mAP_3d_sc_inter <- arrow::read_parquet(file.path(
-    root_dir, "2.2d_vs_3d_analysis/results/mAP/3d_sc_inter_patient_mAP_by_dose.parquet"
-))
-
-width <- 12
-height <- 6
-options(repr.plot.width = width, repr.plot.height = height)
-organoid_intra_plot <- (
-    ggplot(data = organoid_fs_intra_patient_mAP_df,
-    aes(
-        x = mean_average_precision,
-        y = `-log10(p-value)`,
-        color = treatment
-    ))
-    + geom_point(size = 2, alpha = 0.7)
-    + labs(
-        x = "Mean Average Precision",
-        y = "-log10(p-value)",
-        title = "Intra-patient mAP for Organoid FS"
-    )
-    + geom_hline(yintercept = 1.3, linetype = "dashed", color = "red")  # Adjust threshold as needed
-    + theme_bw()
-    + theme(
-        plot.title = element_text(hjust = 0.5, size = 14),
-        axis.title.x = element_text(size = 16),
-        axis.title.y = element_text(size = 16),
-        axis.text.x = element_text(size = 14),
-        axis.text.y = element_text(size = 14),
-        legend.position = "bottom",
-        legend.title = element_blank(),
-        legend.text = element_text(size = 16)
-    )
-    + xlim(0, 1)
-    + facet_wrap(~patient, ncol = 4,
-    # scales = "free"
-    )
-        + geom_text_repel(
-        aes(
-            label = treatment
-        ),
-        size = 4,
-        nudge_y = 0.1,
-        show.legend = FALSE,
-        segment.color = "grey50",
-        segment.size = 0.2,
-        box.padding = 0.5,
-        point.padding = 0.5,
-        max.overlaps = 10
-    )
-)
-ggsave(
-    filename = organoid_fs_intra_patient_mAP_plot_path,
-    plot = organoid_intra_plot,
-    width = width,
-    height = height,
-    dpi = 600
-)
-organoid_intra_plot
-
-width <- 8
-height <- 6
-options(repr.plot.width = width, repr.plot.height = height)
-organoid_inter_plot <- (
-    ggplot(data = organoid_fs_inter_patient_mAP_df,
-    aes(
-        x = mean_average_precision,
-        y = `-log10(p-value)`,
-        color = treatment
-    ))
-    + geom_point(size = 4, alpha = 0.7)
-    + labs(
-        x = "Mean Average Precision",
-        y = "-log10(p-value)",
-        title = "Inter-patient mAP for Organoid FS"
-    )
-    + geom_hline(yintercept = 1.3, linetype = "dashed", color = "red")  # Adjust threshold as needed
-    + theme_bw()
-    + theme(
-        plot.title = element_text(hjust = 0.5, size = 14),
-        axis.title.x = element_text(size = 16),
-        axis.title.y = element_text(size = 16),
-        axis.text.x = element_text(size = 14),
-        axis.text.y = element_text(size = 14),
-        legend.position = "bottom",
-        legend.title = element_blank(),
-        legend.text = element_text(size = 16)
-    )
-        + geom_text_repel(
-        aes(
-            label = treatment
-        ),
-        size = 4,
-        nudge_y = 0.1,
-        show.legend = FALSE,
-        segment.color = "grey50",
-        segment.size = 0.2,
-        box.padding = 0.5,
-        point.padding = 0.5,
-        max.overlaps = 10
-    )
-    + xlim(0, 1)
-)
-ggsave(
-    filename = organoid_fs_inter_patient_mAP_plot_path,
-    plot = organoid_inter_plot,
-    width = width,
-    height = height,
-    dpi = 600
-)
-organoid_inter_plot
-
-width <- 10
-height <- 6
-options(repr.plot.width = width, repr.plot.height = height)
-sc_intra_plot <- (
-    ggplot(data = sc_fs_intra_patient_mAP_df,
-    aes(
-        x = mean_average_precision,
-        y = `-log10(p-value)`,
-        color = treatment
-    ))
-    + geom_point(size = 2, alpha = 0.7)
-    + labs(
-        x = "Mean Average Precision",
-        y = "-log10(p-value)",
-        title = "Intra-patient mAP for single cell FS"
-    )
-    + geom_hline(yintercept = 1.3, linetype = "dashed", color = "red")  # Adjust threshold as needed
-    + theme_bw()
-    + theme(
-        plot.title = element_text(hjust = 0.5, size = 14),
-        axis.title.x = element_text(size = 16),
-        axis.title.y = element_text(size = 16),
-        axis.text.x = element_text(size = 14),
-        axis.text.y = element_text(size = 14),
-        legend.position = "bottom",
-        legend.title = element_blank(),
-        legend.text = element_text(size = 16)
-    )
-    + xlim(0, 1)
-    + facet_wrap(~patient, ncol = 4,
-    # scales = "free"
-    )
-        + geom_text_repel(
-        aes(
-            label = treatment
-        ),
-        size = 4,
-        nudge_y = 0.1,
-        show.legend = FALSE,
-        segment.color = "grey50",
-        segment.size = 0.2,
-        box.padding = 0.5,
-        point.padding = 0.5,
-        max.overlaps = 8
-    )
-)
-ggsave(
-    filename = sc_fs_intra_patient_mAP_plot_path,
-    plot = sc_intra_plot,
-    width = width,
-    height = height,
-    dpi = 600
-)
-sc_intra_plot
-
-width <- 12
-height <- 8
-options(repr.plot.width = width, repr.plot.height = height)
-sc_inter_plot <- (
-    ggplot(data = sc_fs_inter_patient_mAP_df,
-    aes(
-        x = mean_average_precision,
-        y = `-log10(p-value)`,
-        color = treatment
-    ))
-    + geom_point(size = 4, alpha = 0.7)
-    + labs(
-        x = "Mean Average Precision",
-        y = "-log10(p-value)",
-        title = "Inter-patient mAP for single cell FS"
-    )
-    + geom_hline(yintercept = 1.3, linetype = "dashed", color = "red")  # Adjust threshold as needed
-    + theme_bw()
-    + theme(
-        plot.title = element_text(hjust = 0.5, size = 14),
-        axis.title.x = element_text(size = 16),
-        axis.title.y = element_text(size = 16),
-        axis.text.x = element_text(size = 14),
-        axis.text.y = element_text(size = 14),
-        legend.position = "bottom",
-        legend.title = element_blank(),
-        legend.text = element_text(size = 16)
-    )
-    + xlim(0, 1)
-    + geom_text_repel(
-        aes(
-            label = treatment
-        ),
-        size = 4,
-        nudge_y = 0.1,
-        show.legend = FALSE,
-        segment.color = "grey50",
-        segment.size = 0.2,
-        box.padding = 0.5,
-        point.padding = 0.5,
-        max.overlaps = 10
-    )
-
-)
-ggsave(
-    filename = sc_fs_inter_patient_mAP_plot_path,
-    plot = sc_inter_plot,
-    width = width,
-    height = height,
-    dpi = 600
-)
-sc_inter_plot
-
-organoid_fs_intra_patient_mAP_df <- select(organoid_fs_intra_patient_mAP_df,
-    c(
-        treatment,mean_average_precision, patient
-    )
-)
-colnames(organoid_fs_intra_patient_mAP_df)[2] <- "intra_patient_mAP"
-
-
-organoid_fs_inter_patient_mAP_df <- select(organoid_fs_inter_patient_mAP_df,
-    c(
-        treatment, mean_average_precision
-    )
-)
-# rename mean_average_precision to inter_patient_mAP
-colnames(organoid_fs_inter_patient_mAP_df)[2] <- "inter_patient_mAP"
-# rename mean_average_precision to intra_patient_mAP
-# combine intra and inter patient mAP for organoid
-# merge the two dataframes on treatment and shuffle
-organoid_sc_fs_mAP_df <- merge(
-    organoid_fs_intra_patient_mAP_df,
-    organoid_fs_inter_patient_mAP_df,
-    by = c("treatment"),
-    all = TRUE
-)
-
-organoid_sc_fs_mAP_df$intra_to_inter_ratio <- (
-    organoid_sc_fs_mAP_df$intra_patient_mAP /
-    organoid_sc_fs_mAP_df$inter_patient_mAP
-)
-head(organoid_sc_fs_mAP_df)
-
-width <- 8
-height <- 6
-options(repr.plot.width = width, repr.plot.height = height)
-ratio_plot <- (
-    ggplot(
-        data = organoid_sc_fs_mAP_df,
-        aes(
-            x = treatment,
-            y = intra_to_inter_ratio,
-            fill = treatment
-        )
-    )
-    + geom_bar(stat = "identity", position = "dodge")
-    + labs(
-        x = "Treatment",
-        y = "Intra to Inter Patient mAP Ratio",
-        title = "Intra to Inter Patient mAP Ratio for Organoid and Single Cell FS"
-    )
-    + theme_bw()
-    + theme(
-        plot.title = element_text(hjust = 0.5, size = 14),
-        axis.text.x = element_text(angle = 90, hjust = 1, size = 14),
-        axis.text.y = element_text(size = 14),
-        axis.title.x = element_text(size = 16),
-        axis.title.y = element_text(size = 16),
-        legend.position = "none",
-        legend.title = element_blank(),
-        legend.text = element_text(size = 16),
-    )
-    + geom_hline(
-        yintercept = 1,
-        linetype = "dashed",
-        color = "red"
-    )  # Adjust threshold as needed
-
-)
-ggsave(
-    filename = file.path(figures_path, "intra_to_inter_patient_mAP_ratio_bar.png"),
-    plot = ratio_plot,
-    width = width,
-    height = height,
-    dpi = 600
-)
-ratio_plot
-
-width <- 10
-height <- 10
-options(repr.plot.width = width, repr.plot.height = height)
-plot <- (
-    ggplot(
-        data = organoid_sc_fs_mAP_df,
-        aes(
-            x = inter_patient_mAP,
-            y = intra_patient_mAP,
-            color = treatment,
-            label = treatment
-                    )
-    )
-    + geom_point(size = 2, alpha = 0.7)
-    # + geom_boxplot(
-    #     aes(fill = treatment),
-    #     alpha = 0.4,
-    #     size = 5,
-    #     outlier.shape = NA,
-    #     jitter = TRUE,
-    #     position = position_dodge(width = 0.75)
-    # )
-    + labs(
-        x = "Inter-patient mAP",
-        y = "Intra-patient mAP",
-        title = "Inter vs Intra Patient mAP for Organoid FS"
-    )
-    # + ylim(0, 1)
-    # + xlim(0, 1)
-    + geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red")  # Diagonal line
-    + theme_bw()
-    + theme(
-        plot.title = element_text(hjust = 0.5, size = 14),
-        axis.text.x = element_text(size = 16),
-        axis.text.y = element_text(size = 16),
-        axis.title.x = element_text(size = 16),
-        axis.title.y = element_text(size = 16),
-        legend.position = "bottom",
-        legend.title = element_blank(),
-        legend.text = element_text(size = 16)
-    )
-        + geom_text_repel(
-        aes(
-            label = treatment
-        ),
-        size = 4,
-        nudge_y = 0.1,
-        show.legend = FALSE,
-        segment.color = "grey50",
-        segment.size = 0.2,
-        box.padding = 0.5,
-        point.padding = 0.5,
-        max.overlaps = 10
-    )
-    + xlim(0, 1)
-)
-ggsave(
-    filename = file.path(figures_path, "organoid_fs_mAP_inter_vs_intra.png"),
-    plot = plot,
-    width = 10,
-    height = 6,
-    dpi = 600
-)
-plot
-
-# Merge 2D and 3D for plotting
-# Intra-patient
-mAP_organoid_intra_merged <- inner_join(
-    mAP_2d_organoid_intra %>% select(Metadata_treatment, Metadata_patient, mean_average_precision) %>% rename(mAP_2D = mean_average_precision),
-    mAP_3d_organoid_intra %>% select(Metadata_treatment, Metadata_patient, mean_average_precision) %>% rename(mAP_3D = mean_average_precision),
-    by = c("Metadata_treatment", "Metadata_patient")
-)
-
-mAP_sc_intra_merged <- inner_join(
-    mAP_2d_sc_intra %>% select(Metadata_treatment, Metadata_patient, mean_average_precision) %>% rename(mAP_2D = mean_average_precision),
-    mAP_3d_sc_intra %>% select(Metadata_treatment, Metadata_patient, mean_average_precision) %>% rename(mAP_3D = mean_average_precision),
-    by = c("Metadata_treatment", "Metadata_patient")
-)
-
-# Inter-patient
-mAP_organoid_inter_merged <- inner_join(
-    mAP_2d_organoid_inter %>% select(Metadata_treatment_dose, mean_average_precision) %>% rename(mAP_2D = mean_average_precision),
-    mAP_3d_organoid_inter %>% select(Metadata_treatment_dose, mean_average_precision) %>% rename(mAP_3D = mean_average_precision),
-    by = "Metadata_treatment_dose"
-)
-
-mAP_sc_inter_merged <- inner_join(
-    mAP_2d_sc_inter %>% select(Metadata_treatment_dose, mean_average_precision) %>% rename(mAP_2D = mean_average_precision),
-    mAP_3d_sc_inter %>% select(Metadata_treatment_dose, mean_average_precision) %>% rename(mAP_3D = mean_average_precision),
-    by = "Metadata_treatment_dose"
-)
-
-# Shared plot theme — defined once so all plots are consistent
 plot_theme <- theme(
     plot.title   = element_text(hjust = 0.5, size = 14),
     axis.title.x = element_text(size = 16),
@@ -465,317 +82,260 @@ plot_theme <- theme(
     axis.text.x  = element_text(size = 14),
     axis.text.y  = element_text(size = 14),
     legend.position = "bottom",
-    legend.title = element_blank(),
-    legend.text  = element_text(size = 12)
+    legend.title = element_text(size = 12, face = "bold", hjust = 0.5),
+    legend.text  = element_text(size = 10)
 )
 
-# Organoid: 2D vs 3D Intra-patient mAP scatter plot faceted by patient
-width <- 12
-height <- 8
-options(repr.plot.width = width, repr.plot.height = height)
-
-organoid_2d_vs_3d_plot <- (
-    ggplot(
-        data = mAP_organoid_intra_merged,
-        aes(
-            x = mAP_2D,
-            y = mAP_3D,
-            color = Metadata_treatment
-        )
-    )
-    + geom_point(size = 3, alpha = 0.7)
-    + geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red")
-    + labs(
-        x = "2D mAP Score",
-        y = "3D mAP Score",
-        title = "2D vs 3D Intra-patient mAP — Organoid FS"
-    )
-    + theme_bw()
-    + plot_theme
-    + xlim(0, 1)
-    + ylim(0, 1)
-    + facet_wrap(~Metadata_patient, ncol = 4)
-    + geom_text_repel(
-        aes(label = Metadata_treatment),
-        size = 3,
-        show.legend = FALSE,
-        segment.color = "grey50",
-        segment.size = 0.2,
-        box.padding = 0.5,
-        point.padding = 0.5,
-        max.overlaps = 10
-    )
-)
-ggsave(filename = file.path(figures_path, "2d_vs_3d_organoid_intra_mAP.png"),
-       plot = organoid_2d_vs_3d_plot, width = width, height = height, dpi = 600)
-organoid_2d_vs_3d_plot
-
-# Single cell: 2D vs 3D Intra-patient mAP scatter plot faceted by patient
-width <- 12
-height <- 8
-options(repr.plot.width = width, repr.plot.height = height)
-
-sc_2d_vs_3d_plot <- (
-    ggplot(
-        data = mAP_sc_intra_merged,
-        aes(
-            x = mAP_2D,
-            y = mAP_3D,
-            color = Metadata_treatment
-        )
-    )
-    + geom_point(size = 3, alpha = 0.7)
-    + geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red")
-    + labs(
-        x = "2D mAP Score",
-        y = "3D mAP Score",
-        title = "2D vs 3D Intra-patient mAP — Single Cell FS"
-    )
-    + theme_bw()
-    + plot_theme
-    + xlim(0, 1)
-    + ylim(0, 1)
-    + facet_wrap(~Metadata_patient, ncol = 4)
-    + geom_text_repel(
-        aes(label = Metadata_treatment),
-        size = 3,
-        show.legend = FALSE,
-        segment.color = "grey50",
-        segment.size = 0.2,
-        box.padding = 0.5,
-        point.padding = 0.5,
-        max.overlaps = 10
-    )
-)
-ggsave(filename = file.path(figures_path, "2d_vs_3d_sc_intra_mAP.png"),
-       plot = sc_2d_vs_3d_plot, width = width, height = height, dpi = 600)
-sc_2d_vs_3d_plot
-
-# Organoid: 2D vs 3D Inter-patient mAP scatter plot
-width <- 10
-height <- 8
-options(repr.plot.width = width, repr.plot.height = height)
-
-plot_org_inter_mAP <- (
-    ggplot(
-        data = mAP_organoid_inter_merged,
-        aes(x = mAP_2D, y = mAP_3D, color = Metadata_treatment_dose)
-    )
-    + geom_point(size = 4, alpha = 0.7)
-    + geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red")
-    + labs(
-        x = "2D mAP Score",
-        y = "3D mAP Score",
-        title = "2D vs 3D Inter-patient mAP — Organoid Agg"
-    )
-    + theme_bw()
-    + plot_theme
-    + xlim(0, 1)
-    + ylim(0, 1)
-    + geom_text_repel(
-        aes(label = Metadata_treatment_dose),
-        size = 4, show.legend = FALSE,
-        segment.color = "grey50", segment.size = 0.2,
-        box.padding = 0.5, point.padding = 0.5, max.overlaps = 10
-    )
-)
-ggsave(filename = file.path(figures_path, "2d_vs_3d_organoid_inter_mAP.png"),
-       plot = plot_org_inter_mAP, width = width, height = height, dpi = 600)
-plot_org_inter_mAP
-
-# Single cell: 2D vs 3D Inter-patient mAP scatter plot
-width <- 10
-height <- 8
-options(repr.plot.width = width, repr.plot.height = height)
-
-plot_sc_inter_mAP <- (
-    ggplot(
-        data = mAP_sc_inter_merged,
-        aes(x = mAP_2D, y = mAP_3D, color = Metadata_treatment_dose)
-    )
-    + geom_point(size = 4, alpha = 0.7)
-    + geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red")
-    + labs(
-        x = "2D mAP Score",
-        y = "3D mAP Score",
-        title = "2D vs 3D Inter-patient mAP — Single Cell Agg"
-    )
-    + theme_bw()
-    + plot_theme
-    + xlim(0, 1)
-    + ylim(0, 1)
-    + geom_text_repel(
-        aes(label = Metadata_treatment_dose),
-        size = 4, show.legend = FALSE,
-        segment.color = "grey50", segment.size = 0.2,
-        box.padding = 0.5, point.padding = 0.5, max.overlaps = 10
-    )
-)
-ggsave(filename = file.path(figures_path, "2d_vs_3d_sc_inter_mAP.png"),
-       plot = plot_sc_inter_mAP, width = width, height = height, dpi = 600)
-plot_sc_inter_mAP
-
-#Load Data
-dist_2d_organoid_intra <- arrow::read_parquet(file.path(root_dir, "2.2d_vs_3d_analysis/results/distance_metrics/2d_organoid_intra_patient_cosine_distance.parquet"))
-dist_3d_organoid_intra <- arrow::read_parquet(file.path(root_dir, "2.2d_vs_3d_analysis/results/distance_metrics/3d_organoid_intra_patient_cosine_distance.parquet"))
-dist_2d_organoid_inter <- arrow::read_parquet(file.path(root_dir, "2.2d_vs_3d_analysis/results/distance_metrics/2d_organoid_inter_patient_cosine_distance.parquet"))
-dist_3d_organoid_inter <- arrow::read_parquet(file.path(root_dir, "2.2d_vs_3d_analysis/results/distance_metrics/3d_organoid_inter_patient_cosine_distance.parquet"))
-dist_2d_sc_intra <- arrow::read_parquet(file.path(root_dir, "2.2d_vs_3d_analysis/results/distance_metrics/2d_sc_intra_patient_cosine_distance.parquet"))
-dist_3d_sc_intra <- arrow::read_parquet(file.path(root_dir, "2.2d_vs_3d_analysis/results/distance_metrics/3d_sc_intra_patient_cosine_distance.parquet"))
-dist_2d_sc_inter <- arrow::read_parquet(file.path(root_dir, "2.2d_vs_3d_analysis/results/distance_metrics/2d_sc_inter_patient_cosine_distance.parquet"))
-dist_3d_sc_inter <- arrow::read_parquet(file.path(root_dir, "2.2d_vs_3d_analysis/results/distance_metrics/3d_sc_inter_patient_cosine_distance.parquet"))
-
-# Distance Metrics output path
-dist_figures_path <- file.path(root_dir, "2.2d_vs_3d_analysis/figures/distance_metrics")
-if (!dir.exists(dist_figures_path)) {
-    dir.create(dist_figures_path, recursive = TRUE)
+# Rasterizes the point layer (via ggrastr) while everything else in the plot
+# (axes, text, legend) stays vector, so combined multi-page PDFs with many
+# points per page don't balloon in file size.
+point_layer <- function(..., rasterize_dpi = 300) {
+    layer <- geom_point(...)
+    ggrastr::rasterise(layer, dpi = rasterize_dpi)
 }
 
-# Distance Metrics: Merge 2D and 3D for plotting
-# Intra-patient
-dist_organoid_intra_merged <- inner_join(
-    dist_2d_organoid_intra %>% select(Metadata_treatment_dose, Metadata_patient, cosine_distance_mean) %>% rename(cosine_2D = cosine_distance_mean),
-    dist_3d_organoid_intra %>% select(Metadata_treatment_dose, Metadata_patient, cosine_distance_mean) %>% rename(cosine_3D = cosine_distance_mean),
-    by = c("Metadata_treatment_dose", "Metadata_patient")
-)
+# Saves a list of ggplot objects as a single multi-page PDF, one page per plot.
+save_plots_pdf <- function(plots, output_path, width = 10, height = 6) {
+    pdf(output_path, width = width, height = height)
+    on.exit(dev.off(), add = TRUE)
+    for (p in plots) {
+        print(p)
+    }
+}
 
-dist_sc_intra_merged <- inner_join(
-    dist_2d_sc_intra %>% select(Metadata_treatment_dose, Metadata_patient, cosine_distance_mean) %>% rename(cosine_2D = cosine_distance_mean),
-    dist_3d_sc_intra %>% select(Metadata_treatment_dose, Metadata_patient, cosine_distance_mean) %>% rename(cosine_3D = cosine_distance_mean),
-    by = c("Metadata_treatment_dose", "Metadata_patient")
-)
+# mAP volcano-style scatter (mAP vs -log10(p))
+make_mAP_plot <- function(df, title, faceted) {
+    p <- (
+        ggplot(df, aes(x = mean_average_precision, y = `-log10(p-value)`, color = Metadata_treatment, shape = Metadata_dose))
+        + point_layer(size = 3, alpha = 0.7)
+        + scale_color_manual(name = "Treatment", values = custom_treatment_palette,
+                              guide = guide_legend(title.position = "top", title.hjust = 0.5, order = 1))
+        + scale_shape_manual(name = "Dose", values = dose_shape_palette,
+                              guide = guide_legend(title.position = "top", title.hjust = 0.5, order = 2))
+        + geom_hline(yintercept = 1.3, linetype = "dashed", color = "red")
+        + labs(x = "Mean Average Precision", y = "-log10(p-value)", title = title)
+        + theme_bw()
+        + plot_theme
+        + xlim(0, 1)
+    )
+    if (faceted) {
+        p <- p + facet_wrap(~Metadata_patient, ncol = 4)
+    }
+    p
+}
 
-# Inter-patient
-dist_organoid_inter_merged <- inner_join(
-    dist_2d_organoid_inter %>% select(Metadata_treatment_dose, cosine_distance_mean) %>% rename(cosine_2D = cosine_distance_mean),
-    dist_3d_organoid_inter %>% select(Metadata_treatment_dose, cosine_distance_mean) %>% rename(cosine_3D = cosine_distance_mean),
-    by = "Metadata_treatment_dose"
-)
+# mAP vs cosine distance scatter
+make_mAP_vs_distance_plot <- function(df, title, faceted) {
+    p <- (
+        ggplot(df, aes(x = cosine_distance_mean, y = mean_average_precision, color = Metadata_treatment, shape = Metadata_dose))
+        + point_layer(size = 3, alpha = 0.7)
+        + scale_color_manual(name = "Treatment", values = custom_treatment_palette,
+                              guide = guide_legend(title.position = "top", title.hjust = 0.5, order = 1))
+        + scale_shape_manual(name = "Dose", values = dose_shape_palette,
+                              guide = guide_legend(title.position = "top", title.hjust = 0.5, order = 2))
+        + labs(x = "Cosine Distance", y = "Mean Average Precision", title = title)
+        + theme_bw()
+        + plot_theme
+        + ylim(0, 1)
+    )
+    if (faceted) {
+        p <- p + facet_wrap(~Metadata_patient, ncol = 4)
+    }
+    p
+}
 
-dist_sc_inter_merged <- inner_join(
-    dist_2d_sc_inter %>% select(Metadata_treatment_dose, cosine_distance_mean) %>% rename(cosine_2D = cosine_distance_mean),
-    dist_3d_sc_inter %>% select(Metadata_treatment_dose, cosine_distance_mean) %>% rename(cosine_3D = cosine_distance_mean),
-    by = "Metadata_treatment_dose"
-)
+intra_plots <- list()
+inter_plots <- list()
+cross_plots <- list()
 
-# Distance Metrics: 2D vs 3D Intra-patient — Organoid (faceted by patient)
-width <- 12
-height <- 8
-options(repr.plot.width = width, repr.plot.height = height)
+# mAP-vs-p and mAP-vs-distance, one intra + one inter pair of plots per profile type
+for (i in seq_len(nrow(profile_types))) {
+    label <- profile_types$label[i]
+    slug  <- profile_types$slug[i]
 
-plot_org_intra <- (
-    ggplot(
-        data = dist_organoid_intra_merged,
-        aes(x = cosine_2D, y = cosine_3D, color = Metadata_treatment_dose)
-    )
-    + geom_point(size = 3, alpha = 0.7)
-    + geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red")
-    + labs(
-        x = "2D Cosine Distance",
-        y = "3D Cosine Distance",
-        title = "2D vs 3D Intra-patient Cosine Distance — Organoid Agg"
-    )
-    + theme_bw()
-    + plot_theme
-    + facet_wrap(~Metadata_patient, ncol = 4)
-    + geom_text_repel(
-        aes(label = Metadata_treatment_dose),
-        size = 3, show.legend = FALSE,
-        segment.color = "grey50", segment.size = 0.2,
-        box.padding = 0.5, point.padding = 0.5, max.overlaps = 10
-    )
-)
-ggsave(filename = file.path(dist_figures_path, "2d_vs_3d_organoid_intra_cosine_distance.png"),
-       plot = plot_org_intra, width = width, height = height, dpi = 600)
-plot_org_intra
+    intra_mAP <- split_treatment_dose(arrow::read_parquet(file.path(mAP_results_dir, paste0(slug, "_intra_patient_mAP_by_dose.parquet"))))
+    inter_mAP <- split_treatment_dose(arrow::read_parquet(file.path(mAP_results_dir, paste0(slug, "_inter_patient_mAP_by_dose.parquet"))))
+    intra_dist <- split_treatment_dose(arrow::read_parquet(file.path(dist_results_dir, paste0(slug, "_intra_patient_cosine_distance.parquet"))))
+    inter_dist <- split_treatment_dose(arrow::read_parquet(file.path(dist_results_dir, paste0(slug, "_inter_patient_cosine_distance.parquet"))))
 
-# Distance Metrics: 2D vs 3D Intra-patient — Single Cell (faceted by patient)
-width <- 12
-height <- 8
-options(repr.plot.width = width, repr.plot.height = height)
+    intra_plots[[length(intra_plots) + 1]] <- make_mAP_plot(intra_mAP, paste0("Intra-patient mAP - ", label), faceted = TRUE)
+    inter_plots[[length(inter_plots) + 1]] <- make_mAP_plot(inter_mAP, paste0("Inter-patient mAP - ", label), faceted = FALSE)
 
-plot_sc_intra <- (
-    ggplot(
-        data = dist_sc_intra_merged,
-        aes(x = cosine_2D, y = cosine_3D, color = Metadata_treatment_dose)
+    intra_mAP_dist <- inner_join(
+        intra_mAP,
+        intra_dist %>% select(Metadata_treatment_dose, Metadata_patient, cosine_distance_mean),
+        by = c("Metadata_treatment_dose", "Metadata_patient")
     )
-    + geom_point(size = 3, alpha = 0.7)
-    + geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red")
-    + labs(
-        x = "2D Cosine Distance",
-        y = "3D Cosine Distance",
-        title = "2D vs 3D Intra-patient Cosine Distance — Single Cell Agg"
+    inter_mAP_dist <- inner_join(
+        inter_mAP,
+        inter_dist %>% select(Metadata_treatment_dose, cosine_distance_mean),
+        by = "Metadata_treatment_dose"
     )
-    + theme_bw()
-    + plot_theme
-    + facet_wrap(~Metadata_patient, ncol = 4)
-    + geom_text_repel(
-        aes(label = Metadata_treatment_dose),
-        size = 3, show.legend = FALSE,
-        segment.color = "grey50", segment.size = 0.2,
-        box.padding = 0.5, point.padding = 0.5, max.overlaps = 10
-    )
-)
-ggsave(filename = file.path(dist_figures_path, "2d_vs_3d_sc_intra_cosine_distance.png"),
-       plot = plot_sc_intra, width = width, height = height, dpi = 600)
-plot_sc_intra
 
-# Distance Metrics: 2D vs 3D Inter-patient — Organoid
-width <- 10
-height <- 8
-options(repr.plot.width = width, repr.plot.height = height)
+    intra_plots[[length(intra_plots) + 1]] <- make_mAP_vs_distance_plot(intra_mAP_dist, paste0("Intra-patient mAP vs Distance - ", label), faceted = TRUE)
+    inter_plots[[length(inter_plots) + 1]] <- make_mAP_vs_distance_plot(inter_mAP_dist, paste0("Inter-patient mAP vs Distance - ", label), faceted = FALSE)
+}
 
-plot_org_inter <- (
-    ggplot(
-        data = dist_organoid_inter_merged,
-        aes(x = cosine_2D, y = cosine_3D, color = Metadata_treatment_dose)
-    )
-    + geom_point(size = 4, alpha = 0.7)
-    + geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red")
-    + labs(
-        x = "2D Cosine Distance",
-        y = "3D Cosine Distance",
-        title = "2D vs 3D Inter-patient Cosine Distance — Organoid Agg"
-    )
-    + theme_bw()
-    + plot_theme
-    + geom_text_repel(
-        aes(label = Metadata_treatment_dose),
-        size = 4, show.legend = FALSE,
-        segment.color = "grey50", segment.size = 0.2,
-        box.padding = 0.5, point.padding = 0.5, max.overlaps = 10
-    )
-)
-ggsave(filename = file.path(dist_figures_path, "2d_vs_3d_organoid_inter_cosine_distance.png"),
-       plot = plot_org_inter, width = width, height = height, dpi = 600)
-plot_org_inter
+# Ratio bar chart + inter-vs-intra mAP scatter, one pair of plots per profile type
+for (i in seq_len(nrow(profile_types))) {
+    label <- profile_types$label[i]
+    slug  <- profile_types$slug[i]
 
-# Distance Metrics: 2D vs 3D Inter-patient — Single Cell
-width <- 10
-height <- 8
-options(repr.plot.width = width, repr.plot.height = height)
+    intra_df <- arrow::read_parquet(file.path(mAP_results_dir, paste0(slug, "_intra_patient_mAP_by_dose.parquet"))) %>%
+        select(Metadata_treatment_dose, Metadata_patient, intra_patient_mAP = mean_average_precision)
+    inter_df <- arrow::read_parquet(file.path(mAP_results_dir, paste0(slug, "_inter_patient_mAP_by_dose.parquet"))) %>%
+        select(Metadata_treatment_dose, inter_patient_mAP = mean_average_precision)
 
-plot_sc_inter <- (
-    ggplot(
-        data = dist_sc_inter_merged,
-        aes(x = cosine_2D, y = cosine_3D, color = Metadata_treatment_dose)
+    merged_df <- merge(intra_df, inter_df, by = "Metadata_treatment_dose", all = TRUE)
+    merged_df$intra_to_inter_ratio <- merged_df$intra_patient_mAP / merged_df$inter_patient_mAP
+    merged_df <- split_treatment_dose(merged_df)
+
+    # merged_df has one row per (patient, treatment) since intra is per-patient and inter
+    # isn't; summarize to one ratio per treatment (median across patients) before plotting
+    # a bar, otherwise geom_bar sums the per-patient duplicates into an inflated bar height.
+    ratio_by_treatment <- merged_df %>%
+        group_by(Metadata_treatment_dose, Metadata_treatment, Metadata_dose) %>%
+        summarize(median_ratio = median(intra_to_inter_ratio, na.rm = TRUE), .groups = "drop")
+
+    ratio_plot <- (
+        ggplot(ratio_by_treatment, aes(x = Metadata_treatment_dose, y = median_ratio, fill = Metadata_treatment))
+        + geom_bar(stat = "identity", position = "dodge")
+        + scale_fill_manual(name = "Treatment", values = custom_treatment_palette,
+                             guide = guide_legend(title.position = "top", title.hjust = 0.5))
+        + labs(x = "Treatment (dose)", y = "Median Intra:Inter Patient mAP Ratio",
+               title = paste0("Intra:Inter mAP Ratio - ", label))
+        + theme_bw()
+        + plot_theme
+        + theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 10), legend.position = "none")
+        + geom_hline(yintercept = 1, linetype = "dashed", color = "red")
     )
-    + geom_point(size = 4, alpha = 0.7)
-    + geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red")
-    + labs(
-        x = "2D Cosine Distance",
-        y = "3D Cosine Distance",
-        title = "2D vs 3D Inter-patient Cosine Distance — Single Cell Agg"
+    cross_plots[[length(cross_plots) + 1]] <- ratio_plot
+
+    scatter_plot <- (
+        ggplot(merged_df, aes(x = inter_patient_mAP, y = intra_patient_mAP, color = Metadata_treatment, shape = Metadata_dose))
+        + point_layer(size = 2, alpha = 0.7)
+        + scale_color_manual(name = "Treatment", values = custom_treatment_palette,
+                              guide = guide_legend(title.position = "top", title.hjust = 0.5, order = 1))
+        + scale_shape_manual(name = "Dose", values = dose_shape_palette,
+                              guide = guide_legend(title.position = "top", title.hjust = 0.5, order = 2))
+        + geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red")
+        + labs(x = "Inter-patient mAP", y = "Intra-patient mAP", title = paste0("Inter vs Intra Patient mAP - ", label))
+        + theme_bw()
+        + plot_theme
+        + xlim(0, 1)
     )
-    + theme_bw()
-    + plot_theme
-    + geom_text_repel(
-        aes(label = Metadata_treatment_dose),
-        size = 4, show.legend = FALSE,
-        segment.color = "grey50", segment.size = 0.2,
-        box.padding = 0.5, point.padding = 0.5, max.overlaps = 10
+    cross_plots[[length(cross_plots) + 1]] <- scatter_plot
+}
+
+# 2D vs 3D mAP scatter, one intra (faceted by patient) + one inter plot per pair
+for (i in seq_len(nrow(pairs_2d_3d))) {
+    label   <- pairs_2d_3d$label[i]
+    slug_2d <- pairs_2d_3d$slug_2d[i]
+    slug_3d <- pairs_2d_3d$slug_3d[i]
+
+    intra_2d <- arrow::read_parquet(file.path(mAP_results_dir, paste0(slug_2d, "_intra_patient_mAP_by_dose.parquet")))
+    intra_3d <- arrow::read_parquet(file.path(mAP_results_dir, paste0(slug_3d, "_intra_patient_mAP_by_dose.parquet")))
+    intra_merged <- inner_join(
+        intra_2d %>% select(Metadata_treatment_dose, Metadata_patient, mAP_2D = mean_average_precision),
+        intra_3d %>% select(Metadata_treatment_dose, Metadata_patient, mAP_3D = mean_average_precision),
+        by = c("Metadata_treatment_dose", "Metadata_patient")
     )
-)
-ggsave(filename = file.path(dist_figures_path, "2d_vs_3d_sc_inter_cosine_distance.png"),
-       plot = plot_sc_inter, width = width, height = height, dpi = 600)
-plot_sc_inter
+
+    inter_2d <- arrow::read_parquet(file.path(mAP_results_dir, paste0(slug_2d, "_inter_patient_mAP_by_dose.parquet")))
+    inter_3d <- arrow::read_parquet(file.path(mAP_results_dir, paste0(slug_3d, "_inter_patient_mAP_by_dose.parquet")))
+    inter_merged <- inner_join(
+        inter_2d %>% select(Metadata_treatment_dose, mAP_2D = mean_average_precision),
+        inter_3d %>% select(Metadata_treatment_dose, mAP_3D = mean_average_precision),
+        by = "Metadata_treatment_dose"
+    )
+    intra_merged <- split_treatment_dose(intra_merged)
+    inter_merged <- split_treatment_dose(inter_merged)
+
+    intra_plots[[length(intra_plots) + 1]] <- (
+        ggplot(intra_merged, aes(x = mAP_2D, y = mAP_3D, color = Metadata_treatment, shape = Metadata_dose))
+        + point_layer(size = 3, alpha = 0.7)
+        + scale_color_manual(name = "Treatment", values = custom_treatment_palette,
+                              guide = guide_legend(title.position = "top", title.hjust = 0.5, order = 1))
+        + scale_shape_manual(name = "Dose", values = dose_shape_palette,
+                              guide = guide_legend(title.position = "top", title.hjust = 0.5, order = 2))
+        + geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red")
+        + labs(x = "2D mAP Score", y = "3D mAP Score", title = paste0("2D vs 3D Intra-patient mAP - ", label))
+        + theme_bw()
+        + plot_theme
+        + xlim(0, 1) + ylim(0, 1)
+        + facet_wrap(~Metadata_patient, ncol = 4)
+    )
+
+    inter_plots[[length(inter_plots) + 1]] <- (
+        ggplot(inter_merged, aes(x = mAP_2D, y = mAP_3D, color = Metadata_treatment, shape = Metadata_dose))
+        + point_layer(size = 4, alpha = 0.7)
+        + scale_color_manual(name = "Treatment", values = custom_treatment_palette,
+                              guide = guide_legend(title.position = "top", title.hjust = 0.5, order = 1))
+        + scale_shape_manual(name = "Dose", values = dose_shape_palette,
+                              guide = guide_legend(title.position = "top", title.hjust = 0.5, order = 2))
+        + geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red")
+        + labs(x = "2D mAP Score", y = "3D mAP Score", title = paste0("2D vs 3D Inter-patient mAP - ", label))
+        + theme_bw()
+        + plot_theme
+        + xlim(0, 1) + ylim(0, 1)
+    )
+}
+
+# 2D vs 3D cosine distance scatter, one intra (faceted by patient) + one inter plot per pair
+for (i in seq_len(nrow(pairs_2d_3d))) {
+    label   <- pairs_2d_3d$label[i]
+    slug_2d <- pairs_2d_3d$slug_2d[i]
+    slug_3d <- pairs_2d_3d$slug_3d[i]
+
+    intra_2d <- arrow::read_parquet(file.path(dist_results_dir, paste0(slug_2d, "_intra_patient_cosine_distance.parquet")))
+    intra_3d <- arrow::read_parquet(file.path(dist_results_dir, paste0(slug_3d, "_intra_patient_cosine_distance.parquet")))
+    intra_merged <- inner_join(
+        intra_2d %>% select(Metadata_treatment_dose, Metadata_patient, cosine_2D = cosine_distance_mean),
+        intra_3d %>% select(Metadata_treatment_dose, Metadata_patient, cosine_3D = cosine_distance_mean),
+        by = c("Metadata_treatment_dose", "Metadata_patient")
+    )
+
+    inter_2d <- arrow::read_parquet(file.path(dist_results_dir, paste0(slug_2d, "_inter_patient_cosine_distance.parquet")))
+    inter_3d <- arrow::read_parquet(file.path(dist_results_dir, paste0(slug_3d, "_inter_patient_cosine_distance.parquet")))
+    inter_merged <- inner_join(
+        inter_2d %>% select(Metadata_treatment_dose, cosine_2D = cosine_distance_mean),
+        inter_3d %>% select(Metadata_treatment_dose, cosine_3D = cosine_distance_mean),
+        by = "Metadata_treatment_dose"
+    )
+    intra_merged <- split_treatment_dose(intra_merged)
+    inter_merged <- split_treatment_dose(inter_merged)
+
+    intra_plots[[length(intra_plots) + 1]] <- (
+        ggplot(intra_merged, aes(x = cosine_2D, y = cosine_3D, color = Metadata_treatment, shape = Metadata_dose))
+        + point_layer(size = 3, alpha = 0.7)
+        + scale_color_manual(name = "Treatment", values = custom_treatment_palette,
+                              guide = guide_legend(title.position = "top", title.hjust = 0.5, order = 1))
+        + scale_shape_manual(name = "Dose", values = dose_shape_palette,
+                              guide = guide_legend(title.position = "top", title.hjust = 0.5, order = 2))
+        + geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red")
+        + labs(x = "2D Cosine Distance", y = "3D Cosine Distance",
+               title = paste0("2D vs 3D Intra-patient Cosine Distance - ", label))
+        + theme_bw()
+        + plot_theme
+        + facet_wrap(~Metadata_patient, ncol = 4)
+    )
+
+    inter_plots[[length(inter_plots) + 1]] <- (
+        ggplot(inter_merged, aes(x = cosine_2D, y = cosine_3D, color = Metadata_treatment, shape = Metadata_dose))
+        + point_layer(size = 4, alpha = 0.7)
+        + scale_color_manual(name = "Treatment", values = custom_treatment_palette,
+                              guide = guide_legend(title.position = "top", title.hjust = 0.5, order = 1))
+        + scale_shape_manual(name = "Dose", values = dose_shape_palette,
+                              guide = guide_legend(title.position = "top", title.hjust = 0.5, order = 2))
+        + geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red")
+        + labs(x = "2D Cosine Distance", y = "3D Cosine Distance",
+               title = paste0("2D vs 3D Inter-patient Cosine Distance - ", label))
+        + theme_bw()
+        + plot_theme
+    )
+}
+
+# One multi-page, rasterized-point PDF per category, instead of a PNG per plot
+save_plots_pdf(intra_plots, file.path(figures_dir, "intra_patient_metrics.pdf"), width = 12, height = 8)
+save_plots_pdf(inter_plots, file.path(figures_dir, "inter_patient_metrics.pdf"), width = 10, height = 6)
+save_plots_pdf(cross_plots, file.path(figures_dir, "intra_vs_inter_metrics.pdf"), width = 9, height = 6)
