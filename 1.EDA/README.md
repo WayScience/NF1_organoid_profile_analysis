@@ -13,7 +13,7 @@ Notebooks are numbered in the order they should be run; `run_all_eda_local.sh` c
 | `1.plot_umap.ipynb` | Plots UMAPs for organoid and single-cell datasets across 2D (max projection, middle slice, middle-N slice) profiles, faceted/colored by patient and treatment. |
 | `2.generate_pca.ipynb` | Generates PCA embeddings and explained-variance tables for every profile type. |
 | `3.plot_pca.ipynb` | Plots PCA embeddings for every profile type in `results/pca`, for both 2D and 3D pipelines. |
-| `4.calculate_correlation_matrix.ipynb` | Computes correlation matrices across patients/treatments for each 2D and 3D profile type (aggregated and consensus). |
+| `4.calculate_correlation_matrix.ipynb` | Computes correlation matrices across patients/treatments for each 2D and 3D profile type (aggregated and consensus), plus per-patient single-cell correlation matrices for 3D feature-selected (sc_fs) profiles. |
 | `5.plot_correlation_heatmaps.ipynb` | Plots each correlation matrix as a heatmap, grouped into per-dimension PDFs. |
 | `7.generate_cell_counts.ipynb` | Computes cell counts per organoid and identifies single cells without a parent organoid. |
 | `8.plot_single_cell_counts.ipynb` | Plots cell count distributions (by patient, by treatment, and 2D vs. 3D comparisons). |
@@ -23,7 +23,7 @@ Notebooks are numbered in the order they should be run; `run_all_eda_local.sh` c
 - `results/pca/` — PCA embeddings and explained variance per profile type.
 - `results/correlation/` — Correlation matrices per profile type.
 - `results/cell_counts/` — Cell count and organoid count tables.
-- `figures/correlation_heatmaps/` — Correlation heatmaps, grouped into a 2D and a 3D PDF.
+- `figures/correlation_heatmaps/` — Correlation heatmaps: 4 combined PDFs (2D/3D × aggregated/consensus), plus 3 per-patient sc_fs PDFs (one per normalization variant), 7 total.
 - `figures/cell_counts/` — Cell/organoid count plots (bar, box, and density plots).
 
 ## Running
