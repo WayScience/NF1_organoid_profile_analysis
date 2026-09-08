@@ -192,9 +192,6 @@ tab20_palette_for_patients <- c(
 )
 
 # cNF = cutaneous/subcutaneous neurofibroma, pNF = plexiform neurofibroma,
-# MPNST = malignant peripheral nerve sheath tumor. NF0030_T1 (myopericytoma),
-# NF0040_T1 (schwannoma), and SARCO361_T1 (sarcoma) are not NF1 nerve-sheath
-# tumors and are grouped as "Other".
 # MPNST = malignant peripheral nerve sheath tumor. NF0030_T1 (myopericytoma)
 # and NF0040_T1 (schwannoma) are not NF1 nerve-sheath tumors and are grouped
 # as "Other".

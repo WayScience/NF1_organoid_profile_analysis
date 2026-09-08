@@ -329,8 +329,11 @@ cells_without_parent_organoid_by_treatment_patient_plot <- plot_boxplot_horizont
 ) + theme(legend.position = "bottom")
 
 # Proportion of cells with a parent organoid, by treatment. Axes swapped
-# (treatment on the vertical axis) and split by tumor type (dodged boxes
-# per treatment row) instead of a single pooled box.
+# (treatment on the vertical axis) and faceted by tumor type (rather than a
+# single dodged/pooled box) so which treatments elicit more "diffuse"
+# morphology (fewer/more parent organoids) is readable per tumor type,
+# free-scaled per panel since the sample sizes differ hugely across tumor
+# types (e.g. the single MPNST patient).
 cells_without_parent_organoid_by_treatment_proportion_plot <- plot_boxplot_horizontal(
     organoid_cell_counts,
     x_col = "Metadata_Experiment_Treatment",
@@ -340,8 +343,10 @@ cells_without_parent_organoid_by_treatment_proportion_plot <- plot_boxplot_horiz
     x_lab = "Treatment",
     y_lab = "Proportion of cells with parent organoid",
     fill_lab = "Tumor type",
+    facet_formula = as.formula("~ Metadata_Biology_TumorType"),
+    facet_scales = "free",
     base_size = 14
-)
+) + theme(legend.position = "bottom")
 
 organoid_qc_plots <- list(
     mean_cells_per_organoid_by_patient = mean_cells_per_organoid_by_patient_plot,
@@ -475,7 +480,12 @@ technical_plots <- lapply(scatter_specs, function(spec) {
         facet_ncol = 5,
         facet_col = if (spec$facet) "Metadata_Experiment_Treatment" else NULL,
         shape_lab = "Dose (uM)",
-        base_size = 14
+        # The three unfaceted overview scatters render at a small (6in
+        # wide) canvas -- base_size 14's x-axis title text was wide enough
+        # to get clipped at that width, so it uses a smaller base_size than
+        # the 22-panel faceted versions below, which have a much larger
+        # canvas.
+        base_size = if (spec$facet) 14 else 10
     )
 })
 

@@ -207,9 +207,13 @@ plot_boxplot_horizontal <- function(
     data, x_col, y_col, fill_col, fill_palette,
     x_lab, y_lab, fill_lab = "Dose",
     ylim_max = NULL, facet_formula = NULL, base_size = 18,
-    facet_nrow = NULL, facet_ncol = NULL
+    facet_nrow = NULL, facet_ncol = NULL, facet_scales = "free_y"
 ) {
-    #' Horizontal boxplot, fill-only (e.g. by dose), shared across treatment box plots.
+    #' Horizontal boxplot, fill-only (e.g. by dose), shared across treatment
+    #' box plots. facet_scales defaults to "free_y" (frees the count axis,
+    #' which coord_flip() renders horizontally, per facet panel) -- pass
+    #' "free" when a single outlier group (e.g. the lone MPNST patient)
+    #' would otherwise force a shared value-axis range onto every panel.
     p <- (
         ggplot(
             data,
@@ -227,7 +231,7 @@ plot_boxplot_horizontal <- function(
     )
 
     if (!is.null(ylim_max)) p <- p + coord_flip(ylim = c(0, ylim_max))
-    if (!is.null(facet_formula)) p <- p + facet_wrap(facet_formula, scales = "free_y", nrow = facet_nrow, ncol = facet_ncol)
+    if (!is.null(facet_formula)) p <- p + facet_wrap(facet_formula, scales = facet_scales, nrow = facet_nrow, ncol = facet_ncol)
     p
 }
 
@@ -348,7 +352,7 @@ build_tumor_type_count_plots <- function(
         fill_col = tumor_type_col, fill_palette = tumor_type_palette,
         x_lab = "Treatment", y_lab = y_lab, fill_lab = "Tumor type",
         facet_formula = as.formula(paste0("~ ", patient_col)), facet_ncol = facet_ncol_patient,
-        base_size = base_size_patient_facet
+        facet_scales = "free", base_size = base_size_patient_facet
     ) + theme(legend.position = "bottom")
 
     list(
