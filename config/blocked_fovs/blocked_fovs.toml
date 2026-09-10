@@ -1,0 +1,11 @@
+# blank images, corrupted raw files, missing z-slices that
+# cause errors in the segmentation pipeline, etc.
+[blocked_patient_well_fovs]
+NF0014_T1 = ["E10-1", "F11-3"]
+NF0016_T1 = ["D3-2", "G3-2", "C5-3", "D8-1"]
+NF0018_T6 = ["F4-2", "C8-2"]
+NF0021_T1 = ["E10-2", "C3-4"]
+NF0030_T1 = ["C6-4", "D4-7", "G2-1", "G2-2", "G2-3"]
+NF0035_T1 = ["C9-7", "E9-3"]
+NF0055_T1 = ["F3-2"]
+SARCO361_T1 = ["D2-3"]

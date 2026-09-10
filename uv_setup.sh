@@ -34,6 +34,7 @@ uv sync
 source .venv/bin/activate
 # Use RELATIVE path - simple and reliable
 uv pip install -e ./utils
+uv pip install 'autogluon.tabular[mitra]'
 
 echo "Virtual environment setup complete. To activate it, run:"
 echo "source $ENV_PATH/bin/activate"
