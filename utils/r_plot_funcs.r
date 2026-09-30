@@ -1,3 +1,174 @@
+plot_umap <- function(data, output_path = NULL, title,
+                       color_by = NULL, palette = NULL, legend_title = NULL,
+                       facet_by = NULL, facet_nrow = 2, facet_legend = FALSE,
+                       alpha = 0.5, point_size = 1, background_alpha = 0.15,
+                       width = 10, height = 5, dpi = 300,
+                       base_size = 8, fixed_coord = TRUE,
+                       extra_theme = NULL, rasterize_dpi = NULL) {
+  # Build, optionally save, and return a single UMAP scatterplot in a
+  # consistent style.
+  #
+  # Two color modes:
+  # - Unfaceted (facet_by is None): points colored by color_by using palette,
+  #   with a legend.
+  # - Faceted (facet_by is set): every panel shows the full point cloud dimmed
+  #   grey as context, plus that panel's own group highlighted using color_by
+  #   and palette. Usually color_by is the same variable as facet_by (matching
+  #   the corresponding non-faceted plot's colors), in which case the facet
+  #   strip label already identifies the group and no legend is shown. Set
+  #   facet_legend = TRUE when color_by differs from facet_by (e.g. faceting
+  #   by patient but coloring by tumor type) so the color mapping stays
+  #   decodable.
+  #
+  # Parameters
+  # ----------
+  # data : data.frame
+  #     Data frame containing UMAP1, UMAP2, and the columns referenced by
+  #     color_by and (optionally) facet_by.
+  # output_path : str or None, optional
+  #     File path the plot is saved to via ggsave(). If None, the plot is
+  #     built and returned but not saved (e.g. to collect pages for a
+  #     combined multi-page PDF built by the caller).
+  # title : str
+  #     Plot title.
+  # color_by : str
+  #     Column name in `data` used to color points. In faceted mode this is
+  #     normally the same column as facet_by.
+  # palette : named vector
+  #     Colors keyed by the values of `color_by`, passed to scale_color_manual().
+  # legend_title : str or None, optional
+  #     Legend title for the color scale (unfaceted mode, or faceted mode
+  #     with facet_legend = TRUE). If None, no title override is applied.
+  # facet_by : str or None, optional
+  #     Column name in `data` to facet by. If None, the plot is not faceted.
+  # facet_nrow : int, optional
+  #     Number of rows to use when faceting (ignored if facet_by is None).
+  # facet_legend : bool, optional
+  #     If True, shows a color legend in faceted mode. Ignored (no legend)
+  #     unless facet_by is set. Use this when color_by differs from
+  #     facet_by; leave False when they match, since the facet strip label
+  #     already identifies the group.
+  # alpha : float, optional
+  #     Point transparency, in [0, 1]. In faceted mode, this applies to the
+  #     highlighted points only.
+  # point_size : float, optional
+  #     Point size.
+  # background_alpha : float, optional
+  #     Transparency of the grey context points in faceted mode (ignored if
+  #     facet_by is None).
+  # width, height : float, optional
+  #     Plot dimensions in inches, used both for the inline render size and
+  #     the saved file.
+  # dpi : int, optional
+  #     Resolution (dots per inch) for the saved file (ignored if
+  #     output_path is None).
+  # base_size : int, optional
+  #     Base font size passed to theme_manuscript().
+  # fixed_coord : bool, optional
+  #     If True, applies coord_fixed() so UMAP1/UMAP2 share a 1:1 scale. If a
+  #     particular plot looks wrong with this on, set it False and adjust
+  #     width/height instead.
+  # extra_theme : ggplot2 theme or None, optional
+  #     Theme object added on top of theme_manuscript(), or None to skip.
+  # rasterize_dpi : int or None, optional
+  #     If set, point layers are rasterized (via ggrastr) at this resolution
+  #     instead of staying vector, while axes/text/labels stay vector. Keeps
+  #     file size down for plots with many points, e.g. combined PDFs.
+  #
+  # Returns
+  # -------
+  # ggplot
+  #     The plot object, returned visibly. Auto-prints when called at the
+  #     top level of a cell; wrap in print() when called inside a loop,
+  #     since R does not auto-print loop-body expressions.
+  options(repr.plot.width = width, repr.plot.height = height)
+
+  point_layer <- function(...) {
+    layer <- geom_point(...)
+    if (!is.null(rasterize_dpi)) {
+      layer <- ggrastr::rasterise(layer, dpi = rasterize_dpi)
+    }
+    layer
+  }
+
+  # Compact legend styling: smaller key swatches and tighter spacing so
+  # many-row legends (e.g. 12 patients, 22 treatments) fit within the plot
+  # instead of getting cut off, especially in the combined PDFs.
+  compact_legend_theme <- theme(
+    legend.key.size = unit(0.3, "cm"),
+    legend.spacing.y = unit(0.05, "cm"),
+    legend.text = element_text(size = base_size * 0.8),
+    legend.title = element_text(size = base_size * 0.9)
+  )
+
+  guide_args <- list(override.aes = list(alpha = 1, size = 2), ncol = 1)
+  if (!is.null(legend_title)) {
+    guide_args$title <- legend_title
+  }
+
+  if (!is.null(facet_by)) {
+    # Full point cloud, minus the facet column, so this layer repeats
+    # unchanged in every panel instead of being split by facet.
+    background_data <- data
+    background_data[[facet_by]] <- NULL
+
+    p <- ggplot(data, aes(x = UMAP1, y = UMAP2, color = .data[[color_by]])) +
+      point_layer(data = background_data, color = "grey80", alpha = background_alpha, size = point_size) +
+      point_layer(alpha = alpha, size = point_size) +
+      scale_color_manual(values = palette) +
+      labs(title = title, x = "UMAP 1", y = "UMAP 2") +
+      theme_manuscript(base_size = base_size) +
+      facet_wrap(as.formula(paste0("~", facet_by)), nrow = facet_nrow)
+
+    if (facet_legend) {
+      p <- p + compact_legend_theme + guides(color = do.call(guide_legend, guide_args))
+    } else {
+      p <- p + guides(color = "none")
+    }
+  } else {
+    p <- ggplot(data, aes(x = UMAP1, y = UMAP2, color = .data[[color_by]])) +
+      point_layer(alpha = alpha, size = point_size) +
+      scale_color_manual(values = palette) +
+      labs(title = title, x = "UMAP 1", y = "UMAP 2") +
+      theme_manuscript(base_size = base_size) +
+      compact_legend_theme +
+      guides(color = do.call(guide_legend, guide_args))
+  }
+
+  if (fixed_coord) {
+    p <- p + coord_fixed()
+  }
+
+  if (!is.null(extra_theme)) {
+    p <- p + extra_theme
+  }
+
+  if (!is.null(output_path)) {
+    ggsave(p, file = output_path, width = width, height = height, dpi = dpi)
+  }
+  p
+}
+save_umap_pca_plots_pdf <- function(plots, output_path, width = 10, height = 5) {
+  # Save a list of ggplot objects as a single multi-page PDF, one page per
+  # plot, all pages sharing the same size.
+  #
+  # Parameters
+  # ----------
+  # plots : list of ggplot
+  #     Plots to save, one per page.
+  # output_path : str
+  #     File path for the combined PDF.
+  # width, height : float, optional
+  #     Page dimensions in inches.
+  pdf(output_path, width = width, height = height)
+  # Guarantees the device closes even if print(p) errors partway through,
+  # so a failure stays local to this PDF instead of leaving the device open
+  # for whatever gets plotted next.
+  on.exit(dev.off(), add = TRUE)
+  for (p in plots) {
+    print(p)
+  }
+}
 # Shared plot builders so common chart shapes (density, boxplot, patterned
 # bar/box, scatter comparison) aren't reimplemented per-notebook.
 # All of them apply theme_manuscript() so styling stays consistent.
@@ -65,6 +236,126 @@ save_plots_pdf <- function(plots, output_path, width, height) {
     }
     status <- system2("pdfunite", c(page_paths, output_path))
     if (status != 0) stop("pdfunite failed with status ", status)
+}
+plot_pca <- function(data, explained_variance_df, title,
+                      color_by, palette, legend_title = NULL,
+                      facet_by = NULL, facet_nrow = 3,
+                      alpha = 0.3, point_size = 0.5, background_alpha = 0.15,
+                      width = 8, height = 8,
+                      base_size = 8, rasterize_dpi = NULL) {
+  # Build a single PC0 vs PC1 scatterplot in a consistent style.
+  #
+  # Faceting is a plain small-multiples split: facet_by only controls which
+  # panel a point falls into, while color_by is independent and keeps its
+  # own legend in every panel (unlike plot_umap()'s faceted mode, where
+  # facet_by and color_by are the same variable and the legend is dropped).
+  # Faceted panels additionally show the full point cloud dimmed grey as
+  # context, matching plot_umap()'s background layer -- background_data has
+  # the facet column removed so it repeats unchanged in every panel.
+  #
+  # Parameters
+  # ----------
+  # data : data.frame
+  #     Data frame containing PC0, PC1, and the columns referenced by
+  #     color_by and (optionally) facet_by.
+  # explained_variance_df : data.frame
+  #     Single-row data frame with PC0_explained_variance and
+  #     PC1_explained_variance columns, used to label the axes.
+  # title : str
+  #     Plot title.
+  # color_by : str
+  #     Column name in `data` used to color points.
+  # palette : named vector
+  #     Colors keyed by the values of `color_by`, passed to scale_color_manual().
+  # legend_title : str or None, optional
+  #     Legend title for the color scale. If None, no title override is applied.
+  # facet_by : str or None, optional
+  #     Column name in `data` to facet by. If None, the plot is not faceted.
+  # facet_nrow : int, optional
+  #     Number of rows to use when faceting (ignored if facet_by is None).
+  # alpha : float, optional
+  #     Point transparency, in [0, 1]. In faceted mode, this applies to the
+  #     highlighted (foreground) points only.
+  # point_size : float, optional
+  #     Point size.
+  # background_alpha : float, optional
+  #     Transparency of the grey context points in faceted mode (ignored if
+  #     facet_by is None).
+  # width, height : float, optional
+  #     Plot dimensions in inches, used for the inline render size.
+  # base_size : int, optional
+  #     Base font size passed to theme_manuscript().
+  # rasterize_dpi : int or None, optional
+  #     If set, the point layer is rasterized (via ggrastr) at this
+  #     resolution instead of staying vector. Keeps file size down for
+  #     plots with many points, e.g. combined PDFs.
+  #
+  # Returns
+  # -------
+  # ggplot
+  #     The plot object, returned visibly.
+  options(repr.plot.width = width, repr.plot.height = height)
+
+  var_pc0 <- explained_variance_df$PC0_explained_variance
+  var_pc1 <- explained_variance_df$PC1_explained_variance
+  x_label <- sprintf("PCA 1 (var explained %.0f%%)", var_pc0 * 100)
+  y_label <- sprintf("PCA 2 (var explained %.0f%%)", var_pc1 * 100)
+
+  point_layer <- function(...) {
+    layer <- geom_point(...)
+    if (!is.null(rasterize_dpi)) {
+      layer <- ggrastr::rasterise(layer, dpi = rasterize_dpi)
+    }
+    layer
+  }
+
+  # Compact legend styling: smaller key swatches and tighter spacing so
+  # many-row legends (e.g. 22 treatments) fit within the plot instead of
+  # getting cut off, especially in the combined PDFs.
+  compact_legend_theme <- theme(
+    legend.key.size = unit(0.3, "cm"),
+    legend.spacing.y = unit(0.05, "cm"),
+    legend.text = element_text(size = base_size * 0.8),
+    legend.title = element_text(size = base_size * 0.9)
+  )
+
+  guide_args <- list(override.aes = list(alpha = 1, size = 2), ncol = 1)
+  if (!is.null(legend_title)) {
+    guide_args$title <- legend_title
+  }
+
+  if (!is.null(facet_by)) {
+    # Full point cloud, minus the facet column, so this layer repeats
+    # unchanged in every panel instead of being split by facet.
+    background_data <- data
+    background_data[[facet_by]] <- NULL
+
+    p <- ggplot(data, aes(x = PC0, y = PC1, color = .data[[color_by]])) +
+      point_layer(data = background_data, color = "grey80", alpha = background_alpha, size = point_size) +
+      point_layer(alpha = alpha, size = point_size) +
+      scale_color_manual(values = palette) +
+      labs(title = title, x = x_label, y = y_label) +
+      theme_manuscript(base_size = base_size) +
+      # PC0/PC1 carry different explained-variance scales, so coord_fixed()
+      # (equal data-unit scaling) would often look badly non-square. Forcing
+      # the panel aspect ratio to 1 instead keeps the rendered plot close to
+      # square without distorting either axis's data range.
+      theme(aspect.ratio = 1) +
+      compact_legend_theme +
+      guides(color = do.call(guide_legend, guide_args)) +
+      facet_wrap(as.formula(paste0("~", facet_by)), nrow = facet_nrow)
+  } else {
+    p <- ggplot(data, aes(x = PC0, y = PC1, color = .data[[color_by]])) +
+      point_layer(alpha = alpha, size = point_size) +
+      scale_color_manual(values = palette) +
+      labs(title = title, x = x_label, y = y_label) +
+      theme_manuscript(base_size = base_size) +
+      theme(aspect.ratio = 1) +
+      compact_legend_theme +
+      guides(color = do.call(guide_legend, guide_args))
+  }
+
+  p
 }
 
 plot_density_by_facet <- function(
