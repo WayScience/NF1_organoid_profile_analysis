@@ -81,17 +81,6 @@ pdf(file.path(figures_dir, "3D_intensity_MEK_vs_DMSO.pdf"), width = 16, height =
 for (s in unique(intensity_3d$stat)) {
     for (cmp in unique(intensity_3d$compartment)) {
         d <- intensity_3d %>% filter(stat == s, compartment == cmp)
-        # A small fraction of rows (~0.1% overall, but concentrated as high
-        # as 34% within some single patient x channel groups, e.g. NF0055's
-        # ER MedianIntensity) carry corrupted z-scores in the 1e15-1e21
-        # range -- near-zero within-patient variance blowing up the z-score
-        # for the rare non-zero raw value. Genuine z-scores across the
-        # whole dataset stay under ~500, so this is a distinct corrupted
-        # population, not real tail data -- a percentile-based clip breaks
-        # down for the groups where it's >1% of the data, so drop by a
-        # fixed sanity threshold instead. This only affects the plot, not
-        # the data file.
-        d <- d %>% filter(abs(value) < 1e6)
         # facet_wrap's default panel order sorts by the first facet variable
         # then the second, so this is already channel-major -- but that's an
         # implicit contract that breaks silently if facet_wrap's fill
