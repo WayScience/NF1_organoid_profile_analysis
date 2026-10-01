@@ -63,6 +63,31 @@ def retrieve_quadrant_info(
     return df["combinations"].to_list()
 
 
+def _resolve_well_image_path(
+    image_base_dir: pathlib.Path,
+    patient_tumor: str,
+    well: str,
+    field_suffix: str = "-1",
+) -> pathlib.Path:
+    """
+    Resolve the zstack image directory for a given patient/tumor and well.
+    If the requested well is not present on disk, fall back to another
+    available well (matching the same field suffix) for that patient/tumor
+    instead of raising a FileNotFoundError.
+    """
+    zstack_dir = pathlib.Path(f"{image_base_dir}/{patient_tumor}", "zstack_images")
+    requested_path = zstack_dir / f"{well}{field_suffix}"
+    if requested_path.exists():
+        return requested_path.resolve(strict=True)
+
+    fallback_candidates = sorted(zstack_dir.glob(f"*{field_suffix}"))
+    if not fallback_candidates:
+        raise FileNotFoundError(
+            f"No well directories matching '*{field_suffix}' found in {zstack_dir}"
+        )
+    return fallback_candidates[0].resolve(strict=True)
+
+
 def generate_image_paths_from_combination_string(
     image_base_dir: pathlib.Path, combination_string: str
 ) -> list:
@@ -70,6 +95,8 @@ def generate_image_paths_from_combination_string(
     Given a combination string, return a list of image paths for group1 and group2.
     The combination string is expected to be in the format:
     "group1_Metadata_Biology_PatientTumor__group1_Metadata_Experiment_Well__group1_Metadata_Experiment_Treatment__group1_Metadata_Experiment_Dose__group2_Metadata_Biology_PatientTumor__group2_Metadata_Experiment_Well__group2_Metadata_Experiment_Treatment__group2_Metadata_Experiment_Dose"
+    If the expected well directory is missing on disk, another available well
+    for that patient/tumor is used instead.
     """
     parts = combination_string.split("__")
     if len(parts) != 8:
@@ -87,16 +114,12 @@ def generate_image_paths_from_combination_string(
         group2_treatment,
         group2_dose,
     ) = parts
-    image1_path = pathlib.Path(
-        f"{image_base_dir}/{group1_patient_tumor}",
-        "zstack_images",
-        f"{group1_well}-1",
-    ).resolve(strict=True)
-    image2_path = pathlib.Path(
-        f"{image_base_dir}/{group2_patient_tumor}",
-        "zstack_images",
-        f"{group2_well}-1",
-    ).resolve(strict=True)
+    image1_path = _resolve_well_image_path(
+        image_base_dir, group1_patient_tumor, group1_well
+    )
+    image2_path = _resolve_well_image_path(
+        image_base_dir, group2_patient_tumor, group2_well
+    )
     return [image1_path, image2_path]
 
 

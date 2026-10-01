@@ -2,11 +2,11 @@
 # coding: utf-8
 
 # # Calculate correlation matrices
-# 
+#
 # Computes two groups of sample-by-sample Pearson correlation matrices, each
 # written as a small, consolidated set of *tidy* files rather than one file
 # per matrix:
-# 
+#
 # - **Group A -- `sc_agg`/`sc_consensus`, replicate/treatment-level**:
 #   aggregate and consensus profiles (derived by summarizing single-cell
 #   measurements up to one row per replicate or per treatment -- not
@@ -28,11 +28,11 @@
 #   Each (variant, patient) matrix is stored as **one row**, with the
 #   correlation values and per-cell treatment labels as nested list columns.
 #   **1 file total** (down from one file per patient).
-# 
+#
 # Preprocessing (`NF0037_T1_CQ1` exclusion, `_Texture_` feature drop,
 # `pycytominer.feature_select` outlier drop) matches `0.generate_umap.ipynb` /
 # `2.generate_pca.ipynb`, via a shared helper used by both groups.
-# 
+#
 # **A note on "organoid" normalization variants**: of the 6 3D normalization
 # variants, `organoid_norm` and `sammed_organoid_norm` are excluded
 # everywhere in this notebook. At the feature-selected (per-cell) stage used
@@ -49,9 +49,9 @@
 # per-cell resolution Group B works at, since it's far slower to correlate
 # per-patient than the others there; it's not a concern at Group A's small,
 # already-aggregated row counts, so it's included there.
-# 
+#
 # Plotting happens separately in `5.plot_correlation_heatmaps.ipynb`.
-# 
+#
 # **Output**: `1.EDA/results/correlation/`
 
 # In[1]:
@@ -61,8 +61,9 @@ import pathlib
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 from notebook_init_utils import init_notebook
-from pycytominer import feature_select
 
 root_dir, in_notebook = init_notebook()
 
@@ -76,9 +77,6 @@ else:
 
 # In[2]:
 
-
-# Feature-selection parameters (matches 2.generate_pca.ipynb / 0.generate_umap.ipynb)
-OUTLIER_CUTOFF = 100
 
 correlation_dir = pathlib.Path(f"{root_dir}/1.EDA/results/correlation/").resolve()
 correlation_dir.mkdir(parents=True, exist_ok=True)
@@ -96,25 +94,22 @@ def clean_profile(df, patient_col):
     if patient_col in df.columns:
         df = df[df[patient_col] != "NF0037_T1_CQ1"]
 
+    # A small number of cells (e.g. 15 in NF0018_T6's sc_norm profiles) are
+    # missing core experimental metadata (treatment, dose, tumor type)
+    # entirely -- an incomplete metadata join, not a real treatment
+    # condition. Drop them: besides being unusable for treatment-based
+    # analysis, a NaN mixed in among strings in Metadata_Experiment_Treatment
+    # crashes pa.table() downstream in Group B (list<string> can't hold a
+    # float).
+    if "Metadata_Experiment_Treatment" in df.columns:
+        df = df[df["Metadata_Experiment_Treatment"].notna()]
+
     metadata_columns = [col for col in df.columns if "Metadata_" in col]
     feature_columns = [col for col in df.columns if col not in metadata_columns]
-
-    # Drop Texture features: prone to extreme outlier values (matches
-    # 0.generate_umap.ipynb / 2.generate_pca.ipynb).
-    feature_columns = [c for c in feature_columns if "_Texture_" not in c]
 
     df[feature_columns] = df[feature_columns].apply(pd.to_numeric, errors="coerce")
     df[feature_columns] = df[feature_columns].replace([np.inf, -np.inf], np.nan)
 
-    # Drop any other features with extreme/blown-up values using
-    # pycytominer's feature_select, with its magnitude-based outlier
-    # operation (matches 2.generate_pca.ipynb).
-    df = feature_select(
-        df,
-        features=feature_columns,
-        operation=["drop_outliers"],
-        outlier_cutoff=OUTLIER_CUTOFF,
-    )
     feature_columns = [c for c in feature_columns if c in df.columns]
 
     df = df.dropna(subset=feature_columns, axis=0).reset_index(drop=True)
@@ -129,7 +124,7 @@ def correlate_samples(df, feature_columns):
 
 
 # ## Group A -- 2D sc_agg / sc_consensus, replicate/treatment-level
-# 
+#
 # 3 slice strategies x {agg, consensus} = 6 matrices, consolidated into a
 # long-format pairs table + a samples metadata table.
 
@@ -197,7 +192,7 @@ print(f"Saved {samples_path.name}: {len(samples_df)} rows")
 
 
 # ## Group A -- 3D sc_agg / sc_consensus, replicate/treatment-level
-# 
+#
 # 4 normalization variants x {agg, consensus} = 8 matrices (excludes
 # `organoid_norm` / `sammed_organoid_norm`, see note above), consolidated
 # into a long-format pairs table + a samples metadata table.
@@ -205,7 +200,12 @@ print(f"Saved {samples_path.name}: {len(samples_df)} rows")
 # In[5]:
 
 
-GROUP_A_3D_VARIANTS = ["nucleocentric_morphem_norm", "sammed_nucleocentric_norm", "sammed_sc_norm", "sc_norm"]
+GROUP_A_3D_VARIANTS = [
+    "nucleocentric_morphem_norm",
+    "sammed_nucleocentric_norm",
+    "sammed_sc_norm",
+    "sc_norm",
+]
 profile_dirs_3d = {"agg": "2.aggregated_profiles", "consensus": "3.consensus_profiles"}
 patient_col_3d = "Metadata_Biology_PatientTumor"
 
@@ -219,7 +219,9 @@ for variant in tqdm.tqdm(GROUP_A_3D_VARIANTS):
         ).resolve(strict=True)
         df = pd.read_parquet(input_path)
 
-        df, metadata_columns, feature_columns = clean_profile(df, patient_col=patient_col_3d)
+        df, metadata_columns, feature_columns = clean_profile(
+            df, patient_col=patient_col_3d
+        )
         corr_mat = correlate_samples(df, feature_columns)
 
         n = corr_mat.shape[0]
@@ -255,7 +257,7 @@ print(f"Saved {samples_path_3d.name}: {len(samples_df_3d)} rows")
 
 
 # ## Group B -- 3D sc_fs, single-cell, per patient
-# 
+#
 # Single-cell normalization variants only (see note above); one row per
 # (variant, patient), with the correlation matrix and per-cell treatment
 # labels stored as nested list columns. Patients with more than
@@ -267,9 +269,6 @@ print(f"Saved {samples_path_3d.name}: {len(samples_df_3d)} rows")
 
 # In[6]:
 
-
-import pyarrow as pa
-import pyarrow.parquet as pq
 
 SC_FS_VARIANTS = ["sc_norm", "nucleocentric_morphem_norm", "sammed_nucleocentric_norm"]
 # sammed_sc_norm (76,445 cells x 6,976 features) is deferred separately --
@@ -317,7 +316,10 @@ for variant in tqdm.tqdm(SC_FS_VARIANTS):
         original_n_cells = len(patient_df)
         if original_n_cells > MAX_CELLS_PER_PATIENT:
             patient_df = subsample_balanced(
-                patient_df, "Metadata_Experiment_Treatment", MAX_CELLS_PER_PATIENT, RANDOM_SEED
+                patient_df,
+                "Metadata_Experiment_Treatment",
+                MAX_CELLS_PER_PATIENT,
+                RANDOM_SEED,
             )
 
         corr_mat = correlate_samples(patient_df, feature_columns)
@@ -352,6 +354,7 @@ for variant in tqdm.tqdm(SC_FS_VARIANTS):
 if writer is not None:
     writer.close()
 
-print(f"Saved {matrices_path.name}: {n_rows_written} rows (variant x patient combinations)")
+print(
+    f"Saved {matrices_path.name}: {n_rows_written} rows (variant x patient combinations)"
+)
 print(pd.DataFrame(summary_rows).to_string(index=False))
-
