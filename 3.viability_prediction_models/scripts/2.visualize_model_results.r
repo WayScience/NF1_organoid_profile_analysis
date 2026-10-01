@@ -6,13 +6,6 @@ for (pkg in packages) {
     )   )
 }
 
-# every plot built below is appended to pdf_plots and written out as a
-# single combined ../figures/model_results.pdf at the end of the
-# notebook, instead of one .png per plot - create ../figures once up
-# front so that final pdf() call doesn't error out.
-dir.create("../figures", showWarnings = FALSE, recursive = TRUE)
-pdf_plots <- list()
-
 # Get the current working directory and find Git root
 find_git_root <- function() {
     # Get current working directory
@@ -40,6 +33,10 @@ find_git_root <- function() {
 # Find the Git root directory
 root_dir <- find_git_root()
 source(file.path(root_dir, "utils", "r_plot_themes.r"))
+
+# every ggsave() call below writes into ../figures, which doesn't exist yet -
+# create it once up front so ggsave() doesn't error out on the first plot.
+dir.create(file.path(root_dir,"3.viability_prediction_models/figures"), showWarnings = FALSE, recursive = TRUE)
 
 model_results_files = c(
     file.path(root_dir, "3.viability_prediction_models/model_results/combined_feature_importances.parquet"),
@@ -129,8 +126,13 @@ predicted_viabilities_df <- add_feature_type(predicted_viabilities_df)
 # ---------------------------------------------------------------------
 # Per-fold model performance: R2 and RMSE by eval split, one plot per
 # split method (mirroring the predicted-vs-actual plots below), faceted
-# by shuffle status (rows) x profile - labeled with its feature type,
-# handcrafted ZedProfiler vs. CHAMMI/SAMMed3D embedding (columns).
+# by profile - labeled with its feature type, handcrafted ZedProfiler vs.
+# CHAMMI/SAMMed3D embedding (columns).
+#
+# The shuffled-feature negative control and the real (not_shuffled) fit
+# score very close to each other, so they are dodged side by side within
+# each eval split (fill = shuffle status) instead of sitting in separate
+# facet rows - the gap between the two bars is the signal.
 #
 # Bars show the mean across folds per (eval_split, shuffle_status,
 # profile) group, with error bars at +/- 1 SD - summarizing the same
@@ -141,7 +143,8 @@ predicted_viabilities_df <- add_feature_type(predicted_viabilities_df)
 # are real values (not a bug), but letting the scale include them
 # flattens every other bar to a line. A fixed, clipped viewport
 # (coord_cartesian, which zooms without recomputing the summary stats)
-# keeps the bars readable.
+# keeps the bars readable; the caption reports how many folds fall
+# outside the clipped view.
 #
 # Viability (and hence RMSE) is stored as a 0-1 fraction, not a 0-100
 # percentage - RMSE_YLIM must be on that same scale or every real bar
@@ -149,10 +152,7 @@ predicted_viabilities_df <- add_feature_type(predicted_viabilities_df)
 # ---------------------------------------------------------------------
 options(repr.plot.width = 16, repr.plot.height = 6)
 
-shuffle_status_colors <- c(
-    not_shuffled = "#3B6FA0",
-    shuffled      = "#E08214"
-)
+bar_dodge <- position_dodge(width = 0.7)
 
 R2_YLIM <- c(-1, 1)
 RMSE_YLIM <- c(0, 1)
@@ -160,49 +160,65 @@ RMSE_YLIM <- c(0, 1)
 for (sm in unique(fold_metrics_df$Metadata_split_method)) {
     df_sub <- filter(fold_metrics_df, Metadata_split_method == sm)
 
+    n_r2_clipped <- sum(df_sub$R2 < R2_YLIM[1], na.rm = TRUE)
     r2_summary_df <- df_sub %>%
         group_by(Metadata_eval_split, Metadata_shuffle_status, Metadata_profile_label) %>%
         summarise(mean_R2 = mean(R2), sd_R2 = sd(R2), n = n(), .groups = "drop")
     r2_plot <- (
-        ggplot(r2_summary_df, aes(x = Metadata_shuffle_status, y = mean_R2, fill = Metadata_shuffle_status))
-        + geom_col(alpha = 0.7, width = 0.6)
-        + geom_errorbar(aes(ymin = mean_R2 - sd_R2, ymax = mean_R2 + sd_R2), width = 0.25, linewidth = 0.4)
-        + facet_grid(
-            Metadata_eval_split ~ Metadata_profile_label,
+        ggplot(r2_summary_df, aes(x = Metadata_eval_split, y = mean_R2, fill = Metadata_shuffle_status))
+        + geom_col(position = bar_dodge, alpha = 0.7, width = 0.6)
+        + geom_errorbar(
+            aes(ymin = mean_R2 - sd_R2, ymax = mean_R2 + sd_R2),
+            position = bar_dodge, width = 0.25, linewidth = 0.4
+        )
+        + facet_wrap(
+            ~Metadata_profile_label, nrow = 1,
             labeller = labeller(Metadata_profile_label = label_wrap_gen(width = 18))
         )
         # + coord_cartesian(ylim = R2_YLIM)
-        + scale_fill_manual(values = shuffle_status_colors, name = "Shuffle status")
+        + scale_fill_manual(values = viability_shuffle_status_colors, name = "Shuffle status")
         + labs(
             x = NULL,
             y = expression("Mean " * R^2 * " ± SD across folds"),
-            title = bquote("Model performance (" * R^2 * ") by profile and feature type — " * .(sm))
+            title = bquote("Model performance (" * R^2 * ") by profile and feature type — " * .(sm)),
+            # caption = paste0(
+            #     "y-axis clipped to [", R2_YLIM[1], ", ", R2_YLIM[2], "]; ",
+            #     n_r2_clipped, " of ", nrow(df_sub), " folds fall below this range."
+            # )
         )
         + theme_manuscript()
     )
-    pdf_plots[[paste0("r2_by_profile_", sm)]] <- r2_plot
+    ggsave(filename = file.path(root_dir,"3.viability_prediction_models/figures", paste0("r2_by_profile_", sm, ".png")), plot = r2_plot, width = 16, height = 6, dpi = 600)
     print(r2_plot)
 
+    n_rmse_clipped <- sum(df_sub$RMSE > RMSE_YLIM[2], na.rm = TRUE)
     rmse_summary_df <- df_sub %>%
         group_by(Metadata_eval_split, Metadata_shuffle_status, Metadata_profile_label) %>%
         summarise(mean_RMSE = mean(RMSE), sd_RMSE = sd(RMSE), n = n(), .groups = "drop")
     rmse_plot <- (
-        ggplot(rmse_summary_df, aes(x = Metadata_shuffle_status, y = mean_RMSE, fill = Metadata_shuffle_status))
-        + geom_col(alpha = 0.7, width = 0.6)
-        + geom_errorbar(aes(ymin = mean_RMSE - sd_RMSE, ymax = mean_RMSE + sd_RMSE), width = 0.25, linewidth = 0.4)
-        + facet_grid(
-            Metadata_eval_split ~ Metadata_profile_label,
+        ggplot(rmse_summary_df, aes(x = Metadata_eval_split, y = mean_RMSE, fill = Metadata_shuffle_status))
+        + geom_col(position = bar_dodge, alpha = 0.7, width = 0.6)
+        + geom_errorbar(
+            aes(ymin = mean_RMSE - sd_RMSE, ymax = mean_RMSE + sd_RMSE),
+            position = bar_dodge, width = 0.25, linewidth = 0.4
+        )
+        + facet_wrap(
+            ~Metadata_profile_label, nrow = 1,
             labeller = labeller(Metadata_profile_label = label_wrap_gen(width = 18))
         )
         # + coord_cartesian(ylim = RMSE_YLIM)
-        + scale_fill_manual(values = shuffle_status_colors, name = "Shuffle status")
+        + scale_fill_manual(values = viability_shuffle_status_colors, name = "Shuffle status")
         + labs(
             x = NULL, y = "Mean RMSE ± SD across folds",
-            title = paste0("Model performance (RMSE) by profile and feature type — ", sm)
+            title = paste0("Model performance (RMSE) by profile and feature type — ", sm),
+            # caption = paste0(
+            #     "y-axis clipped to [", RMSE_YLIM[1], ", ", RMSE_YLIM[2], "]; ",
+            #     n_rmse_clipped, " of ", nrow(df_sub), " folds exceed this range."
+            # )
         )
         + theme_manuscript()
     )
-    pdf_plots[[paste0("rmse_by_profile_", sm)]] <- rmse_plot
+    ggsave(filename = file.path(root_dir,"3.viability_prediction_models/figures", paste0("rmse_by_profile_", sm, ".png")), plot = rmse_plot, width = 16, height = 6, dpi = 600)
     print(rmse_plot)
 }
 
@@ -250,6 +266,8 @@ for (sm in c("lopo", "loto")) {
             )
         )
 
+    n_clipped <- sum(df_sub$RMSE > GROUP_RMSE_YLIM[2], na.rm = TRUE)
+
     group_plot <- (
         ggplot(df_sub, aes(x = Metadata_held_out_group, y = RMSE))
         + geom_boxplot(outlier.shape = NA, color = "#898781", fill = NA)
@@ -258,10 +276,15 @@ for (sm in c("lopo", "loto")) {
         + scale_color_brewer(palette = "Set2", name = "Profile (level / normalization scope)")
         + labs(
             x = NULL, y = "Test RMSE (one point per profile type)",
-            title = paste0("Test RMSE by held-out group — ", sm, " (not shuffled)")
+            title = paste0("Test RMSE by held-out group — ", sm, " (not shuffled)"),
+            caption = paste0(
+                "Groups ordered alphabetically for a predictable order across plots. ",
+                "y-axis clipped to [", GROUP_RMSE_YLIM[1], ", ", GROUP_RMSE_YLIM[2], "]; ",
+                n_clipped, " of ", nrow(df_sub), " points fall outside this range."
+            )
         )
     )
-    pdf_plots[[paste0("rmse_by_held_out_group_", sm)]] <- group_plot
+    ggsave(filename = file.path(root_dir,"3.viability_prediction_models/figures", paste0("rmse_by_held_out_group_", sm, ".png")), plot = group_plot, width = 11, height = 8, dpi = 600)
     print(group_plot)
 }
 
@@ -369,7 +392,7 @@ feature_importances_plot <- (
         legend.position = "bottom"
     )
 )
-pdf_plots[["top_feature_importances_by_profile"]] <- feature_importances_plot
+ggsave(filename = file.path(root_dir,"3.viability_prediction_models/figures", "top_feature_importances_by_profile.png"), plot = feature_importances_plot, width = width, height = height, dpi = 600)
 feature_importances_plot
 
 # predicted vs actual viability, one combined plot faceted by data split
@@ -390,7 +413,7 @@ pred_vs_actual_plot <- (
         Metadata_split_method ~ Metadata_profile_label,
         labeller = labeller(Metadata_profile_label = label_wrap_gen(width = 18))
     )
-    + scale_color_manual(values = shuffle_status_colors, name = "Shuffle status")
+    + scale_color_manual(values = viability_shuffle_status_colors, name = "Shuffle status")
     + guides(color = guide_legend(override.aes = list(alpha = 1, size = 2)))
     + labs(
         x = "Predicted viability", y = "Actual viability",
@@ -398,7 +421,7 @@ pred_vs_actual_plot <- (
     )
     + theme(strip.text.x = element_text(size = 7), strip.text.y = element_text(size = 9))
 )
-pdf_plots[["predicted_vs_actual"]] <- pred_vs_actual_plot
+ggsave(filename = file.path(root_dir,"3.viability_prediction_models/figures", "predicted_vs_actual.png"), plot = pred_vs_actual_plot, width = 16, height = 9, dpi = 600)
 pred_vs_actual_plot
 
 # investigate the top features for each of the models by plotting the distributions of the feature for each model type
@@ -482,6 +505,8 @@ feature_dist_df <- feature_dist_df %>%
     ) %>%
     ungroup()
 
+n_dist_clipped <- sum(feature_dist_df$value != feature_dist_df$value_clipped, na.rm = TRUE)
+
 feature_dist_plot <- (
     ggplot(
         feature_dist_df,
@@ -502,7 +527,12 @@ feature_dist_plot <- (
     + labs(
         x = NULL,
         y = "Feature value (normalized consensus profile, all wells)",
-        title = "Distribution of each model's top-10 features across all profiles"
+        title = "Distribution of each model's top-10 features across all profiles",
+        caption = paste0(
+            "Each (panel, feature) clipped to its own Tukey fence (median IQR x 1.5 beyond Q1/Q3); ",
+            n_dist_clipped, " of ", nrow(feature_dist_df), " points were pulled in by this - ",
+            "the same cross-patient-normalization outlier artifact documented elsewhere in this notebook."
+        )
     )
     + theme(
         axis.text.y = element_text(size = 8),
@@ -510,19 +540,8 @@ feature_dist_plot <- (
         legend.position = "bottom"
     )
 )
-pdf_plots[["top_feature_distributions_by_profile"]] <- feature_dist_plot
+ggsave(filename = file.path(root_dir,"3.viability_prediction_models/figures", "top_feature_distributions_by_profile.png"), plot = feature_dist_plot, width = width, height = height, dpi = 600)
 feature_dist_plot
-
-# Every figure built above was appended to pdf_plots instead of being
-# ggsave()'d to its own .png - write them all out now as pages of one
-# combined PDF. Base R's pdf() device fixes one page size for the whole
-# file, so a single size (the largest plot's, 16x16in) is used for every
-# page rather than one .png-sized file per figure.
-pdf(file.path("../figures", "model_results.pdf"), width = 16, height = 16, onefile = TRUE)
-for (p in pdf_plots) {
-    print(p)
-}
-dev.off()
 
 # ---------------------------------------------------------------------
 # The plot above shows each model's top-10 features are spread out with
@@ -537,7 +556,7 @@ dev.off()
 # organoid_flagged_outliers.parquet / sc_flagged_outliers.parquet (per
 # patient, in 4.qc_profiles/) are the earliest per-object tables that
 # still carry both the raw feature values and the
-# Metadata_Location_<compartment>_{Center,Min,Max}{X,Y,Z} columns -
+# <compartment>_NoChannel_VolumeSizeShape_{Center,Min,Max}{X,Y,Z} columns -
 # everything downstream of QC aggregates them away. Pulling the min/max
 # bounding box in here too (not just the center) means every downstream
 # table - edge_objects_df, extreme_objects_df - already carries what's
@@ -558,7 +577,7 @@ read_object_features <- function(filename, compartments) {
     #' correct compartment-specific center AND bounding box attached to
     #' each row.
     location_cols <- as.vector(outer(
-        paste0("Metadata_Location_", compartments),
+        paste0(compartments, "_NoChannel_VolumeSizeShape"),
         c("CenterX", "CenterY", "CenterZ", "MinX", "MinY", "MinZ", "MaxX", "MaxY", "MaxZ"),
         paste, sep = "_"
     ))
@@ -604,15 +623,15 @@ organoid_objects_df <- read_object_features("organoid_flagged_outliers.parquet",
         # the inner_join below empty for every row (0 edge/extreme objects),
         # the same mistake documented and fixed for feature_values_df above.
         Metadata_profile_type = "organoid_profile_consensus",
-        Metadata_CenterX = Metadata_Location_Organoid_CenterX,
-        Metadata_CenterY = Metadata_Location_Organoid_CenterY,
-        Metadata_CenterZ = Metadata_Location_Organoid_CenterZ,
-        Metadata_MinX = Metadata_Location_Organoid_MinX,
-        Metadata_MinY = Metadata_Location_Organoid_MinY,
-        Metadata_MinZ = Metadata_Location_Organoid_MinZ,
-        Metadata_MaxX = Metadata_Location_Organoid_MaxX,
-        Metadata_MaxY = Metadata_Location_Organoid_MaxY,
-        Metadata_MaxZ = Metadata_Location_Organoid_MaxZ
+        Metadata_CenterX = Organoid_NoChannel_VolumeSizeShape_CenterX,
+        Metadata_CenterY = Organoid_NoChannel_VolumeSizeShape_CenterY,
+        Metadata_CenterZ = Organoid_NoChannel_VolumeSizeShape_CenterZ,
+        Metadata_MinX = Organoid_NoChannel_VolumeSizeShape_MinX,
+        Metadata_MinY = Organoid_NoChannel_VolumeSizeShape_MinY,
+        Metadata_MinZ = Organoid_NoChannel_VolumeSizeShape_MinZ,
+        Metadata_MaxX = Organoid_NoChannel_VolumeSizeShape_MaxX,
+        Metadata_MaxY = Organoid_NoChannel_VolumeSizeShape_MaxY,
+        Metadata_MaxZ = Organoid_NoChannel_VolumeSizeShape_MaxZ
     )
 
 # sc-level top features span three different compartments (Cell_,
@@ -627,64 +646,64 @@ sc_objects_df <- read_object_features("sc_flagged_outliers.parquet", c("Cell", "
         Metadata_profile_type = "sc_profile_consensus",
         Metadata_feature_compartment = sub("_.*", "", feature),
         Metadata_CenterX = dplyr::case_when(
-            Metadata_feature_compartment == "Cell" ~ Metadata_Location_Cell_CenterX,
-            Metadata_feature_compartment == "Cytoplasm" ~ Metadata_Location_Cytoplasm_CenterX,
-            Metadata_feature_compartment == "Nuclei" ~ Metadata_Location_Nuclei_CenterX,
+            Metadata_feature_compartment == "Cell" ~ Cell_NoChannel_VolumeSizeShape_CenterX,
+            Metadata_feature_compartment == "Cytoplasm" ~ Cytoplasm_NoChannel_VolumeSizeShape_CenterX,
+            Metadata_feature_compartment == "Nuclei" ~ Nuclei_NoChannel_VolumeSizeShape_CenterX,
             TRUE ~ NA_real_
         ),
         Metadata_CenterY = dplyr::case_when(
-            Metadata_feature_compartment == "Cell" ~ Metadata_Location_Cell_CenterY,
-            Metadata_feature_compartment == "Cytoplasm" ~ Metadata_Location_Cytoplasm_CenterY,
-            Metadata_feature_compartment == "Nuclei" ~ Metadata_Location_Nuclei_CenterY,
+            Metadata_feature_compartment == "Cell" ~ Cell_NoChannel_VolumeSizeShape_CenterY,
+            Metadata_feature_compartment == "Cytoplasm" ~ Cytoplasm_NoChannel_VolumeSizeShape_CenterY,
+            Metadata_feature_compartment == "Nuclei" ~ Nuclei_NoChannel_VolumeSizeShape_CenterY,
             TRUE ~ NA_real_
         ),
         Metadata_CenterZ = dplyr::case_when(
-            Metadata_feature_compartment == "Cell" ~ Metadata_Location_Cell_CenterZ,
-            Metadata_feature_compartment == "Cytoplasm" ~ Metadata_Location_Cytoplasm_CenterZ,
-            Metadata_feature_compartment == "Nuclei" ~ Metadata_Location_Nuclei_CenterZ,
+            Metadata_feature_compartment == "Cell" ~ Cell_NoChannel_VolumeSizeShape_CenterZ,
+            Metadata_feature_compartment == "Cytoplasm" ~ Cytoplasm_NoChannel_VolumeSizeShape_CenterZ,
+            Metadata_feature_compartment == "Nuclei" ~ Nuclei_NoChannel_VolumeSizeShape_CenterZ,
             TRUE ~ NA_real_
         ),
         Metadata_MinX = dplyr::case_when(
-            Metadata_feature_compartment == "Cell" ~ Metadata_Location_Cell_MinX,
-            Metadata_feature_compartment == "Cytoplasm" ~ Metadata_Location_Cytoplasm_MinX,
-            Metadata_feature_compartment == "Nuclei" ~ Metadata_Location_Nuclei_MinX,
+            Metadata_feature_compartment == "Cell" ~ Cell_NoChannel_VolumeSizeShape_MinX,
+            Metadata_feature_compartment == "Cytoplasm" ~ Cytoplasm_NoChannel_VolumeSizeShape_MinX,
+            Metadata_feature_compartment == "Nuclei" ~ Nuclei_NoChannel_VolumeSizeShape_MinX,
             TRUE ~ NA_real_
         ),
         Metadata_MinY = dplyr::case_when(
-            Metadata_feature_compartment == "Cell" ~ Metadata_Location_Cell_MinY,
-            Metadata_feature_compartment == "Cytoplasm" ~ Metadata_Location_Cytoplasm_MinY,
-            Metadata_feature_compartment == "Nuclei" ~ Metadata_Location_Nuclei_MinY,
+            Metadata_feature_compartment == "Cell" ~ Cell_NoChannel_VolumeSizeShape_MinY,
+            Metadata_feature_compartment == "Cytoplasm" ~ Cytoplasm_NoChannel_VolumeSizeShape_MinY,
+            Metadata_feature_compartment == "Nuclei" ~ Nuclei_NoChannel_VolumeSizeShape_MinY,
             TRUE ~ NA_real_
         ),
         Metadata_MinZ = dplyr::case_when(
-            Metadata_feature_compartment == "Cell" ~ Metadata_Location_Cell_MinZ,
-            Metadata_feature_compartment == "Cytoplasm" ~ Metadata_Location_Cytoplasm_MinZ,
-            Metadata_feature_compartment == "Nuclei" ~ Metadata_Location_Nuclei_MinZ,
+            Metadata_feature_compartment == "Cell" ~ Cell_NoChannel_VolumeSizeShape_MinZ,
+            Metadata_feature_compartment == "Cytoplasm" ~ Cytoplasm_NoChannel_VolumeSizeShape_MinZ,
+            Metadata_feature_compartment == "Nuclei" ~ Nuclei_NoChannel_VolumeSizeShape_MinZ,
             TRUE ~ NA_real_
         ),
         Metadata_MaxX = dplyr::case_when(
-            Metadata_feature_compartment == "Cell" ~ Metadata_Location_Cell_MaxX,
-            Metadata_feature_compartment == "Cytoplasm" ~ Metadata_Location_Cytoplasm_MaxX,
-            Metadata_feature_compartment == "Nuclei" ~ Metadata_Location_Nuclei_MaxX,
+            Metadata_feature_compartment == "Cell" ~ Cell_NoChannel_VolumeSizeShape_MaxX,
+            Metadata_feature_compartment == "Cytoplasm" ~ Cytoplasm_NoChannel_VolumeSizeShape_MaxX,
+            Metadata_feature_compartment == "Nuclei" ~ Nuclei_NoChannel_VolumeSizeShape_MaxX,
             TRUE ~ NA_real_
         ),
         Metadata_MaxY = dplyr::case_when(
-            Metadata_feature_compartment == "Cell" ~ Metadata_Location_Cell_MaxY,
-            Metadata_feature_compartment == "Cytoplasm" ~ Metadata_Location_Cytoplasm_MaxY,
-            Metadata_feature_compartment == "Nuclei" ~ Metadata_Location_Nuclei_MaxY,
+            Metadata_feature_compartment == "Cell" ~ Cell_NoChannel_VolumeSizeShape_MaxY,
+            Metadata_feature_compartment == "Cytoplasm" ~ Cytoplasm_NoChannel_VolumeSizeShape_MaxY,
+            Metadata_feature_compartment == "Nuclei" ~ Nuclei_NoChannel_VolumeSizeShape_MaxY,
             TRUE ~ NA_real_
         ),
         Metadata_MaxZ = dplyr::case_when(
-            Metadata_feature_compartment == "Cell" ~ Metadata_Location_Cell_MaxZ,
-            Metadata_feature_compartment == "Cytoplasm" ~ Metadata_Location_Cytoplasm_MaxZ,
-            Metadata_feature_compartment == "Nuclei" ~ Metadata_Location_Nuclei_MaxZ,
+            Metadata_feature_compartment == "Cell" ~ Cell_NoChannel_VolumeSizeShape_MaxZ,
+            Metadata_feature_compartment == "Cytoplasm" ~ Cytoplasm_NoChannel_VolumeSizeShape_MaxZ,
+            Metadata_feature_compartment == "Nuclei" ~ Nuclei_NoChannel_VolumeSizeShape_MaxZ,
             TRUE ~ NA_real_
         )
     )
 
 object_features_df <- bind_rows(
-    organoid_objects_df %>% select(-starts_with("Metadata_Location_")),
-    sc_objects_df %>% select(-starts_with("Metadata_Location_"), -Metadata_feature_compartment)
+    organoid_objects_df %>% select(-matches("_NoChannel_VolumeSizeShape_")),
+    sc_objects_df %>% select(-matches("_NoChannel_VolumeSizeShape_"), -Metadata_feature_compartment)
 )
 
 # Attach each model (profile_type x split_method) that ranked this
@@ -816,7 +835,7 @@ get_sc_table <- function(patient) {
         sc_cache[[patient]] <<- arrow::read_parquet(path, col_select = c(
             Metadata_Experiment_Well, Metadata_Experiment_WellFOV,
             Metadata_Object_ObjectID, Metadata_Object_ParentOrganoid,
-            Metadata_Location_Cell_CenterX, Metadata_Location_Cell_CenterY, Metadata_Location_Cell_CenterZ
+            Cell_NoChannel_VolumeSizeShape_CenterX, Cell_NoChannel_VolumeSizeShape_CenterY, Cell_NoChannel_VolumeSizeShape_CenterZ
         ))
     }
     sc_cache[[patient]]
@@ -854,9 +873,9 @@ get_identified_cells <- function(row) {
         transmute(
             Metadata_Cell_ObjectID = Metadata_Object_ObjectID,
             Metadata_Cell_ParentOrganoid = Metadata_Object_ParentOrganoid,
-            Metadata_Cell_CenterX = Metadata_Location_Cell_CenterX,
-            Metadata_Cell_CenterY = Metadata_Location_Cell_CenterY,
-            Metadata_Cell_CenterZ = Metadata_Location_Cell_CenterZ
+            Metadata_Cell_CenterX = Cell_NoChannel_VolumeSizeShape_CenterX,
+            Metadata_Cell_CenterY = Cell_NoChannel_VolumeSizeShape_CenterY,
+            Metadata_Cell_CenterZ = Cell_NoChannel_VolumeSizeShape_CenterZ
         )
 }
 

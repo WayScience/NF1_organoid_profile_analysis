@@ -1,15 +1,19 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[ ]:
 
 
+import pathlib
 import time
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import pyarrow.parquet as pq
 import seaborn as sns
+import tifffile
+from microfilm.microplot import microshow
 from notebook_init_utils import bandicoot_check, init_notebook
 
 root_dir, in_notebook = init_notebook()
@@ -26,14 +30,8 @@ else:
 start_time = time.time()
 
 
-# In[3]:
+# In[ ]:
 
-
-import pathlib
-
-import pyarrow.parquet as pq
-import tifffile
-from microfilm.microplot import microshow
 
 # Raw 3D image stacks/segmentation masks live on the external Bandicoot
 # mount (~/mnt/bandicoot/NF1_organoid_data/data/<patient>/...), not in this
@@ -64,7 +62,9 @@ CHANNEL_MARKER_MAP = {
 # for every crop below.
 CROP_PAD_PX = 5
 
-crop_output_dir = pathlib.Path("../figures/single_cell_crops")
+crop_output_dir = pathlib.Path(
+    f"{root_dir}/3.viability_prediction_models/figures/single_cell_crops"
+)
 crop_output_dir.mkdir(parents=True, exist_ok=True)
 
 
@@ -282,6 +282,3 @@ for _, hit in hits_to_plot.iterrows():
         fig.savefig(crop_output_dir / out_name, dpi=150)
         plt.show()
         plt.close(fig)
-
-
-# In[ ]:

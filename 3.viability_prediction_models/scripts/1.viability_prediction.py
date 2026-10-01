@@ -72,7 +72,7 @@ else:
 start_time = time.time()
 
 
-# In[ ]:
+# In[3]:
 
 
 # set up logging
@@ -98,7 +98,7 @@ logging.info(f"Logging to {LOG_DIR / year_month_day_hour_minute_log_name}")
 
 # ## Functions and helpers
 
-# In[ ]:
+# In[4]:
 
 
 """
@@ -109,7 +109,7 @@ training + evaluation under three split strategies
   2. "loto"          - Leave-One-Treatment-Out cross-validation
   3. "random_split"  - a single random 70/30 train/test split (no grouping)
 
-All three reuse the same cleaning / training / metrics / artifact-saving
+All three reuse the same training / metrics / artifact-saving
 logic. For "lopo" and "loto", the model is refit once per fold (holding
 out all rows for one patient / one treatment as the test set), metrics
 are computed per fold, and results are aggregated across folds. For
@@ -120,10 +120,6 @@ it can be compared side-by-side with the grouped results.
 --- Revision notes (leakage fixes) ---
 This version fixes three sources of train/test leakage that were present
 in the previous revision:
-
-  * Feature imputation (median fill for NaN/inf) is now fit on each
-    fold's TRAINING rows only (fit_feature_cleaning / apply_feature_cleaning),
-    instead of being computed once on the full dataset before any split.
 
   * ElasticNet hyperparameter tuning now runs fresh on each fold's own
     training data by default (TUNE_HYPERPARAMS_PER_FOLD=True), instead of
@@ -169,7 +165,9 @@ RETRAIN_EXISTING_MODELS = (
 PATIENT_COL = "Metadata_Biology_PatientTumor"  # column identifying each patient
 TREATMENT_COL = "Metadata_Experiment_FullTreatment"  # column identifying each treatment
 SPLIT_COL = "Metadata_data_split"  # used only for split_method="predefined"
-RAW_VIABILITY_COL = "Metadata_Viability_percentage"  # raw (unnormalized) viability -
+RAW_VIABILITY_COL = (
+    "Metadata_Experiment_ViabilityPercentage"  # raw (unnormalized) viability -
+)
 # used to compute a fold-safe VIABILITY_COL inside each split function below,
 # instead of relying on a precomputed global normalization.
 VIABILITY_COL = "min_max_viability"  # fold-safe, per-patient min-max target column
@@ -177,9 +175,6 @@ VIABILITY_COL = "min_max_viability"  # fold-safe, per-patient min-max target col
 
 RANDOM_SPLIT_TEST_SIZE = 0.3  # fraction held out for the random_split test set
 RANDOM_SPLIT_SEED = 0  # fixed seed so the random split is reproducible
-
-# NOT a 0-100 percentage. Predictions are clipped to this range before being
-# scored or saved, since the raw ElasticNet output is unconstrained.
 
 TUNE_HYPERPARAMS_PER_FOLD = True  # Correct-but-slower default: tunes alpha/l1_ratio
 # fresh on each fold's own training data (see run_group_cv docstring below). Set
@@ -204,9 +199,7 @@ def log_feature_diagnostics(df: pd.DataFrame, feature_cols: list) -> None:
     """
     Read-only diagnostics on the feature block, reported once before any
     fold split happens. This is purely informational and never imputes or
-    modifies anything - imputation happens per-fold (see
-    fit_feature_cleaning / apply_feature_cleaning below) so it can never
-    leak a held-out fold's statistics into training.
+    modifies anything - imputation happens per-fold
     """
     X = df[feature_cols]
     has_inf = bool(np.isinf(X.values).any())
@@ -219,42 +212,6 @@ def log_feature_diagnostics(df: pd.DataFrame, feature_cols: list) -> None:
     if has_inf:
         inf_mask = np.isinf(X.values).any(axis=0)
         logging.info(f"Columns with inf values: {list(X.columns[inf_mask])}")
-
-
-def fit_feature_cleaning(train_df: pd.DataFrame, feature_cols: list) -> pd.Series:
-    """
-    Computes per-feature median values from TRAINING rows only. Call this
-    once per fold, then pass the result to apply_feature_cleaning() for
-    both that fold's train and test rows. Keeping this fit step scoped to
-    train_df only (never the full dataset) is what prevents a held-out
-    fold's own values from influencing the imputed value it's later
-    evaluated against.
-    """
-    X_train = train_df[feature_cols].replace([np.inf, -np.inf], np.nan)
-    return X_train.median(axis=0, numeric_only=True)
-
-
-def apply_feature_cleaning(
-    df: pd.DataFrame, feature_cols: list, median_values: pd.Series
-) -> pd.DataFrame:
-    """
-    Applies a previously-fit median (from fit_feature_cleaning) to replace
-    inf/NaN in feature_cols, then clips to a wide safety bound. The clip
-    bound is a fixed constant (not derived from data), and features are
-    already clipped to a tighter, domain-specific range upstream (see the
-    driver loop) before this ever runs - this clip is just a defensive
-    backstop, not a required step, so it carries no leakage risk either way.
-    """
-    X = df[feature_cols].copy()
-    X = X.replace([np.inf, -np.inf], np.nan)
-    X = X.fillna(median_values)
-    # A feature that's all-NaN/inf within this fold's training data has an
-    # undefined median (NaN) - fall back to 0 so training can proceed.
-    X = X.fillna(0)
-    X = X.clip(lower=-1e5, upper=1e5)
-    df = df.copy()
-    df[feature_cols] = X
-    return df
 
 
 # ---------------------------------------------------------------------
@@ -572,10 +529,6 @@ def run_group_cv(
             )
             continue
 
-        median_values = fit_feature_cleaning(train_df, feature_cols)
-        train_df = apply_feature_cleaning(train_df, feature_cols, median_values)
-        test_df = apply_feature_cleaning(test_df, feature_cols, median_values)
-
         X_train, X_test = train_df[feature_cols], test_df[feature_cols]
         Y_train, Y_test = train_df[viability_col], test_df[viability_col]
 
@@ -836,10 +789,6 @@ def run_random_split(
         f"(profile={profile_type}) ==="
     )
 
-    median_values = fit_feature_cleaning(train_df, feature_cols)
-    train_df = apply_feature_cleaning(train_df, feature_cols, median_values)
-    test_df = apply_feature_cleaning(test_df, feature_cols, median_values)
-
     X_train, X_test = train_df[feature_cols], test_df[feature_cols]
     Y_train, Y_test = train_df[viability_col], test_df[viability_col]
 
@@ -1060,9 +1009,6 @@ for image_mode, consensus_paths in censensus_profiles_all_dict.items():
         logging.info(
             f"  {consensus_profile_name}: {len(consensus_df)} rows, "
             f"{len(feature_cols)} feature columns"
-        )
-        consensus_df[feature_cols] = consensus_df[feature_cols].clip(
-            lower=-1e1, upper=1e1
         )
 
         for shuffle_status in tqdm.tqdm(

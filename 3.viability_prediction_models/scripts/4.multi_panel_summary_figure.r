@@ -6,7 +6,7 @@ for (pkg in packages) {
     )   )
 }
 
-dir.create("../figures", showWarnings = FALSE, recursive = TRUE)
+
 
 # Get the current working directory and find Git root
 find_git_root <- function() {
@@ -27,6 +27,8 @@ find_git_root <- function() {
 
 root_dir <- find_git_root()
 source(file.path(root_dir, "utils", "r_plot_themes.r"))
+
+dir.create(file.path(root_dir,"3.viability_prediction_models/figures"), showWarnings = FALSE, recursive = TRUE)
 
 # Same profile-labeling helpers as 2.visualize_model_results.ipynb, kept
 # self-contained here rather than sourced from that notebook, since
@@ -218,7 +220,7 @@ panel_c
 panel_d <- (
     ggplot()
     + xlim(0, 1) + ylim(0, 1)
-    + annotate("text", x = 0.5, y = 0.5, label = "Montage — TBD", size = 5, color = "#898781")
+    + annotate("text", x = 0.5, y = 0.5, label = "Montage - TBD", size = 5, color = "#898781")
     + theme_void()
 )
 
@@ -233,9 +235,7 @@ summary_figure <- (
 )
 
 ggsave(
-    filename = file.path("../figures", "multi_panel_summary_figure.png"),
+    filename = file.path(root_dir,"3.viability_prediction_models/figures", "multi_panel_summary_figure.png"),
     plot = summary_figure, width = 16, height = 16, dpi = 600
 )
 summary_figure
-
-
