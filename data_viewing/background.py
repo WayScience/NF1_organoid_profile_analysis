@@ -19,6 +19,11 @@ PROFILE_GLOSSARY = """
 """
 
 MODULE_BACKGROUND = {
+    "0.Overview": (
+        "Static experiment design, read directly from `config/platemaps/` (not "
+        "computed): which drugs were plated where, and which patient tumor "
+        "samples were screened on each platemap."
+    ),
     "1.EDA": (
         "Exploratory analysis of the image-based morphology profiles of NF1 patient "
         "tumor organoids treated with drugs at one or more doses (DMSO is the "
@@ -57,16 +62,28 @@ MODULE_BACKGROUND = {
 }
 
 SECTION_BACKGROUND = {
+    # ---- 0.Overview ----
+    "Platemap": (
+        "The well -> treatment/dose layout of each named platemap "
+        "(`config/platemaps/platemap*.csv`). Two layouts were used across the "
+        "screen; pick one to see its grid and which patient samples ran on it."
+    ),
+    "Drugs": (
+        "Every drug (excluding the DMSO control), with its dose(s) and "
+        "mechanism of action, deduplicated across both platemaps."
+    ),
+    "Patients & tumor manifestations": (
+        "Every patient tumor sample screened, which platemap it ran on, and "
+        "its tumor manifestation (cNF, pNF, MPNST or Other) "
+        "(`config/platemaps/barcode_platemap.csv`)."
+    ),
     # ---- 1.EDA ----
     "UMAP": (
         "2D UMAP embeddings of single-cell morphology profiles "
         "(`0.generate_umap.py`). **Pooled** embeddings use all patients together, "
         "per projection (2D max, 2D middle, 3D) and profile variant. **Per-patient** "
         "embeddings are an independent UMAP fit for each patient, so UMAP1/UMAP2 "
-        "are comparable only *within* a patient, never across patients. Texture "
-        "features (extreme outliers that overflow to inf) and other blown-up "
-        "features are dropped, and rows with NaN features are removed. Each point "
-        "is one cell; color it by treatment or patient to look for structure."
+        "are comparable only *within* a patient, never across patients. "
     ),
     "PCA": (
         "PCA embeddings of the pooled (all-patient) feature-selected, aggregated, "

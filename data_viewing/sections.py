@@ -1,25 +1,44 @@
 """One render function per analysis type, grouped into one function per module."""
 
+import re
+
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 from background import subpanel_background
-from data_io import EDA_RESULTS, Dataset, load_dataset, parquet_columns, registry
+from data_io import (
+    EDA_RESULTS,
+    EXCLUDED_PATIENTS,
+    Dataset,
+    load_barcode_platemap,
+    load_dataset,
+    load_platemaps,
+    parquet_columns,
+    registry,
+)
 from palettes import (
     BIOLOGICAL_TERMS,
     TECHNICAL_TERMS,
     TERM_ORDER,
+    TREATMENT_CLASS_DEFAULT,
+    TREATMENT_CLASS_MAP,
+    TREATMENT_MOA_MAP,
     TUMOR_TYPE_LOOKUP,
+    humanize_label,
     palette_for,
 )
 from plots import (
+    COL_TRACK_NAMES,
     NONE,
+    ROW_TRACK_NAMES,
     annotated_significance_heatmap,
     apply_global_filters,
+    correlation_heatmap,
     explorer,
     local_subset,
     missing_notice,
+    platemap_heatmap,
     png_download,
     regroup_combos_by_identity,
     upset_plot,
@@ -46,7 +65,9 @@ def dataset_section(
     if not datasets:
         missing_notice(key.replace("_", " "), produced_by, directory)
         return
-    label = st.selectbox("Dataset", list(datasets), key=f"{key}_dataset")
+    label = st.selectbox(
+        "Dataset", list(datasets), key=f"{key}_dataset", format_func=humanize_label
+    )
     ds = datasets[label]
     df = load_dataset(str(ds.path), columns)
     if prepare:
@@ -60,35 +81,157 @@ def _first(df: pd.DataFrame, *names: str) -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# 0.Overview -- static experiment design (not computed, just config/platemaps/*)
+# ---------------------------------------------------------------------------
+def platemap_section(filters: Filters) -> None:
+    plates = load_platemaps()
+    if not plates:
+        missing_notice("platemaps", "(none)", "config/platemaps")
+        return
+    barcodes = load_barcode_platemap()
+    name = st.selectbox(
+        "Platemap", list(plates), key="overview_platemap", format_func=humanize_label
+    )
+    plate = plates[name]
+    patients = sorted(
+        barcodes.loc[barcodes["platemap_number"] == name, "patient_tumor"]
+    )
+    if patients:
+        st.caption(f"Run on {len(patients)} patient(s): {', '.join(patients)}")
+    palette = palette_for("treatment", sorted(plate["Treatment"].unique())) or {}
+    fig = platemap_heatmap(plate, palette, title=humanize_label(name))
+    st.plotly_chart(fig, width="stretch", key="overview_platemap_chart")
+    png_download(fig, "overview_platemap", f"{name}_layout")
+
+
+def drugs_section(filters: Filters) -> None:
+    plates = load_platemaps()
+    if not plates:
+        missing_notice("platemaps", "(none)", "config/platemaps")
+        return
+    combined = pd.concat(plates.values(), ignore_index=True)
+    drugs = (
+        combined[combined["Treatment"] != "DMSO"]
+        .drop_duplicates(["Treatment", "Dose", "Unit"])
+        .assign(
+            moa=lambda d: d["Treatment"].map(TREATMENT_MOA_MAP),
+            drug_class=lambda d: (
+                d["Treatment"].map(TREATMENT_CLASS_MAP).fillna(TREATMENT_CLASS_DEFAULT)
+            ),
+        )
+        .sort_values(["moa", "Treatment", "Dose"])
+        .rename(
+            columns={
+                "Treatment": "treatment",
+                "Dose": "dose",
+                "Unit": "unit",
+                "drug_class": "class",
+            }
+        )
+    )
+    drugs = local_subset(
+        drugs[["treatment", "class", "moa", "dose", "unit"]], "overview_drugs"
+    )
+    st.caption(f"{drugs['treatment'].nunique()} drugs across {len(plates)} platemap(s)")
+    st.dataframe(drugs, width="stretch", hide_index=True)
+
+
+def patients_section(filters: Filters) -> None:
+    barcodes = load_barcode_platemap()
+    if barcodes.empty:
+        missing_notice("patients", "(none)", "config/platemaps/barcode_platemap.csv")
+        return
+    st.caption(f"{len(barcodes)} patient tumor samples")
+    st.dataframe(
+        barcodes.rename(
+            columns={"platemap_number": "platemap", "tumor_type": "tumor manifestation"}
+        ).sort_values("patient_tumor"),
+        width="stretch",
+        hide_index=True,
+    )
+
+
+OVERVIEW_SECTIONS = {
+    "Platemap": platemap_section,
+    "Drugs": drugs_section,
+    "Patients & tumor manifestations": patients_section,
+}
+
+
+# ---------------------------------------------------------------------------
 # 1.EDA
 # ---------------------------------------------------------------------------
-def umap_section(filters: Filters) -> None:
-    def defaults(label, df):
-        return {
-            "kind": "scatter",
-            "x": "UMAP1",
-            "y": "UMAP2",
-            "color": _first(df, "treatment", "patient_tumor"),
-            "facet": None,
-        }
+_DIMENSION_RE = re.compile(r"(?:^|_)(2D|3D)(?:_|$)")
 
-    dataset_section(
-        registry()["umap"],
-        "umap",
+
+def _dimension_of(key: str) -> str | None:
+    """ "2D"/"3D" token in a dataset key (e.g. ``patient_specific_2D_maxproj_scfs_umap``
+    -> "2D"), or None if the key doesn't carry one."""
+    m = _DIMENSION_RE.search(key)
+    return m.group(1) if m else None
+
+
+def umap_section(filters: Filters) -> None:
+    datasets = registry()["umap"]
+    dims = sorted({d for d in (_dimension_of(k) for k in datasets) if d})
+    if dims:
+        dim = st.radio("Dimensionality", dims, horizontal=True, key="umap_dim")
+        datasets = {k: v for k, v in datasets.items() if _dimension_of(k) == dim}
+    if not datasets:
+        missing_notice("umap", "1.EDA/scripts/0.generate_umap.py", EDA_RESULTS / "umap")
+        return
+
+    label = st.selectbox(
+        "Dataset", list(datasets), key="umap_dataset", format_func=humanize_label
+    )
+    df = load_dataset(str(datasets[label].path))
+
+    is_per_patient = label.startswith("patient_specific")
+    individual = True
+    if is_per_patient:
+        individual = st.checkbox(
+            "Individual patients (one plot per patient, each with its own axes "
+            "-- combining them is misleading since each patient has its own "
+            "independent UMAP fit)",
+            value=True,
+            key="umap_pp_individual",
+        )
+
+    facet_by_patient = is_per_patient and individual
+    defaults = {
+        "kind": "scatter",
+        "x": "UMAP1",
+        "y": "UMAP2",
+        "color": (
+            _first(df, "treatment")
+            if facet_by_patient
+            else _first(df, "treatment", "patient_tumor")
+        ),
+        "facet": "patient_tumor" if facet_by_patient else None,
+    }
+    explorer(
+        df,
+        f"umap_{label}_{'ind' if facet_by_patient else 'comb'}",
         filters,
-        "1.EDA/scripts/0.generate_umap.py",
-        EDA_RESULTS / "umap",
-        defaults,
         kinds=["scatter", "histogram", "heatmap"],
+        defaults=defaults,
+        title=label,
+        free_facet_axes=facet_by_patient,
     )
 
 
 def pca_section(filters: Filters) -> None:
     datasets = registry()["pca"]
+    dims = sorted({d for d in (_dimension_of(k) for k in datasets) if d})
+    if dims:
+        dim = st.radio("Dimensionality", dims, horizontal=True, key="pca_dim")
+        datasets = {k: v for k, v in datasets.items() if _dimension_of(k) == dim}
     if not datasets:
         missing_notice("PCA", "1.EDA/scripts/2.generate_pca.py", EDA_RESULTS / "pca")
         return
-    label = st.selectbox("Dataset", list(datasets), key="pca_dataset")
+    label = st.selectbox(
+        "Dataset", list(datasets), key="pca_dataset", format_func=humanize_label
+    )
     path = datasets[label].path
     df = load_dataset(str(path))
     variance_path = path.with_name(
@@ -172,7 +315,10 @@ def _pairs_heatmap(pair_files, filters: Filters) -> None:
         st.info("No `*_correlation_pairs.parquet` files found.")
         return
     pairs_path = st.selectbox(
-        "Pairs file", pair_files, format_func=lambda p: p.stem, key="corr_pairs_file"
+        "Pairs file",
+        pair_files,
+        format_func=lambda p: humanize_label(p.stem),
+        key="corr_pairs_file",
     )
     samples_path = pairs_path.with_name(pairs_path.name.replace("_pairs", "_samples"))
     if not samples_path.exists():
@@ -230,20 +376,28 @@ def _pairs_heatmap(pair_files, filters: Filters) -> None:
         if order_by
         else np.arange(len(idx)).astype(str)
     )
-    fig = px.imshow(
+    labels = [f"{i}: {v}" for i, v in enumerate(labels)]
+
+    c1, c2 = st.columns(2)
+    cluster = c1.checkbox(
+        "Hierarchical clustering (rows & cols)", key="corr_pairs_cluster"
+    )
+    track_options = [c for c in order_options if filtered[c].nunique() <= 60]
+    tracks = c2.multiselect(
+        "Color bars (rows & cols)", track_options, key="corr_pairs_tracks"
+    )
+    meta = (
+        filtered[tracks].reset_index(drop=True) if tracks else pd.DataFrame(index=idx)
+    )
+    fig = correlation_heatmap(
         sub,
-        x=[f"{i}: {v}" for i, v in enumerate(labels)],
-        y=[f"{i}: {v}" for i, v in enumerate(labels)],
-        color_continuous_scale="RdBu_r",
-        zmin=-1,
-        zmax=1,
-        aspect="auto",
+        labels,
+        meta,
+        [(t, t, t) for t in tracks],
+        cluster,
         title=" | ".join(f"{k}={v}" for k, v in selection.items()),
     )
-    fig.update_layout(height=750, template="plotly_white")
-    fig.update_xaxes(showticklabels=len(idx) <= 60)
-    fig.update_yaxes(showticklabels=len(idx) <= 60)
-    st.plotly_chart(fig, width="stretch", key="corr_pairs_chart")
+    st.plotly_chart(fig, width="content", key="corr_pairs_chart")
     png_download(fig, "corr_pairs", "correlation_heatmap")
 
 
@@ -252,9 +406,13 @@ def _per_patient_heatmap(matrix_files) -> None:
         st.info("No per-patient correlation matrix file found.")
         return
     df = pd.read_parquet(matrix_files[0])
+    df = df[~df["patient"].astype(str).isin(EXCLUDED_PATIENTS)]
     c1, c2 = st.columns(2)
     variant = c1.selectbox(
-        "Normalization variant", sorted(df["variant"].unique()), key="corr_variant"
+        "Normalization variant",
+        sorted(df["variant"].unique()),
+        key="corr_variant",
+        format_func=humanize_label,
     )
     patient = c2.selectbox(
         "Patient",
@@ -275,18 +433,24 @@ def _per_patient_heatmap(matrix_files) -> None:
     )
     idx = np.where(keep)[0]
     idx = idx[np.argsort(treatments[idx], kind="stable")]
-    fig = px.imshow(
-        matrix[np.ix_(idx, idx)],
-        color_continuous_scale="RdBu_r",
-        zmin=-1,
-        zmax=1,
-        aspect="auto",
-        title=f"{patient} - {variant} ({len(idx)} cells, sorted by treatment)",
+
+    c3, c4 = st.columns(2)
+    cluster = c3.checkbox(
+        "Hierarchical clustering (rows & cols)", key="corr_pp_cluster"
     )
-    fig.update_layout(height=750, template="plotly_white")
-    fig.update_xaxes(showticklabels=False)
-    fig.update_yaxes(showticklabels=False)
-    st.plotly_chart(fig, width="stretch", key="corr_pp_chart")
+    show_track = c4.checkbox("Color bar: treatment", value=True, key="corr_pp_track")
+    meta = pd.DataFrame({"treatment": treatments[idx]})
+    tracks = [("Treatment", "treatment", "treatment")] if show_track else []
+    order_note = "clustered" if cluster else "sorted by treatment"
+    fig = correlation_heatmap(
+        matrix[np.ix_(idx, idx)],
+        [str(i) for i in idx],
+        meta,
+        tracks,
+        cluster,
+        title=f"{patient} - {humanize_label(variant)} ({len(idx)} cells, {order_note})",
+    )
+    st.plotly_chart(fig, width="content", key="corr_pp_chart")
     png_download(fig, "corr_pp", "correlation_heatmap_per_patient")
 
 
@@ -316,7 +480,7 @@ def area_volume_section(filters: Filters) -> None:
             "kind": "violin",
             "x": "treatment",
             "y": _first(df, "volume", "area"),
-            "color": _first(df, "dose"),
+            "color": _first(df, "treatment"),
             "facet": _first(df, "patient_tumor"),
         }
 
@@ -504,6 +668,7 @@ def feature_importance_section(filters: Filters) -> None:
                 options,
                 default=options[:1] if name == "profile_type" else options,
                 key=f"fi_{name}",
+                format_func=humanize_label,
             )
     for name, values in selectors.items():
         if values:
@@ -518,6 +683,7 @@ def feature_importance_section(filters: Filters) -> None:
         "Color by",
         [NONE, "split_method", "shuffle_status", "profile_type", "held_out_group"],
         key="fi_color",
+        format_func=lambda v: v if v == NONE else humanize_label(v),
     )
     color = None if color == NONE or color not in df.columns else color
     top = df.groupby("feature")["importance"].mean().nlargest(top_n).index
@@ -574,7 +740,12 @@ def _linear_model_data(key: str, extra_defaults=None):
             "4.linear_modeling/results/linear_modeling",
         )
         return None, None
-    label = st.selectbox("Model results", list(datasets), key=f"{key}_dataset")
+    label = st.selectbox(
+        "Model results",
+        list(datasets),
+        key=f"{key}_dataset",
+        format_func=humanize_label,
+    )
     df = _normalize_lm_df(load_dataset(str(datasets[label].path)))
     if "pvalue_fdr" in df.columns:
         df["neg_log10_pvalue_fdr"] = -np.log10(df["pvalue_fdr"].clip(lower=1e-300))
@@ -758,7 +929,9 @@ def lm_upset_section(filters: Filters) -> None:
     hits = df.assign(hit=(df["pvalue_fdr"] < fdr_max) & (df["coefficient"] > coef_min))
     terms = [t for t in TERM_ORDER if t in hits["term"].unique()]
 
-    scope = st.selectbox("Scope", list(UPSET_SCOPES), key="upset_scope")
+    scope = st.selectbox(
+        "Scope", list(UPSET_SCOPES), key="upset_scope", format_func=humanize_label
+    )
     group_cols = UPSET_SCOPES[scope]
     index_cols = group_cols + ["feature"]
     membership_all = _build_membership(hits, terms, index_cols)
@@ -1083,34 +1256,70 @@ def lm_model_variates_section(filters: Filters) -> None:
         )
         return
 
-    fig = annotated_significance_heatmap(sig, criterion, legend_title=criterion)
+    with st.expander("Heatmap: color bars & clustering", expanded=False):
+        c6, c7 = st.columns(2)
+        cluster_rows = c6.checkbox(
+            "Cluster rows (features)", value=True, key="lmvar_cluster_rows"
+        )
+        cluster_cols = c6.checkbox(
+            "Cluster columns (patient x treatment)",
+            value=True,
+            key="lmvar_cluster_cols",
+        )
+        row_tracks = c7.multiselect(
+            "Row color bars",
+            ROW_TRACK_NAMES,
+            default=ROW_TRACK_NAMES,
+            key="lmvar_row_tracks",
+        )
+        col_tracks = c7.multiselect(
+            "Column color bars",
+            COL_TRACK_NAMES,
+            default=COL_TRACK_NAMES,
+            key="lmvar_col_tracks",
+        )
+
+    fig = annotated_significance_heatmap(
+        sig,
+        criterion,
+        legend_title=criterion,
+        cluster_rows=cluster_rows,
+        cluster_cols=cluster_cols,
+        row_tracks=row_tracks,
+        col_tracks=col_tracks,
+    )
     if fig is None:
         st.warning("Nothing to plot.")
     else:
-        st.plotly_chart(fig, width="stretch", key="lmvar_heatmap")
+        st.plotly_chart(fig, width="content", key="lmvar_heatmap")
         png_download(fig, "lmvar_heatmap", f"{label}_{criterion.replace(' ', '_')}")
-        _annotation_legends(
-            [
-                ("Patient", sorted(sig["patient"].unique()), "patient"),
-                (
-                    "Tumor type",
-                    sorted(sig["tumor_type"].dropna().unique()),
-                    "tumor_type",
-                ),
-                ("Treatment", sorted(sig["drug"].unique()), "treatment"),
-                (
-                    "Feature type",
-                    sorted(sig["Feature_type"].fillna("Other").unique()),
-                    "feature_type",
-                ),
-                ("Channel", sorted(sig["Channel"].fillna("Other").unique()), "channel"),
-                (
-                    "Compartment",
-                    sorted(sig["Compartment"].fillna("Other").unique()),
-                    "compartment",
-                ),
-            ]
-        )
+        all_legends = {
+            "Patient": ("Patient", sorted(sig["patient"].unique()), "patient"),
+            "Tumor type": (
+                "Tumor type",
+                sorted(sig["tumor_type"].dropna().unique()),
+                "tumor_type",
+            ),
+            "Treatment": ("Treatment", sorted(sig["drug"].unique()), "treatment"),
+            "Feature type": (
+                "Feature type",
+                sorted(sig["Feature_type"].fillna("Other").unique()),
+                "feature_type",
+            ),
+            "Channel": (
+                "Channel",
+                sorted(sig["Channel"].fillna("Other").unique()),
+                "channel",
+            ),
+            "Compartment": (
+                "Compartment",
+                sorted(sig["Compartment"].fillna("Other").unique()),
+                "compartment",
+            ),
+        }
+        shown = [all_legends[t] for t in col_tracks + row_tracks if t in all_legends]
+        if shown:
+            _annotation_legends(shown)
 
     st.divider()
     st.caption("Drill into one model's full term signature")

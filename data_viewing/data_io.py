@@ -1,39 +1,79 @@
 """Dataset registry, loading and metadata harmonization for the data_viewing app.
 
-Every results table the app can show is registered here with its path. Paths are
-defined relative to the Git root. Metadata columns are renamed to canonical
-names (e.g. ``Metadata_Experiment_Treatment`` and ``Metadata_treatment`` both
-become ``treatment``) so one set of filters works across every module.
+Every results table the app can show is registered here with its path. Metadata
+columns are renamed to canonical names (e.g. ``Metadata_Experiment_Treatment``
+and ``Metadata_treatment`` both become ``treatment``) so one set of filters
+works across every module.
+
+Data lives in an HF Bucket (see ``sync_data.py``). Two ways to get it into a
+running app, picked automatically:
+
+- An HF Space with the bucket mounted as a storage volume (Space Settings ->
+  Storage Buckets) -- set ``DATA_DIR`` to that mount path.
+- Anywhere else (e.g. Streamlit Community Cloud, which can't mount buckets):
+  this module downloads it with ``sync_bucket()`` into ``DATA_DIR`` every
+  time the process starts, via ``st.cache_resource`` so it only actually
+  transfers once per process (``sync_bucket`` also diffs, so even that one
+  call is cheap if ``DATA_DIR`` already matches). The bucket (see
+  ``HF_BUCKET`` below) is **private**, so this requires an ``HF_TOKEN``
+  secret/env var with read access to it -- without one, the download fails,
+  every section shows "no results", and a sidebar warning names the error.
 """
 
+import os
 import pathlib
-import sys
 
 import pandas as pd
 import pyarrow.parquet as pq
 import streamlit as st
 from palettes import TREATMENT_MOA_MAP, TUMOR_TYPE_LOOKUP
 
-# `uv run` re-syncs the env and drops the editable `utils` install (it is not in
-# pyproject.toml), so fall back to the in-repo source when it is not importable.
-try:
-    from notebook_init_utils.notebook_init_utils import init_notebook
-except ModuleNotFoundError:
-    sys.path.insert(
-        0, str(pathlib.Path(__file__).resolve().parents[1] / "utils" / "src")
-    )
-    from notebook_init_utils.notebook_init_utils import init_notebook
-
-root_dir, in_notebook = init_notebook()
-
-
-EDA_RESULTS = root_dir / "1.EDA" / "results"
-VIABILITY_RESULTS = root_dir / "3.viability_prediction_models" / "model_results"
-LINEAR_MODELING_RESULTS = root_dir / "4.linear_modeling" / "results" / "linear_modeling"
-VARIATE_IMPORTANCE_RESULTS = (
-    root_dir / "4.linear_modeling" / "results" / "variate_importance"
+DATA_DIR = pathlib.Path(
+    os.environ.get("DATA_DIR", pathlib.Path(__file__).resolve().parent / "data")
 )
-PLATEMAPS = root_dir / "data" / "viabilities" / "combined_platemaps.parquet"
+
+# default matches sync_data.py's push target, so this works with zero extra
+# config beyond HF_TOKEN (the bucket is private) once deployed.
+HF_BUCKET = os.environ.get("HF_BUCKET", "lippincm/NF1_3D_organoid_data_viewing-storage")
+
+
+@st.cache_resource(show_spinner="Downloading precomputed results from the HF Bucket...")
+def _sync_bucket_once(bucket: str, dest: str) -> None:
+    """Download ``hf://buckets/<bucket>/data`` into ``dest``, once per process.
+
+    Always attempts the sync rather than skipping when ``dest`` already has
+    *some* files: a previous attempt (e.g. before ``HF_TOKEN`` was set) can
+    leave it partially populated -- missing just one subfolder was exactly
+    that bug -- and ``sync_bucket`` only transfers what's actually missing
+    or changed, so a fully-up-to-date ``dest`` costs one cheap diff, not a
+    re-download. ``st.cache_resource`` only caches a *successful* call, so a
+    failure (e.g. bad ``HF_TOKEN``) retries on the next process start rather
+    than silently staying broken for its lifetime.
+    """
+    from huggingface_hub import sync_bucket
+
+    pathlib.Path(dest).mkdir(parents=True, exist_ok=True)
+    sync_bucket(f"hf://buckets/{bucket}/data", dest)
+
+
+BUCKET_SYNC_ERROR: str | None = None
+try:
+    _sync_bucket_once(HF_BUCKET, str(DATA_DIR))
+except Exception as err:  # no/bad HF_TOKEN, offline, unreachable, ...
+    from huggingface_hub import get_token
+
+    token_state = "an HF_TOKEN is set" if get_token() else "no HF_TOKEN is set"
+    BUCKET_SYNC_ERROR = (
+        f"Could not sync data from the HF Bucket `{HF_BUCKET}` ({token_state}): {err}"
+    )
+
+
+EDA_RESULTS = DATA_DIR / "eda"
+VIABILITY_RESULTS = DATA_DIR / "viability_models"
+LINEAR_MODELING_RESULTS = DATA_DIR / "linear_modeling" / "models"
+VARIATE_IMPORTANCE_RESULTS = DATA_DIR / "linear_modeling" / "variate_importance"
+PLATEMAP_CONFIG_DIR = DATA_DIR / "platemaps"
+PLATEMAPS = PLATEMAP_CONFIG_DIR / "combined_platemaps.parquet"
 
 # ---------------------------------------------------------------------------
 # Canonical metadata names
@@ -66,6 +106,12 @@ CANONICAL_COLUMNS = {
     "Treatment": "treatment",
     "Dose": "dose",
 }
+
+# NF0037_T1_CQ1 is a separate analysis (see data_viewing/background.py's
+# PROFILE_GLOSSARY) and must never show up alongside the pooled patients, in
+# any module -- dropped here so every table is covered, not just the ones an
+# upstream script already excludes it from.
+EXCLUDED_PATIENTS = {"NF0037_T1_CQ1"}
 
 # Metadata fields offered in the shared sidebar filters (when present in a table).
 GLOBAL_FILTER_COLUMNS = [
@@ -112,6 +158,14 @@ def _add_derived(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def _exclude_patients(df: pd.DataFrame) -> pd.DataFrame:
+    """Drop rows for ``EXCLUDED_PATIENTS`` wherever a patient column is present."""
+    for col in ("patient_tumor", "patient"):
+        if col in df.columns:
+            df = df[~df[col].astype(str).isin(EXCLUDED_PATIENTS)]
+    return df
+
+
 def _harmonize(df: pd.DataFrame) -> pd.DataFrame:
     mapping = canonicalize_columns(list(df.columns))
     df = df.rename(columns=mapping)
@@ -119,7 +173,7 @@ def _harmonize(df: pd.DataFrame) -> pd.DataFrame:
     for col in ("dose", "well"):
         if col in df.columns and df[col].dtype == object:
             df[col] = df[col].astype(str)
-    return _add_derived(df)
+    return _exclude_patients(_add_derived(df))
 
 
 # ---------------------------------------------------------------------------
@@ -167,7 +221,9 @@ def global_filter_options(paths: tuple[str, ...]) -> dict[str, list[str]]:
         wanted = [r for r, c in mapping.items() if c in GLOBAL_FILTER_COLUMNS]
         if not wanted:
             continue
-        df = _add_derived(pd.read_parquet(path, columns=wanted).rename(columns=mapping))
+        df = _exclude_patients(
+            _add_derived(pd.read_parquet(path, columns=wanted).rename(columns=mapping))
+        )
         for col in df.columns:
             values[col].update(df[col].dropna().astype(str).unique())
     return {c: sorted(v, key=_natural_key) for c, v in values.items() if v}
@@ -246,6 +302,28 @@ def registry() -> dict[str, dict[str, Dataset]]:
             "4.linear_modeling/scripts/5.calculate_variate_importance.py",
         ),
     }
+
+
+@st.cache_data(show_spinner=False)
+def load_platemaps() -> dict[str, pd.DataFrame]:
+    """Named well -> treatment layouts (``config/platemaps/platemap*.csv``),
+    keyed by file stem (``platemap1``, ``platemap2``, ...)."""
+    if not PLATEMAP_CONFIG_DIR.exists():
+        return {}
+    files = sorted(PLATEMAP_CONFIG_DIR.glob("platemap[0-9]*.csv"))
+    return {f.stem: pd.read_csv(f) for f in files}
+
+
+@st.cache_data(show_spinner=False)
+def load_barcode_platemap() -> pd.DataFrame:
+    """Which named platemap each patient was run on, plus its tumor type."""
+    path = PLATEMAP_CONFIG_DIR / "barcode_platemap.csv"
+    if not path.exists():
+        return pd.DataFrame(columns=["patient_tumor", "platemap_number", "tumor_type"])
+    df = pd.read_csv(path).rename(columns={"patient_tumor_barcode": "patient_tumor"})
+    df = df[~df["patient_tumor"].astype(str).isin(EXCLUDED_PATIENTS)]
+    df["tumor_type"] = df["patient_tumor"].map(TUMOR_TYPE_LOOKUP)
+    return df.reset_index(drop=True)
 
 
 def all_filterable_paths() -> tuple[str, ...]:

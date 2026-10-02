@@ -11,7 +11,7 @@ from data_io import GLOBAL_FILTER_COLUMNS, _natural_key
 from palettes import TERM_COLORS, order_for, palette_for
 from plotly.subplots import make_subplots
 from scipy.cluster.hierarchy import dendrogram, leaves_list, linkage
-from scipy.spatial.distance import pdist
+from scipy.spatial.distance import pdist, squareform
 
 NONE = "(none)"
 MAX_FACETS = 30
@@ -153,6 +153,7 @@ def explorer(
     defaults: dict | None = None,
     title: str = "",
     height: int = 650,
+    free_facet_axes: bool = False,
 ) -> go.Figure | None:
     """Interactive plot with plot-type, axis, color, facet and subset controls.
 
@@ -162,7 +163,11 @@ def explorer(
     key : unique widget-key prefix for this section.
     filters : shared sidebar filters (column -> selected values).
     kinds : allowed plot types (defaults to all).
-    defaults : initial values for ``kind``, ``x``, ``y``, ``color``, ``facet``.
+    defaults : initial values for ``kind``, ``x``, ``y``, ``color``, ``facet``,
+        ``shape``.
+    free_facet_axes : give each facet panel its own x/y range instead of a
+        shared one (e.g. per-patient UMAPs, whose coordinates are independent
+        fits and aren't comparable across panels).
     """
     kinds = kinds or PLOT_KINDS
     defaults = defaults or {}
@@ -196,10 +201,12 @@ def explorer(
     y_options = numeric if kind in ("box", "violin", "bar") else all_cols
     y = pick("Y", y_options, defaults.get("y"), c3, allow_none=kind == "histogram")
 
-    c4, c5, c6 = st.columns(3)
+    c4, c5, c6, c7 = st.columns(4)
     color = pick("Color", all_cols, defaults.get("color"), c4)
     facet = pick("Facet", categorical, defaults.get("facet"), c5)
-    facet_wrap = c6.slider(
+    shape_options = [c for c in ("dose", "tumor_type") if c in df.columns]
+    shape = pick("Shape", shape_options, defaults.get("shape"), c6, allow_none=True)
+    facet_wrap = c7.slider(
         "Facets per row", 1, 8, 3, key=f"{key}_wrap", disabled=facet == NONE
     )
 
@@ -231,6 +238,7 @@ def explorer(
     y = None if y == NONE else y
     color = None if color == NONE else color
     facet = None if facet == NONE else facet
+    shape = None if shape == NONE else shape
 
     if facet:
         n_facets = plot_df[facet].nunique()
@@ -240,7 +248,7 @@ def explorer(
                 f"{facet} has {n_facets} levels; showing the {MAX_FACETS} largest."
             )
             plot_df = plot_df[plot_df[facet].isin(top)]
-    for col in (x, color, facet):
+    for col in (x, color, facet, shape):
         if col and (col != color or as_cat or col in ("dose",)):
             _order_categories(plot_df, col)
     if color and as_cat and pd.api.types.is_numeric_dtype(plot_df[color]):
@@ -249,7 +257,7 @@ def explorer(
     common = dict(
         color=color, facet_col=facet, facet_col_wrap=facet_wrap if facet else 0
     )
-    common.update(_palette_kwargs(plot_df, x, color, facet))
+    common.update(_palette_kwargs(plot_df, x, color, facet, shape))
     if not facet:
         common.pop("facet_col_wrap")
     log = dict(log_x=log_x, log_y=log_y)
@@ -268,6 +276,7 @@ def explorer(
             agg,
             nbins,
             background and facet is not None,
+            shape,
         )
     except Exception as err:
         st.error(f"Could not draw this combination: {err}")
@@ -276,13 +285,16 @@ def explorer(
     fig.update_layout(title=title, height=height, template="plotly_white")
     if facet:
         fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
+        if free_facet_axes:
+            fig.update_xaxes(matches=None, showticklabels=True)
+            fig.update_yaxes(matches=None, showticklabels=True)
     st.plotly_chart(fig, width="stretch", key=f"{key}_chart")
     png_download(fig, key, key)
     return fig
 
 
-def _palette_kwargs(df: pd.DataFrame, x, color, facet) -> dict:
-    """R-theme colors for the color column and R-defined orders for x/color/facet."""
+def _palette_kwargs(df: pd.DataFrame, x, color, facet, shape=None) -> dict:
+    """R-theme colors for the color column and R-defined orders for x/color/facet/shape."""
     kwargs: dict = {}
     if color and not (
         pd.api.types.is_numeric_dtype(df[color])
@@ -293,7 +305,7 @@ def _palette_kwargs(df: pd.DataFrame, x, color, facet) -> dict:
         if colors:
             kwargs["color_discrete_map"] = colors
     orders = {}
-    for col in (x, color, facet):
+    for col in (x, color, facet, shape):
         if col and not pd.api.types.is_numeric_dtype(df[col]):
             levels = [str(v) for v in df[col].dropna().unique()]
             order = order_for(col, levels)
@@ -305,7 +317,19 @@ def _palette_kwargs(df: pd.DataFrame, x, color, facet) -> dict:
 
 
 def _build(
-    kind, df, x, y, common, log, opacity, size, max_points, agg, nbins, background=False
+    kind,
+    df,
+    x,
+    y,
+    common,
+    log,
+    opacity,
+    size,
+    max_points,
+    agg,
+    nbins,
+    background=False,
+    shape=None,
 ):
     if kind == "scatter":
         if x is None or y is None:
@@ -314,7 +338,14 @@ def _build(
             st.caption(f"Showing a random {max_points:,} of {len(df):,} points.")
             df = df.sample(int(max_points), random_state=0)
         fig = px.scatter(
-            df, x=x, y=y, opacity=opacity, render_mode="webgl", **common, **log
+            df,
+            x=x,
+            y=y,
+            symbol=shape,
+            opacity=opacity,
+            render_mode="webgl",
+            **common,
+            **log,
         )
         fig.update_traces(marker=dict(size=size))
         if background:
@@ -661,6 +692,27 @@ def _hclust(arr: np.ndarray) -> tuple[list[int], np.ndarray | None]:
         return list(range(n)), None
 
 
+def _cluster_from_similarity(sim: np.ndarray) -> tuple[list[int], np.ndarray | None]:
+    """Average-linkage leaf order and linkage matrix for a symmetric similarity
+    matrix (e.g. a correlation matrix), clustered on ``1 - similarity`` as the
+    distance. Missing pairs (NaN) are treated as maximally dissimilar rather
+    than dropped, so the matrix stays square. Falls back to the original order
+    (no dendrogram) when there are too few rows to cluster."""
+    n = sim.shape[0]
+    if n < 3:
+        return list(range(n)), None
+    dist = 1 - np.nan_to_num(sim, nan=-1.0)
+    np.fill_diagonal(dist, 0)
+    try:
+        d = squareform(dist, checks=False)
+        if not np.all(np.isfinite(d)):
+            return list(range(n)), None
+        z = linkage(d, method="average")
+        return leaves_list(z).tolist(), z
+    except Exception:
+        return list(range(n)), None
+
+
 def _dendrogram_traces(
     z: np.ndarray | None, leaf_axis: str, color: str = "#999999"
 ) -> list[go.Scatter]:
@@ -696,22 +748,37 @@ def _dendrogram_traces(
     return traces
 
 
+ROW_TRACK_NAMES = ["Compartment", "Channel", "Feature type"]
+COL_TRACK_NAMES = ["Patient", "Tumor type", "Treatment"]
+
+
 def annotated_significance_heatmap(
     sig: pd.DataFrame,
     title: str,
     legend_title: str = "significant",
+    cluster_rows: bool = True,
+    cluster_cols: bool = True,
+    row_tracks: list[str] | None = None,
+    col_tracks: list[str] | None = None,
 ) -> go.Figure | None:
     """Feature x (patient, treatment) yes/no significance matrix with Patient,
     Tumor type, Treatment (top) and Compartment, Channel, Feature type (left)
-    color-coded annotation strips, both axes hierarchically clustered, ported
-    from ``6.plot_variate_importance.r``'s ``cooccurrence_heatmap()``. ``sig``
+    color-coded annotation strips, ported from
+    ``6.plot_variate_importance.r``'s ``cooccurrence_heatmap()``. ``sig``
     is one row per (feature, patient, treatment) pair that is significant
     under the chosen criterion, with columns ``feature``, ``Feature_type``,
     ``Channel``, ``Compartment``, ``patient``, ``treatment``, ``drug``,
     ``tumor_type``.
+
+    ``cluster_rows``/``cluster_cols`` toggle hierarchical clustering on each
+    axis independently (unclustered keeps the original row/column order).
+    ``row_tracks``/``col_tracks`` pick which annotation strips to draw on each
+    axis (from ``ROW_TRACK_NAMES``/``COL_TRACK_NAMES``; ``None`` draws all).
     """
     if sig.empty:
         return None
+    row_tracks = ROW_TRACK_NAMES if row_tracks is None else row_tracks
+    col_tracks = COL_TRACK_NAMES if col_tracks is None else col_tracks
     sig = sig.assign(
         patient_treatment=sig["patient"] + " | " + sig["treatment"],
         Feature_type=sig["Feature_type"].fillna("Other"),
@@ -735,30 +802,36 @@ def annotated_significance_heatmap(
         sig["patient_treatment"].map(col_idx).to_numpy(),
     ] = 1
 
-    row_order, row_z = _hclust(arr)
-    col_order, col_z = _hclust(arr.T)
+    row_order, row_z = (
+        _hclust(arr) if cluster_rows else (list(range(arr.shape[0])), None)
+    )
+    col_order, col_z = (
+        _hclust(arr.T) if cluster_cols else (list(range(arr.shape[1])), None)
+    )
     arr = arr[np.ix_(row_order, col_order)]
     features = features.iloc[row_order].reset_index(drop=True)
     columns = columns.iloc[col_order].reset_index(drop=True)
     feat_list = features["feature"].tolist()
     col_list = columns["patient_treatment"].tolist()
 
-    row_annotations = [
+    row_annotations_all = [
         ("Compartment", features["Compartment"].tolist(), "compartment"),
         ("Channel", features["Channel"].tolist(), "channel"),
         ("Feature type", features["Feature_type"].tolist(), "feature_type"),
     ]
-    col_annotations = [
+    col_annotations_all = [
         ("Patient", columns["patient"].tolist(), "patient"),
         ("Tumor type", columns["tumor_type"].tolist(), "tumor_type"),
         ("Treatment", columns["drug"].tolist(), "treatment"),
     ]
+    row_annotations = [t for t in row_annotations_all if t[0] in row_tracks]
+    col_annotations = [t for t in col_annotations_all if t[0] in col_tracks]
     n_row_strips = len(row_annotations)
     n_col_strips = len(col_annotations)
     top_strip_frac = 0.018
     left_strip_frac = 0.03
-    dendro_top_frac = 0.08
-    dendro_left_frac = 0.08
+    dendro_top_frac = 0.08 if col_z is not None else 0.001
+    dendro_left_frac = 0.08 if row_z is not None else 0.001
     row_heights = (
         [dendro_top_frac]
         + [top_strip_frac] * n_col_strips
@@ -834,6 +907,9 @@ def annotated_significance_heatmap(
     for c in range(2, main_col):
         fig.update_yaxes(matches=f"y{main_axis_num}", row=main_row, col=c)
         fig.update_yaxes(showticklabels=False, row=main_row, col=c)
+        # the row (left-strip) track name is its single x tick label; vertical
+        # text fits the narrow strip width far better than horizontal
+        fig.update_xaxes(tickangle=90, row=main_row, col=c)
     fig.update_xaxes(
         range=[-0.5, len(col_list) - 0.5],
         showticklabels=False,
@@ -860,10 +936,200 @@ def annotated_significance_heatmap(
     # carry the per-row identity instead); hover still shows the feature name
     fig.update_yaxes(showticklabels=False, row=main_row, col=main_col)
     fig.update_xaxes(showticklabels=False, row=main_row, col=main_col)
+    size = max(280, min(900, 4 * len(feat_list) + 140))
     fig.update_layout(
         template="plotly_white",
         title=f"{title} ({len(feat_list):,} features x {len(col_list):,} patient-treatments)",
-        height=max(280, 4 * len(feat_list) + 140),
+        width=size,
+        height=size,
+        showlegend=False,
+    )
+    return fig
+
+
+def platemap_heatmap(
+    plate: pd.DataFrame,
+    palette: dict[str, str],
+    title: str = "",
+) -> go.Figure:
+    """Well-grid view of a plate layout: one colored cell per well, grouped by
+    ``Treatment`` (``palette`` maps treatment name -> color), with dose/unit
+    in the hover text. ``plate`` has ``WellRow``, ``WellCol``, ``Treatment``,
+    ``Dose``, ``Unit`` columns (one row per well, as in
+    ``config/platemaps/platemap*.csv``). Row A is at the top, matching the
+    physical plate."""
+    rows = sorted(plate["WellRow"].unique())
+    cols = sorted(plate["WellCol"].unique(), key=int)
+    treatments = sorted(plate["Treatment"].unique())
+    scale, cat_to_z = _discrete_colorscale(treatments, palette)
+    row_idx = {r: i for i, r in enumerate(rows)}
+    col_idx = {c: i for i, c in enumerate(cols)}
+    z = np.full((len(rows), len(cols)), np.nan)
+    text = np.full((len(rows), len(cols)), "", dtype=object)
+    for _, well in plate.iterrows():
+        i, j = row_idx[well["WellRow"]], col_idx[well["WellCol"]]
+        z[i, j] = cat_to_z[well["Treatment"]]
+        text[i, j] = (
+            f"{well['WellRow']}{well['WellCol']}<br>{well['Treatment']}"
+            f"<br>{well['Dose']}{well['Unit']}"
+        )
+    fig = go.Figure(
+        go.Heatmap(
+            z=z,
+            x=[str(c) for c in cols],
+            y=rows,
+            text=text,
+            texttemplate="%{text}",
+            textfont=dict(size=9),
+            colorscale=scale,
+            zmin=0,
+            zmax=1,
+            showscale=False,
+            hoverinfo="text",
+            xgap=2,
+            ygap=2,
+        )
+    )
+    fig.update_yaxes(autorange="reversed", title_text="Row")
+    fig.update_xaxes(title_text="Column", side="top")
+    fig.update_layout(
+        title=title,
+        template="plotly_white",
+        height=max(320, 70 * len(rows) + 80),
+    )
+    return fig
+
+
+def correlation_heatmap(
+    matrix: np.ndarray,
+    labels: list[str],
+    meta: pd.DataFrame,
+    tracks: list[tuple[str, str, str]],
+    cluster: bool,
+    zmin: float = -1,
+    zmax: float = 1,
+    title: str = "",
+) -> go.Figure:
+    """Symmetric correlation-style matrix with optional average-linkage
+    hierarchical clustering and optional color-coded annotation strips along
+    both edges. Since rows and columns represent the same samples, one
+    clustering order and one set of tracks is applied to both axes.
+
+    Parameters
+    ----------
+    matrix : square, symmetric similarity matrix (may contain NaN for missing
+        pairs).
+    labels : axis tick labels, aligned row-for-row with ``matrix``.
+    meta : per-sample metadata, aligned row-for-row with ``matrix``; supplies
+        the values for each selected track.
+    tracks : ``(display name, column in meta, palette lookup key)`` for every
+        annotation strip to draw (already filtered to what the caller wants
+        shown -- pass ``[]`` for none).
+    cluster : reorder rows/columns by hierarchical clustering instead of
+        keeping the given order.
+    """
+    n = matrix.shape[0]
+    order = list(range(n))
+    z = None
+    if cluster:
+        order, z = _cluster_from_similarity(matrix)
+    mat = matrix[np.ix_(order, order)]
+    labels = [labels[i] for i in order]
+    meta = meta.iloc[order].reset_index(drop=True)
+    tracks = [t for t in tracks if t[1] in meta.columns]
+
+    n_tracks = len(tracks)
+    strip_frac = 0.02
+    dendro_frac = 0.08 if z is not None else 0.001
+    main_frac = max(0.2, 1 - dendro_frac - strip_frac * n_tracks)
+
+    fig = make_subplots(
+        rows=n_tracks + 2,
+        cols=n_tracks + 2,
+        row_heights=[dendro_frac] + [strip_frac] * n_tracks + [main_frac],
+        column_widths=[dendro_frac] + [strip_frac] * n_tracks + [main_frac],
+        horizontal_spacing=0.003,
+        vertical_spacing=0.003,
+        specs=[[{}] * (n_tracks + 2)] * (n_tracks + 2),
+    )
+    main_row = main_col = n_tracks + 2
+
+    for trace in _dendrogram_traces(z, "x"):
+        fig.add_trace(trace, row=1, col=main_col)
+    for trace in _dendrogram_traces(z, "y"):
+        fig.add_trace(trace, row=main_row, col=1)
+    for i, (name, col, palette_key) in enumerate(tracks, start=2):
+        values = meta[col].astype(str).tolist()
+        palette = palette_for(palette_key, values) or {}
+        fig.add_trace(
+            _annotation_strip(labels, values, palette, "row", name),
+            row=i,
+            col=main_col,
+        )
+        fig.add_trace(
+            _annotation_strip(labels, values, palette, "col", name),
+            row=main_row,
+            col=i,
+        )
+
+    fig.add_trace(
+        go.Heatmap(
+            z=mat,
+            x=labels,
+            y=labels,
+            colorscale="RdBu_r",
+            zmin=zmin,
+            zmax=zmax,
+            showscale=True,
+            hovertemplate="%{y}<br>%{x}<br>%{z:.2f}<extra></extra>",
+        ),
+        row=main_row,
+        col=main_col,
+    )
+
+    main_axis_num = main_row * main_col
+    for r in range(2, main_row):
+        fig.update_xaxes(
+            matches=f"x{main_axis_num}", showticklabels=False, row=r, col=main_col
+        )
+    for c in range(2, main_col):
+        fig.update_yaxes(
+            matches=f"y{main_axis_num}", showticklabels=False, row=main_row, col=c
+        )
+        # the row (left-strip) track name is its single x tick label; vertical
+        # text fits the narrow strip width far better than horizontal
+        fig.update_xaxes(tickangle=90, row=main_row, col=c)
+    fig.update_xaxes(
+        range=[-0.5, n - 0.5],
+        showticklabels=False,
+        showgrid=False,
+        zeroline=False,
+        row=1,
+        col=main_col,
+    )
+    fig.update_yaxes(
+        showticklabels=False, showgrid=False, zeroline=False, row=1, col=main_col
+    )
+    fig.update_yaxes(
+        range=[-0.5, n - 0.5],
+        showticklabels=False,
+        showgrid=False,
+        zeroline=False,
+        row=main_row,
+        col=1,
+    )
+    fig.update_xaxes(
+        showticklabels=False, showgrid=False, zeroline=False, row=main_row, col=1
+    )
+    show_labels = n <= 60
+    fig.update_xaxes(showticklabels=show_labels, row=main_row, col=main_col)
+    fig.update_yaxes(showticklabels=show_labels, row=main_row, col=main_col)
+    size = max(500, min(1200, 20 * n + 200))
+    fig.update_layout(
+        template="plotly_white",
+        title=title,
+        width=size,
+        height=size,
         showlegend=False,
     )
     return fig

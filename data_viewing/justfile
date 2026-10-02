@@ -1,0 +1,8 @@
+upload_data_to_hf_bucket:
+	python3 sync_data.py upload
+
+download_data_from_hf_bucket:
+	python3 sync_data.py download
+
+run_app_locally:
+	bash ./run_app.sh

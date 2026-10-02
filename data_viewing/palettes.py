@@ -5,6 +5,8 @@ column name so any plot colored/faceted by that column picks up the same colors
 as the static R figures.
 """
 
+import re
+
 MOA_PALETTE = {
     "BRD4 inhibitor": "#93152A",
     "receptor tyrosine kinase inhibitor": "#BA3924",
@@ -47,6 +49,14 @@ TREATMENT_MOA_MAP = {
     "Ketotifen": "histamine H1\nreceptor antagonist",
     "Trabectedin": "DNA binding",
 }
+
+# ported from the EDA tables' Metadata_Experiment_Class / Metadata_class column;
+# every drug is a small molecule except the DMSO control and the ARV-825 PROTAC
+TREATMENT_CLASS_MAP = {
+    "DMSO": "Control",
+    "ARV-825": "PROTAC",
+}
+TREATMENT_CLASS_DEFAULT = "Small Molecule"
 
 MOA_ORDER = [
     "Control",
@@ -283,3 +293,102 @@ def order_for(column: str, levels: list[str]) -> list[str] | None:
     return [lvl for lvl in order if lvl in levels] + [
         lvl for lvl in levels if lvl not in order
     ]
+
+
+# ---------------------------------------------------------------------------
+# Dropdown labels: turn code-shaped names (file stems, profile_type values)
+# into plain English. Multi-token keys are matched greedily, longest first,
+# against underscore-split tokens; an empty mapped phrase drops the token
+# (e.g. "profiles", "embeddings", which carry no information for a human).
+# ---------------------------------------------------------------------------
+_PHRASES: dict[tuple[str, ...], str] = {
+    ("patient", "specific"): "Per-patient",
+    ("max", "projection"): "Max projection",
+    ("maxproj",): "Max projection",
+    ("middle", "n", "slice"): "Middle N-slice",
+    ("middle", "slice"): "Middle slice",
+    ("midslice",): "Mid-slice",
+    ("single", "cell", "agg"): "Single-cell (aggregated)",
+    ("single", "cell"): "Single-cell",
+    ("organoid", "norm", "technical", "model"): "Organoid (technical model)",
+    ("sc", "norm", "technical", "model"): "Single-cell (technical model)",
+    ("sammed", "organoid", "norm"): "Organoid (SAM-med)",
+    ("sammed", "sc", "norm"): "Single-cell (SAM-med)",
+    ("sammed", "nucleocentric", "norm"): "Nucleocentric (SAM-med)",
+    ("nucleocentric", "morphem", "norm"): "Nucleocentric (MorphEm)",
+    ("nucleocentric", "norm"): "Nucleocentric",
+    ("organoid", "norm"): "Organoid (ZEDProfiler)",
+    ("sc", "norm"): "Single-cell (ZEDProfiler)",
+    ("organoid", "agg"): "Organoid (aggregated)",
+    ("organoid", "consensus"): "Organoid (consensus)",
+    ("organoid", "fs"): "Organoid (feature-selected)",
+    ("sc", "agg"): "Single-cell (aggregated)",
+    ("sc", "consensus"): "Single-cell (consensus)",
+    ("sc", "fs"): "Single-cell (feature-selected)",
+    ("scagg",): "Single-cell (aggregated)",
+    ("scconsensus",): "Single-cell (consensus)",
+    ("scfs",): "Single-cell (feature-selected)",
+    ("sammed",): "SAM-med",
+    ("fold", "metrics"): "fold metrics",
+    ("summary", "metrics"): "summary metrics",
+    ("predicted", "viabilities"): "predicted viabilities",
+    ("feature", "importances"): "feature importances",
+    ("correlation", "pairs"): "correlation pairs",
+    ("correlation", "samples"): "correlation samples",
+    ("cell", "counts"): "cell counts",
+    ("held", "out", "group"): "held-out group",
+    ("random", "split"): "Random split",
+    ("lopo",): "LOPO (leave one patient out)",
+    ("loto",): "LOTO (leave one treatment out)",
+    ("combined",): "",
+    ("profiles",): "",
+    ("embeddings",): "",
+    ("fs",): "feature-selected",
+    ("agg",): "aggregated",
+    ("norm",): "normalized",
+    ("sc",): "single-cell",
+    ("raw",): "(raw)",
+    ("umap",): "UMAP",
+    ("pca",): "PCA",
+}
+
+_DIMENSION_RE = re.compile(r"\d+[dD]$")
+
+
+def humanize_label(name: str) -> str:
+    """Turn a code-shaped dataset/profile name (a file stem or raw data value
+    like ``organoid_norm`` or ``patient_specific_2D_maxproj_scfs_umap``) into a
+    plain-English label for display in a dropdown. Falls back to title-casing
+    unrecognized tokens, so it degrades gracefully on names not covered above.
+    """
+    if not isinstance(name, str) or not name:
+        return str(name)
+    if " " in name:
+        return name  # already humanized (raw keys never contain spaces); idempotent
+    # pipeline-step prefixes carry no meaning for a reader (e.g. the
+    # "1.feature_selected_profiles_" in PCA/UMAP file stems)
+    s = re.sub(r"\d+\.(feature_selected|aggregated|consensus)_profiles_", "", name)
+    tokens = [t for t in s.split("_") if t]
+    out: list[str] = []
+    i, n = 0, len(tokens)
+    while i < n:
+        for width in (4, 3, 2, 1):
+            if i + width > n:
+                continue
+            key = tuple(t.lower() for t in tokens[i : i + width])
+            if key in _PHRASES:
+                phrase = _PHRASES[key]
+                if phrase:
+                    out.append(phrase)
+                i += width
+                break
+        else:
+            tok = tokens[i]
+            out.append(
+                tok.upper() if _DIMENSION_RE.fullmatch(tok) else tok.capitalize()
+            )
+            i += 1
+    label = re.sub(r"\s+", " ", " ".join(out)).strip()
+    if not label:
+        return name
+    return label[0].upper() + label[1:]
