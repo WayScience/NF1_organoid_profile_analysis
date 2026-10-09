@@ -130,25 +130,6 @@ profile_dict = {
 # In[4]:
 
 
-tumor_type_dict = {
-    "NF0014_T1": "cNF",
-    "NF0014_T2": "pNF",
-    "NF0016_T1": "pNF",
-    "NF0018_T6": "cNF",
-    "NF0021_T1": "cNF",
-    "NF0030_T1": "Other",
-    "NF0035_T1": "cNF",
-    "NF0037_T1": "cNF",
-    "NF0040_T1": "Other",
-    "NF0055_T1": "pNF",
-    "SARCO219_T2": "MPNST",
-    "SARCO361_T1": "MPNST",
-}
-
-
-# In[5]:
-
-
 def fit_combo(
     patient,
     combo,
@@ -230,7 +211,7 @@ def fit_combo(
     return rows
 
 
-# In[6]:
+# In[5]:
 
 
 for profile in tqdm(profile_dict.keys(), desc="Loading profiles"):
@@ -255,8 +236,10 @@ for profile in tqdm(profile_dict.keys(), desc="Loading profiles"):
     )
     # drop the NF0037_T1_CQ1 patient
     df = df.loc[df["patient"] != "NF0037_T1_CQ1"]
-    # map each patient to its tumor type via the manually defined lookup
-    df["tumor_type"] = df["patient"].map(tumor_type_dict)
+    # a few rows (e.g. NF0018_T6) are missing the experimental metadata
+    # (treatment, dose, tumor type) from an incomplete metadata join;
+    # drop them so they do not form a spurious "nan" treatment group
+    df = df.loc[df["treatment"].notna()]
     # combine treatment, dose, and unit into a single column so that
     # different doses of the same treatment are modeled as distinct groups
     df["Metadata_treatment_full"] = (
@@ -349,15 +332,10 @@ for profile in tqdm(profile_dict.keys(), desc="Loading profiles"):
 
     count_columns = ["cell_count", "organoid_count", "cell_per_organoid_count"]
     metadata_columns = (
-        ["patient", "treatment", "tumor_type"]
+        ["patient", "treatment", "Metadata_Biology_TumorType"]
         + count_columns
         + [col for col in df.columns if col.startswith("Metadata_")]
     )
-    # TODO: temporarily drop texture features
-    df = df.drop(columns=[col for col in df.columns if "_Texture_" in col])
-    # clip feature values to reduce the influence of extreme outliers on the model fit
-    feature_columns = [col for col in df.columns if col not in metadata_columns]
-    df[feature_columns] = df[feature_columns].clip(lower=-1e1, upper=1e1)
     # rename feature columns as the "." dod not play nice with the formula
     # the linear model interprets the "." as an operator and not as part of the column name
     # track the sanitized -> original name mapping so the original feature

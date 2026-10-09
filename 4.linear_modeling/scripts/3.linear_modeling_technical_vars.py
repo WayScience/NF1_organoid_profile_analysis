@@ -142,26 +142,7 @@ lm_equation_terms = (
 )
 
 
-# In[4]:
-
-
-tumor_type_dict = {
-    "NF0014_T1": "cNF",
-    "NF0014_T2": "pNF",
-    "NF0016_T1": "pNF",
-    "NF0018_T6": "cNF",
-    "NF0021_T1": "cNF",
-    "NF0030_T1": "Other",
-    "NF0035_T1": "cNF",
-    "NF0037_T1": "cNF",
-    "NF0040_T1": "Other",
-    "NF0055_T1": "pNF",
-    "SARCO219_T2": "MPNST",
-    "SARCO361_T1": "MPNST",
-}
-
-
-# In[5]:
+# In[ ]:
 
 
 # number of processes for the joblib fan-out (-1 = all cores) and how many
@@ -210,13 +191,28 @@ def fit_feature_chunk(
         "coefficient": [],
         "intercept": [],
     }
+    # columns patsy needs for every term in the formula; a NaN in any of
+    # them (outcome or predictor) drops that row from the fit, not just a
+    # NaN in the outcome
+    required_columns = ["Metadata_Experiment_TreatmentFull"] + numeric_covariates
     for col in features:
-        # skip features with no observed values in this combo (e.g. a channel
-        # that was not imaged/segmented for this patient/treatment) --
-        # an all-NaN outcome leaves an empty design matrix after patsy drops
-        # the missing rows, which smf.ols cannot fit
         model_name = f"{profile}_{patient}_{drug_name}_{col}"
-        if df_trt[col].notna().sum() == 0:
+        # skip features with zero complete-case rows (no NaN in the outcome
+        # or any predictor) -- a covariate that is entirely missing for this
+        # patient/combo (e.g. a well with no location metadata, or no
+        # Manhattan-distance match) drops every row via patsy's NA handling
+        # even when the outcome itself is fine, which otherwise leaves
+        # smf.ols an empty design matrix. A handful of complete rows is
+        # still fit (it may yield a degenerate, NaN-pvalue model -- handled
+        # downstream by the per-term FDR step), just not zero rows, and both
+        # treatment levels must still be present or the treatment dummy
+        # below won't exist.
+        complete_mask = df_trt[[col] + required_columns].notna().all(axis=1)
+        if (
+            complete_mask.sum() == 0
+            or df_trt.loc[complete_mask, "Metadata_Experiment_TreatmentFull"].nunique()
+            < 2
+        ):
             continue
         # Prepare the formula for the linear model:
         # y ~ txt + cell_count + organoid_count + cell/organoid_count + technical covariates
@@ -310,8 +306,10 @@ for profile in tqdm(profile_dict.keys(), desc="Loading profiles"):
     # manhattan_distance_df
     # drop the NF0037_T1_CQ1 patient
     df = df.loc[df["Metadata_Biology_PatientTumor"] != "NF0037_T1_CQ1"]
-    # map each patient to its tumor type via the manually defined lookup
-    df["tumor_type"] = df["Metadata_Biology_PatientTumor"].map(tumor_type_dict)
+    # a few rows (e.g. NF0018_T6) are missing the experimental metadata
+    # (treatment, dose, tumor type) from an incomplete metadata join;
+    # drop them so they do not form a spurious "nan" treatment group
+    df = df.loc[df["Metadata_Experiment_Treatment"].notna()]
     # combine treatment, dose, and unit into a single column so that
     # different doses of the same treatment are modeled as distinct groups
     df["Metadata_Experiment_TreatmentFull"] = (
@@ -421,15 +419,14 @@ for profile in tqdm(profile_dict.keys(), desc="Loading profiles"):
     # evaluate (raises "boolean value of NA is ambiguous")
     df[numeric_covariates] = df[numeric_covariates].astype("float64")
     metadata_columns = (
-        ["Metadata_Biology_PatientTumor", "Metadata_Experiment_Treatment", "tumor_type"]
+        [
+            "Metadata_Biology_PatientTumor",
+            "Metadata_Experiment_Treatment",
+            "Metadata_Biology_TumorType",
+        ]
         + numeric_covariates
         + [col for col in df.columns if col.startswith("Metadata_")]
     )
-    # TODO: temporarily drop texture features
-    df = df.drop(columns=[col for col in df.columns if "_Texture_" in col])
-    # clip feature values to reduce the influence of extreme outliers on the model fit
-    feature_columns = [col for col in df.columns if col not in metadata_columns]
-    df[feature_columns] = df[feature_columns].clip(lower=-1e1, upper=1e1)
     # rename feature columns as the "." dod not play nice with the formula
     # the linear model interprets the "." as an operator and not as part of the column name
     # track the sanitized -> original name mapping so the original feature

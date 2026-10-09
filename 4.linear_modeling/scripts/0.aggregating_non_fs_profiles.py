@@ -72,6 +72,10 @@ for profile_name, profile_sub_dict in profile_dict.items():
     output_profile_path.parent.mkdir(parents=True, exist_ok=True)
 
     df = pd.read_parquet(input_profile_path)
+    # a few rows (e.g. NF0018_T6) are missing the experimental metadata
+    # (treatment, dose, tumor type) from an incomplete metadata join;
+    # drop them so they do not form a spurious "nan" treatment group
+    df = df.loc[df["Metadata_Experiment_Treatment"].notna()]
 
     features_columns = [col for col in df.columns if not col.startswith("Metadata_")]
     if profile_name == "organoid_norm":
