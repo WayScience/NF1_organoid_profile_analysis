@@ -40,7 +40,7 @@
 # | 23 | 30 questions | A direct, numeric answer to 30 concrete questions the models can answer |
 # | 24 | Every technical variate | Each covariate term explored like treatment |
 
-# In[ ]:
+# In[1]:
 
 
 import pathlib
@@ -61,7 +61,7 @@ pd.set_option("display.width", 200)
 RNG = np.random.default_rng(0)
 
 
-# In[ ]:
+# In[2]:
 
 
 # paths (all relative to the git root)
@@ -81,6 +81,22 @@ def save_plot_data(name, **frames):
             plot_data_path / f"{name}__{key}.parquet", index=False
         )
 
+
+# patient -> tumor type, matching utils/r_plot_themes.r's tumor_type_lookup
+tumor_type_dict = {
+    "NF0014_T1": "cNF",
+    "NF0014_T2": "pNF",
+    "NF0016_T1": "pNF",
+    "NF0018_T6": "cNF",
+    "NF0021_T1": "cNF",
+    "NF0030_T1": "Other",
+    "NF0035_T1": "cNF",
+    "NF0037_T1": "cNF",
+    "NF0040_T1": "Other",
+    "NF0055_T1": "pNF",
+    "SARCO219_T2": "MPNST",
+    "SARCO361_T1": "MPNST",
+}
 
 # profile key -> technical-covariate model file (treatment + every technical covariate)
 profile_files = {
@@ -187,7 +203,7 @@ all_treatments = sorted(trt["organoid"]["treatment"].unique())
 #
 # *Volcano plots with significance on the y-axis and effect size on the x-axis, colored by R2.*
 
-# In[ ]:
+# In[3]:
 
 
 volcano = pd.concat(
@@ -214,7 +230,7 @@ save_plot_data("4_volcano_by_profile", volcano=volcano)
 # variance cleanly and can swing arbitrarily negative under suppression) is
 # left out of these tables: it isn't a meaningful quantity to plot.*
 
-# In[ ]:
+# In[4]:
 
 
 partition_rows = []
@@ -253,7 +269,7 @@ save_plot_data(
 partition
 
 
-# In[ ]:
+# In[5]:
 
 
 # treatment variance share by patient and drug (organoid & sc)
@@ -278,7 +294,7 @@ save_plot_data(
 # *Which patients, drugs, MOAs, doses and tumor types produce the most hits?
 # The hit rate is hits / models tested so unbalanced designs do not mislead.*
 
-# In[ ]:
+# In[6]:
 
 
 def hit_rate(df, by):
@@ -306,7 +322,7 @@ landscape.to_parquet(results_path / "hit_rate_landscape.parquet", index=False)
 save_plot_data("6_hit_rate_by_group", landscape=landscape)
 
 
-# In[ ]:
+# In[7]:
 
 
 hit_rate_pt = pd.concat(
@@ -329,7 +345,7 @@ hit_rate_pt = pd.concat(
 save_plot_data("6_hit_rate_patient_by_treatment", hit_rate=hit_rate_pt)
 
 
-# In[ ]:
+# In[8]:
 
 
 # direction of hits: is a drug mostly increasing or decreasing features?
@@ -354,7 +370,7 @@ save_plot_data("6_hit_direction_by_treatment", direction=direction)
 # *Which parts of the morphology feature space respond? Fisher exact test of
 # hit vs non-hit for every compartment / channel / feature type.*
 
-# In[ ]:
+# In[9]:
 
 
 def enrichment(df, col):
@@ -395,7 +411,7 @@ enr.to_parquet(results_path / "feature_family_enrichment.parquet", index=False)
 save_plot_data("7_feature_family_enrichment", enrichment=enr)
 
 
-# In[ ]:
+# In[10]:
 
 
 channel_frames = []
@@ -416,7 +432,7 @@ channel_heat = pd.concat(channel_frames, ignore_index=True)
 save_plot_data("7_channel_by_feature_type_heatmaps", heatmap=channel_heat)
 
 
-# In[ ]:
+# In[11]:
 
 
 # which drugs "own" which channels? MOA x channel hit rate
@@ -438,7 +454,7 @@ save_plot_data("7_drug_by_channel_hit_rate", heatmap=drug_channel)
 # Does effect size grow with dose (a hallmark of a real pharmacological
 # effect)?*
 
-# In[ ]:
+# In[12]:
 
 
 dose_pairs = []
@@ -474,7 +490,7 @@ dose_pairs.to_parquet(results_path / "dose_concordance.parquet", index=False)
 dose_pairs
 
 
-# In[ ]:
+# In[13]:
 
 
 # scatter of low vs high dose for each multi-dose drug (organoid)
@@ -514,7 +530,7 @@ dose_scatter = (
 save_plot_data("8_dose_scatter_organoid", scatter=dose_scatter)
 
 
-# In[ ]:
+# In[14]:
 
 
 # does |effect| grow with dose? (units of the smaller dose that are hits)
@@ -563,7 +579,7 @@ dose_growth
 # For every (treatment, feature): in how many patients is it a hit, and do
 # those hits agree in sign?*
 
-# In[ ]:
+# In[15]:
 
 
 def consensus_table(df):
@@ -619,7 +635,7 @@ save_plot_data(
 )
 
 
-# In[ ]:
+# In[16]:
 
 
 # consensus hits per treatment: >=3 patients, >=80% same sign
@@ -639,7 +655,7 @@ pd.concat(consensus_counts, axis=1).reset_index().to_parquet(
 )
 
 
-# In[ ]:
+# In[17]:
 
 
 # patient x patient agreement of the full treatment signature
@@ -667,7 +683,7 @@ save_plot_data("9_patient_patient_agreement", agreement=patient_agreement)
 # *Do drugs with the same MOA give similar morphological signatures? And
 # which is stronger: the patient effect or the drug effect?*
 
-# In[ ]:
+# In[18]:
 
 
 sig_matrix = {}
@@ -708,7 +724,7 @@ save_plot_data(
 )
 
 
-# In[ ]:
+# In[19]:
 
 
 # patient vs drug effect: correlate every (patient, treatment) signature
@@ -743,7 +759,7 @@ pairs.to_parquet(results_path / "signature_pair_correlations.parquet", index=Fal
 save_plot_data("10_patient_vs_drug_signature", pairs=pairs)
 
 
-# In[ ]:
+# In[20]:
 
 
 # PCA (SVD) of all patient x treatment signatures
@@ -770,7 +786,7 @@ for p in main_profiles:
 # over its compartments gives a like-for-like comparison. Do the two scales
 # agree on direction, on which patient x treatment responds, and on hit rate?*
 
-# In[ ]:
+# In[21]:
 
 
 shared = [
@@ -812,7 +828,7 @@ save_plot_data(
 )
 
 
-# In[ ]:
+# In[22]:
 
 
 # does the same patient x treatment respond at both scales?
@@ -836,7 +852,7 @@ save_plot_data("11_hit_rate_organoid_vs_sc", rate=rate)
 # *`*_agg` profiles have far fewer rows per model. Do their coefficients and
 # hits agree with the full-resolution fits?*
 
-# In[ ]:
+# In[23]:
 
 
 agg_pairs = [("organoid", "organoid_agg"), ("sc", "sc_agg")]
@@ -884,7 +900,7 @@ agg_concordance
 # top of the cell and organoid counts. Which covariate terms explain variance and
 # reach significance?*
 
-# In[ ]:
+# In[24]:
 
 
 technical_covariates_frames = []
@@ -916,7 +932,7 @@ save_plot_data(
 )
 
 
-# In[ ]:
+# In[25]:
 
 
 # mean variance share of every term (treatment + covariates)
@@ -934,7 +950,7 @@ save_plot_data("13_technical_term_variance", term_variance=tv.reset_index())
 # position covariates can absorb plate effects. A hit where treatment explains
 # less variance than any covariate term is suspect.*
 
-# In[ ]:
+# In[26]:
 
 
 count_rows = []
@@ -967,7 +983,7 @@ save_plot_data(
 count_df
 
 
-# In[ ]:
+# In[27]:
 
 
 # how much variance do the covariate terms themselves explain?
@@ -987,7 +1003,7 @@ save_plot_data("14_count_covariate_variance_share", variance=covariate_variance)
 #
 # *How many hits do you get as the FDR / R2 / effect thresholds move?*
 
-# In[ ]:
+# In[28]:
 
 
 fdrs = [0.001, 0.01, 0.05, 0.1]
@@ -1044,7 +1060,7 @@ save_plot_data(
 # *Do cNF, pNF, MPNST and "Other" tumors respond to different drugs and
 # different parts of feature space?*
 
-# In[ ]:
+# In[29]:
 
 
 tumor_type_by_treatment = pd.concat(
@@ -1064,7 +1080,7 @@ tumor_type_by_treatment = pd.concat(
 save_plot_data("16_tumor_type_by_treatment", heatmap=tumor_type_by_treatment)
 
 
-# In[ ]:
+# In[30]:
 
 
 # features that discriminate tumor types: hit rate per tumor type, keep the most variable
@@ -1087,7 +1103,7 @@ pd.concat(tt_rows).to_parquet(
 # features by their coefficient profile across patient x treatment groups
 # shows how many independent "modules" of biology sit in the hits.*
 
-# In[ ]:
+# In[31]:
 
 
 module_tables = []
@@ -1139,7 +1155,7 @@ save_plot_data(
 # (robustness = mean of agg-supported and dose-consistent). This score
 # favours *replicated* effects; sections 20-21 rank the other kinds of interesting.
 
-# In[ ]:
+# In[32]:
 
 
 def build_needles(p):
@@ -1205,7 +1221,7 @@ for p in main_profiles:
 all_needles["organoid"].head(25)
 
 
-# In[ ]:
+# In[33]:
 
 
 # evidence overview: what fraction of hits pass each line of evidence?
@@ -1227,7 +1243,7 @@ save_plot_data("18_evidence_pass_rates", rates=ev.reset_index())
 ev
 
 
-# In[ ]:
+# In[34]:
 
 
 # top needles overall
@@ -1248,7 +1264,7 @@ save_plot_data(
 )
 
 
-# In[ ]:
+# In[35]:
 
 
 # the top needles across every patient: is the effect visible everywhere?
@@ -1274,7 +1290,7 @@ save_plot_data(
 )
 
 
-# In[ ]:
+# In[36]:
 
 
 # the best feature for every treatment
@@ -1292,7 +1308,7 @@ pd.concat(best_tables).to_parquet(
 )
 
 
-# In[ ]:
+# In[37]:
 
 
 # MOA-level needles: features hit by several drugs of the same MOA
@@ -1323,7 +1339,7 @@ moa_needles.loc[(moa_needles["moa_drugs"] > 1)].sort_values(
 ).head(25)
 
 
-# In[ ]:
+# In[38]:
 
 
 # patient-private needles: strong, robust hits that occur in exactly one patient.
@@ -1353,7 +1369,7 @@ private_needles.groupby("profile").head(10)[
 ]
 
 
-# In[ ]:
+# In[39]:
 
 
 # summary: a compact story of the haystack
@@ -1396,7 +1412,7 @@ summary.T
 # (The effect of treatment *on* the counts is not in the saved results; that
 # needs a separate model of well-level counts.)
 
-# In[ ]:
+# In[40]:
 
 
 count_view = []
@@ -1426,7 +1442,7 @@ count_view.to_parquet(results_path / "count_view_by_treatment.parquet", index=Fa
 save_plot_data("19_hits_treatment_vs_count_linked", count_view=count_view)
 
 
-# In[ ]:
+# In[41]:
 
 
 # treatment vs count share of variance, per (patient, treatment) -- points above
@@ -1448,7 +1464,7 @@ treatment_vs_covariate_share = pd.concat(
 save_plot_data("19_treatment_vs_covariate_share", share=treatment_vs_covariate_share)
 
 
-# In[ ]:
+# In[42]:
 
 
 # features whose hits are mostly count-linked (candidate "object number" readouts)
@@ -1474,7 +1490,7 @@ feat_count.loc[feat_count["n_hits"] >= 3].sort_values("frac_treatment_driven").h
 # type the tests are underpowered, so the effect (`delta`) and the hit-based
 # specificity flag matter more than the p-value.
 
-# In[ ]:
+# In[43]:
 
 
 def tumor_type_specificity(df):
@@ -1533,7 +1549,7 @@ for p, t in tumor_specific.items():
     )
 
 
-# In[ ]:
+# In[44]:
 
 
 tumor_specificity_scatter_frames = []
@@ -1573,7 +1589,7 @@ save_plot_data(
 )
 
 
-# In[ ]:
+# In[45]:
 
 
 # which tumor type owns the specific hits, and for which MOA?
@@ -1601,7 +1617,7 @@ ts_all.groupby(["profile", "best_tumor_type", "therapeutic_category"]).size().re
 # The shortlist keeps pairs passing at least one and records which. Count
 # behaviour and technical robustness are carried as columns rather than filters.
 
-# In[ ]:
+# In[46]:
 
 
 def dose_value(label):
@@ -1640,7 +1656,7 @@ for p in main_profiles:
     print(f"{p}: {int(g['dose_dependent'].sum())} dose-dependent (drug, feature) pairs")
 
 
-# In[ ]:
+# In[47]:
 
 
 shortlists = []
@@ -1691,7 +1707,7 @@ print(
 )
 
 
-# In[ ]:
+# In[48]:
 
 
 counts = shortlist.groupby("profile")[crit].sum().T
@@ -1713,7 +1729,7 @@ save_plot_data(
 )
 
 
-# In[ ]:
+# In[49]:
 
 
 # the strongest candidates, ranked by how many definitions they pass
@@ -1730,7 +1746,7 @@ shortlist.sort_values(["n_criteria", "needle_score"], ascending=False).head(20)[
 # average correlation between different drugs of the same MOA higher than
 # between drugs of different MOAs? Tested by permuting MOA labels over drugs.*
 
-# In[ ]:
+# In[50]:
 
 
 moa_test_rows, moa_within_rows, perm_store = [], [], {}
@@ -1808,7 +1824,7 @@ moa_test
 # Each question is answered numerically from the saved fit statistics and the
 # tables built above. The answers are collected in `qa_answers.parquet`.
 
-# In[ ]:
+# In[51]:
 
 
 qa = []
@@ -1831,7 +1847,7 @@ def answer(n, question, text):
 # axis is `term_pct_of_total_var`. A term-level "hit" is `pvalue_fdr < FDR_MAX` in a good model
 # (`R2 > R2_MIN`, `adj R2 > R2_ADJ_MIN`); the coefficient cut-off is dropped because it is on the treatment scale.
 
-# In[ ]:
+# In[52]:
 
 
 # term-level call for every term (treatment included), all profiles
@@ -1862,7 +1878,7 @@ save_plot_data("24_term_summary", summary=term_summary)
 term_summary
 
 
-# In[ ]:
+# In[53]:
 
 
 # significance vs variance share, one panel per term
@@ -1890,7 +1906,7 @@ save_plot_data(
 )
 
 
-# In[ ]:
+# In[54]:
 
 
 # where does each term act? term hit rate by patient and by treatment
@@ -1920,7 +1936,7 @@ for p in main_profiles:
     )
 
 
-# In[ ]:
+# In[55]:
 
 
 # which parts of the feature space does each term touch? term x feature family, mean % variance
@@ -1944,7 +1960,7 @@ for p in main_profiles:
     save_plot_data(f"24_term_by_feature_family_{p}", **family_tables)
 
 
-# In[ ]:
+# In[56]:
 
 
 # do term effects replicate across patients? patients with a significant term per (treatment, feature)

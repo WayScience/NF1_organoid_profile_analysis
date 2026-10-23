@@ -66,65 +66,65 @@ add_feature_type <- function(df, x) {
         mutate(
             Metadata_feature_type = dplyr::case_when(
                 # nucleocentric and sammed
-                grepl("sammed", col_vals, ignore.case = TRUE) 
-                & grepl("nucleocentric", col_vals, ignore.case = TRUE) 
+                grepl("sammed", col_vals, ignore.case = TRUE)
+                & grepl("nucleocentric", col_vals, ignore.case = TRUE)
                 ~ "Nucleocentric\nDL (SAMMed3D)",
 
-                grepl("morphem", col_vals, ignore.case = TRUE) 
-                & grepl("nucleocentric", col_vals, ignore.case = TRUE) 
+                grepl("morphem", col_vals, ignore.case = TRUE)
+                & grepl("nucleocentric", col_vals, ignore.case = TRUE)
                 ~ "Nucleocentric\nDL (MorphEM)",
 
-                grepl("sammed", col_vals, ignore.case = TRUE) 
-                & !grepl("nucleocentric", col_vals, ignore.case = TRUE) 
+                grepl("sammed", col_vals, ignore.case = TRUE)
+                & !grepl("nucleocentric", col_vals, ignore.case = TRUE)
                 & grepl("sc", col_vals, ignore.case = TRUE)
                 ~ "Single cell\nDL (SAMMed3D)",
 
-                grepl("sammed", col_vals, ignore.case = TRUE) 
-                & !grepl("nucleocentric", col_vals, ignore.case = TRUE) 
+                grepl("sammed", col_vals, ignore.case = TRUE)
+                & !grepl("nucleocentric", col_vals, ignore.case = TRUE)
                 & grepl("organoid", col_vals, ignore.case = TRUE)
                 ~ "Organoid\nDL (SAMMed3D)",
 
-                !grepl("sammed", col_vals, ignore.case = TRUE) 
-                & !grepl("nucleocentric", col_vals, ignore.case = TRUE) 
-                & grepl("3D", col_vals, ignore.case = TRUE) 
+                !grepl("sammed", col_vals, ignore.case = TRUE)
+                & !grepl("nucleocentric", col_vals, ignore.case = TRUE)
+                & grepl("3D", col_vals, ignore.case = TRUE)
                 & grepl("sc", col_vals, ignore.case = TRUE)
                 ~ "Single cell\nhandcrafted (ZedProfiler)",
 
-                !grepl("sammed", col_vals, ignore.case = TRUE) 
-                & !grepl("nucleocentric", col_vals, ignore.case = TRUE) 
-                & grepl("3D", col_vals, ignore.case = TRUE) 
+                !grepl("sammed", col_vals, ignore.case = TRUE)
+                & !grepl("nucleocentric", col_vals, ignore.case = TRUE)
+                & grepl("3D", col_vals, ignore.case = TRUE)
                 & grepl("organoid", col_vals, ignore.case = TRUE)
                 ~ "Organoid\nhandcrafted (ZedProfiler)",
 
-            
 
-                grepl("2D", col_vals, ignore.case = TRUE) 
-                & grepl("max", col_vals, ignore.case = TRUE) 
+
+                grepl("2D", col_vals, ignore.case = TRUE)
+                & grepl("max", col_vals, ignore.case = TRUE)
                 & grepl("sc", col_vals, ignore.case = TRUE)
                 ~ "Single cell\n2D max projection\n(CellProfiler)",
-                
-                grepl("2D", col_vals, ignore.case = TRUE) 
-                & grepl("max", col_vals, ignore.case = TRUE) 
+
+                grepl("2D", col_vals, ignore.case = TRUE)
+                & grepl("max", col_vals, ignore.case = TRUE)
                 & grepl("Organoid", col_vals, ignore.case = TRUE)
                 ~ "Organoid\n2D max projection\n(CellProfiler)",
 
-                grepl("2D", col_vals, ignore.case = TRUE) 
-                & grepl("middle_slice", col_vals, ignore.case = TRUE) 
+                grepl("2D", col_vals, ignore.case = TRUE)
+                & grepl("middle_slice", col_vals, ignore.case = TRUE)
                 & grepl("sc", col_vals, ignore.case = TRUE)
                 ~ "Single cell\n2D middle slice\n(CellProfiler)",
-                
-                grepl("2D", col_vals, ignore.case = TRUE) 
-                & grepl("middle_slice", col_vals, ignore.case = TRUE) 
+
+                grepl("2D", col_vals, ignore.case = TRUE)
+                & grepl("middle_slice", col_vals, ignore.case = TRUE)
                 & grepl("Organoid", col_vals, ignore.case = TRUE)
                 ~ "Organoid\n2D middle slice\n(CellProfiler)",
 
-                grepl("2D", col_vals, ignore.case = TRUE) 
-                & grepl("middle_n", col_vals, ignore.case = TRUE) 
+                grepl("2D", col_vals, ignore.case = TRUE)
+                & grepl("middle_n", col_vals, ignore.case = TRUE)
                 & grepl("sc", col_vals, ignore.case = TRUE)
                 ~ "Single cell\n2D middle 3 slices\n(CellProfiler)",
 
-                grepl("2D", col_vals, ignore.case = TRUE) 
-                & grepl("middle_n", col_vals, ignore.case = TRUE) 
+                grepl("2D", col_vals, ignore.case = TRUE)
+                & grepl("middle_n", col_vals, ignore.case = TRUE)
                 & grepl("Organoid", col_vals, ignore.case = TRUE)
                 ~ "Organoid\n2D middle 3 slices\n(CellProfiler)",
                 TRUE ~ "other"
@@ -465,7 +465,13 @@ scatter_specs <- list(
 # meaningful even in a free-scaled panel whose visible range happens not
 # to include any point where 2D == 3D -- the case where the dashed
 # reference line itself would otherwise just not be drawn at all.
-technical_plots <- lapply(scatter_specs, function(spec) {
+# the 2D-vs-3D join is on patient tumor; if the 2D profiles carry no real
+# patient IDs (e.g. a placeholder like "2D_analysis"), nothing matches --
+# skip these plots instead of failing on an empty data frame.
+if (nrow(merged_df) == 0) {
+    message("No 2D/3D patient-treatment-dose overlap; skipping technical_considerations plots.")
+}
+technical_plots <- if (nrow(merged_df) == 0) list() else lapply(scatter_specs, function(spec) {
     plot_2d_vs_3d_scatter(
         merged_df,
         x_col = spec$x_col,
@@ -498,7 +504,7 @@ technical_plots <- lapply(scatter_specs, function(spec) {
 # 5 columns x 5 rows of panels plus their own axis titles/legend.
 tech_widths <- c(6, 6, 6, 16, 16, 16)
 tech_heights <- c(5.5, 5.5, 5.5, 12, 12, 12)
-save_plots_pdf(
+if (length(technical_plots) > 0) save_plots_pdf(
     technical_plots,
     output_path = file.path(cell_counts_figure_path, "technical_considerations.pdf"),
     width = tech_widths,

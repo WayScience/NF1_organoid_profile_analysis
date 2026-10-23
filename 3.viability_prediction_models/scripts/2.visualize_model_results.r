@@ -180,7 +180,7 @@ for (sm in unique(fold_metrics_df$Metadata_split_method)) {
         + labs(
             x = NULL,
             y = expression("Mean " * R^2 * " ± SD across folds"),
-            title = bquote("Model performance (" * R^2 * ") by profile and feature type — " * .(sm)),
+            title = bquote("Model performance (" * R^2 * ") by profile and feature type - " * .(sm)),
             # caption = paste0(
             #     "y-axis clipped to [", R2_YLIM[1], ", ", R2_YLIM[2], "]; ",
             #     n_r2_clipped, " of ", nrow(df_sub), " folds fall below this range."
@@ -210,7 +210,7 @@ for (sm in unique(fold_metrics_df$Metadata_split_method)) {
         + scale_fill_manual(values = viability_shuffle_status_colors, name = "Shuffle status")
         + labs(
             x = NULL, y = "Mean RMSE ± SD across folds",
-            title = paste0("Model performance (RMSE) by profile and feature type — ", sm),
+            title = paste0("Model performance (RMSE) by profile and feature type - ", sm),
             # caption = paste0(
             #     "y-axis clipped to [", RMSE_YLIM[1], ", ", RMSE_YLIM[2], "]; ",
             #     n_rmse_clipped, " of ", nrow(df_sub), " folds exceed this range."
@@ -276,7 +276,7 @@ for (sm in c("lopo", "loto")) {
         + scale_color_brewer(palette = "Set2", name = "Profile (level / normalization scope)")
         + labs(
             x = NULL, y = "Test RMSE (one point per profile type)",
-            title = paste0("Test RMSE by held-out group — ", sm, " (not shuffled)"),
+            title = paste0("Test RMSE by held-out group - ", sm, " (not shuffled)"),
             caption = paste0(
                 "Groups ordered alphabetically for a predictable order across plots. ",
                 "y-axis clipped to [", GROUP_RMSE_YLIM[1], ", ", GROUP_RMSE_YLIM[2], "]; ",
@@ -349,7 +349,7 @@ scale_x_reordered <- function(..., sep = "___") {
 
 top_features_df <- top_features_df %>%
     mutate(
-        Metadata_facet_label = paste0(Metadata_profile_label, "\n— ", Metadata_split_method)
+        Metadata_facet_label = paste0(Metadata_profile_label, "\n- ", Metadata_split_method)
     )
 
 # SAMMed3D and MorphEM (and their nucleocentric variants) are embedding-
@@ -556,7 +556,7 @@ feature_dist_plot
 # organoid_flagged_outliers.parquet / sc_flagged_outliers.parquet (per
 # patient, in 4.qc_profiles/) are the earliest per-object tables that
 # still carry both the raw feature values and the
-# <compartment>_NoChannel_VolumeSizeShape_{Center,Min,Max}{X,Y,Z} columns -
+# Metadata_Location_<compartment>_{Center,Min,Max}{X,Y,Z} columns -
 # everything downstream of QC aggregates them away. Pulling the min/max
 # bounding box in here too (not just the center) means every downstream
 # table - edge_objects_df, extreme_objects_df - already carries what's
@@ -577,7 +577,7 @@ read_object_features <- function(filename, compartments) {
     #' correct compartment-specific center AND bounding box attached to
     #' each row.
     location_cols <- as.vector(outer(
-        paste0(compartments, "_NoChannel_VolumeSizeShape"),
+        paste0("Metadata_Location_", compartments),
         c("CenterX", "CenterY", "CenterZ", "MinX", "MinY", "MinZ", "MaxX", "MaxY", "MaxZ"),
         paste, sep = "_"
     ))
@@ -623,15 +623,15 @@ organoid_objects_df <- read_object_features("organoid_flagged_outliers.parquet",
         # the inner_join below empty for every row (0 edge/extreme objects),
         # the same mistake documented and fixed for feature_values_df above.
         Metadata_profile_type = "organoid_profile_consensus",
-        Metadata_CenterX = Organoid_NoChannel_VolumeSizeShape_CenterX,
-        Metadata_CenterY = Organoid_NoChannel_VolumeSizeShape_CenterY,
-        Metadata_CenterZ = Organoid_NoChannel_VolumeSizeShape_CenterZ,
-        Metadata_MinX = Organoid_NoChannel_VolumeSizeShape_MinX,
-        Metadata_MinY = Organoid_NoChannel_VolumeSizeShape_MinY,
-        Metadata_MinZ = Organoid_NoChannel_VolumeSizeShape_MinZ,
-        Metadata_MaxX = Organoid_NoChannel_VolumeSizeShape_MaxX,
-        Metadata_MaxY = Organoid_NoChannel_VolumeSizeShape_MaxY,
-        Metadata_MaxZ = Organoid_NoChannel_VolumeSizeShape_MaxZ
+        Metadata_CenterX = Metadata_Location_Organoid_CenterX,
+        Metadata_CenterY = Metadata_Location_Organoid_CenterY,
+        Metadata_CenterZ = Metadata_Location_Organoid_CenterZ,
+        Metadata_MinX = Metadata_Location_Organoid_MinX,
+        Metadata_MinY = Metadata_Location_Organoid_MinY,
+        Metadata_MinZ = Metadata_Location_Organoid_MinZ,
+        Metadata_MaxX = Metadata_Location_Organoid_MaxX,
+        Metadata_MaxY = Metadata_Location_Organoid_MaxY,
+        Metadata_MaxZ = Metadata_Location_Organoid_MaxZ
     )
 
 # sc-level top features span three different compartments (Cell_,
@@ -646,64 +646,64 @@ sc_objects_df <- read_object_features("sc_flagged_outliers.parquet", c("Cell", "
         Metadata_profile_type = "sc_profile_consensus",
         Metadata_feature_compartment = sub("_.*", "", feature),
         Metadata_CenterX = dplyr::case_when(
-            Metadata_feature_compartment == "Cell" ~ Cell_NoChannel_VolumeSizeShape_CenterX,
-            Metadata_feature_compartment == "Cytoplasm" ~ Cytoplasm_NoChannel_VolumeSizeShape_CenterX,
-            Metadata_feature_compartment == "Nuclei" ~ Nuclei_NoChannel_VolumeSizeShape_CenterX,
+            Metadata_feature_compartment == "Cell" ~ Metadata_Location_Cell_CenterX,
+            Metadata_feature_compartment == "Cytoplasm" ~ Metadata_Location_Cytoplasm_CenterX,
+            Metadata_feature_compartment == "Nuclei" ~ Metadata_Location_Nuclei_CenterX,
             TRUE ~ NA_real_
         ),
         Metadata_CenterY = dplyr::case_when(
-            Metadata_feature_compartment == "Cell" ~ Cell_NoChannel_VolumeSizeShape_CenterY,
-            Metadata_feature_compartment == "Cytoplasm" ~ Cytoplasm_NoChannel_VolumeSizeShape_CenterY,
-            Metadata_feature_compartment == "Nuclei" ~ Nuclei_NoChannel_VolumeSizeShape_CenterY,
+            Metadata_feature_compartment == "Cell" ~ Metadata_Location_Cell_CenterY,
+            Metadata_feature_compartment == "Cytoplasm" ~ Metadata_Location_Cytoplasm_CenterY,
+            Metadata_feature_compartment == "Nuclei" ~ Metadata_Location_Nuclei_CenterY,
             TRUE ~ NA_real_
         ),
         Metadata_CenterZ = dplyr::case_when(
-            Metadata_feature_compartment == "Cell" ~ Cell_NoChannel_VolumeSizeShape_CenterZ,
-            Metadata_feature_compartment == "Cytoplasm" ~ Cytoplasm_NoChannel_VolumeSizeShape_CenterZ,
-            Metadata_feature_compartment == "Nuclei" ~ Nuclei_NoChannel_VolumeSizeShape_CenterZ,
+            Metadata_feature_compartment == "Cell" ~ Metadata_Location_Cell_CenterZ,
+            Metadata_feature_compartment == "Cytoplasm" ~ Metadata_Location_Cytoplasm_CenterZ,
+            Metadata_feature_compartment == "Nuclei" ~ Metadata_Location_Nuclei_CenterZ,
             TRUE ~ NA_real_
         ),
         Metadata_MinX = dplyr::case_when(
-            Metadata_feature_compartment == "Cell" ~ Cell_NoChannel_VolumeSizeShape_MinX,
-            Metadata_feature_compartment == "Cytoplasm" ~ Cytoplasm_NoChannel_VolumeSizeShape_MinX,
-            Metadata_feature_compartment == "Nuclei" ~ Nuclei_NoChannel_VolumeSizeShape_MinX,
+            Metadata_feature_compartment == "Cell" ~ Metadata_Location_Cell_MinX,
+            Metadata_feature_compartment == "Cytoplasm" ~ Metadata_Location_Cytoplasm_MinX,
+            Metadata_feature_compartment == "Nuclei" ~ Metadata_Location_Nuclei_MinX,
             TRUE ~ NA_real_
         ),
         Metadata_MinY = dplyr::case_when(
-            Metadata_feature_compartment == "Cell" ~ Cell_NoChannel_VolumeSizeShape_MinY,
-            Metadata_feature_compartment == "Cytoplasm" ~ Cytoplasm_NoChannel_VolumeSizeShape_MinY,
-            Metadata_feature_compartment == "Nuclei" ~ Nuclei_NoChannel_VolumeSizeShape_MinY,
+            Metadata_feature_compartment == "Cell" ~ Metadata_Location_Cell_MinY,
+            Metadata_feature_compartment == "Cytoplasm" ~ Metadata_Location_Cytoplasm_MinY,
+            Metadata_feature_compartment == "Nuclei" ~ Metadata_Location_Nuclei_MinY,
             TRUE ~ NA_real_
         ),
         Metadata_MinZ = dplyr::case_when(
-            Metadata_feature_compartment == "Cell" ~ Cell_NoChannel_VolumeSizeShape_MinZ,
-            Metadata_feature_compartment == "Cytoplasm" ~ Cytoplasm_NoChannel_VolumeSizeShape_MinZ,
-            Metadata_feature_compartment == "Nuclei" ~ Nuclei_NoChannel_VolumeSizeShape_MinZ,
+            Metadata_feature_compartment == "Cell" ~ Metadata_Location_Cell_MinZ,
+            Metadata_feature_compartment == "Cytoplasm" ~ Metadata_Location_Cytoplasm_MinZ,
+            Metadata_feature_compartment == "Nuclei" ~ Metadata_Location_Nuclei_MinZ,
             TRUE ~ NA_real_
         ),
         Metadata_MaxX = dplyr::case_when(
-            Metadata_feature_compartment == "Cell" ~ Cell_NoChannel_VolumeSizeShape_MaxX,
-            Metadata_feature_compartment == "Cytoplasm" ~ Cytoplasm_NoChannel_VolumeSizeShape_MaxX,
-            Metadata_feature_compartment == "Nuclei" ~ Nuclei_NoChannel_VolumeSizeShape_MaxX,
+            Metadata_feature_compartment == "Cell" ~ Metadata_Location_Cell_MaxX,
+            Metadata_feature_compartment == "Cytoplasm" ~ Metadata_Location_Cytoplasm_MaxX,
+            Metadata_feature_compartment == "Nuclei" ~ Metadata_Location_Nuclei_MaxX,
             TRUE ~ NA_real_
         ),
         Metadata_MaxY = dplyr::case_when(
-            Metadata_feature_compartment == "Cell" ~ Cell_NoChannel_VolumeSizeShape_MaxY,
-            Metadata_feature_compartment == "Cytoplasm" ~ Cytoplasm_NoChannel_VolumeSizeShape_MaxY,
-            Metadata_feature_compartment == "Nuclei" ~ Nuclei_NoChannel_VolumeSizeShape_MaxY,
+            Metadata_feature_compartment == "Cell" ~ Metadata_Location_Cell_MaxY,
+            Metadata_feature_compartment == "Cytoplasm" ~ Metadata_Location_Cytoplasm_MaxY,
+            Metadata_feature_compartment == "Nuclei" ~ Metadata_Location_Nuclei_MaxY,
             TRUE ~ NA_real_
         ),
         Metadata_MaxZ = dplyr::case_when(
-            Metadata_feature_compartment == "Cell" ~ Cell_NoChannel_VolumeSizeShape_MaxZ,
-            Metadata_feature_compartment == "Cytoplasm" ~ Cytoplasm_NoChannel_VolumeSizeShape_MaxZ,
-            Metadata_feature_compartment == "Nuclei" ~ Nuclei_NoChannel_VolumeSizeShape_MaxZ,
+            Metadata_feature_compartment == "Cell" ~ Metadata_Location_Cell_MaxZ,
+            Metadata_feature_compartment == "Cytoplasm" ~ Metadata_Location_Cytoplasm_MaxZ,
+            Metadata_feature_compartment == "Nuclei" ~ Metadata_Location_Nuclei_MaxZ,
             TRUE ~ NA_real_
         )
     )
 
 object_features_df <- bind_rows(
-    organoid_objects_df %>% select(-matches("_NoChannel_VolumeSizeShape_")),
-    sc_objects_df %>% select(-matches("_NoChannel_VolumeSizeShape_"), -Metadata_feature_compartment)
+    organoid_objects_df %>% select(-matches("^Metadata_Location_")),
+    sc_objects_df %>% select(-matches("^Metadata_Location_"), -Metadata_feature_compartment)
 )
 
 # Attach each model (profile_type x split_method) that ranked this
@@ -835,7 +835,7 @@ get_sc_table <- function(patient) {
         sc_cache[[patient]] <<- arrow::read_parquet(path, col_select = c(
             Metadata_Experiment_Well, Metadata_Experiment_WellFOV,
             Metadata_Object_ObjectID, Metadata_Object_ParentOrganoid,
-            Cell_NoChannel_VolumeSizeShape_CenterX, Cell_NoChannel_VolumeSizeShape_CenterY, Cell_NoChannel_VolumeSizeShape_CenterZ
+            Metadata_Location_Cell_CenterX, Metadata_Location_Cell_CenterY, Metadata_Location_Cell_CenterZ
         ))
     }
     sc_cache[[patient]]
@@ -873,9 +873,9 @@ get_identified_cells <- function(row) {
         transmute(
             Metadata_Cell_ObjectID = Metadata_Object_ObjectID,
             Metadata_Cell_ParentOrganoid = Metadata_Object_ParentOrganoid,
-            Metadata_Cell_CenterX = Cell_NoChannel_VolumeSizeShape_CenterX,
-            Metadata_Cell_CenterY = Cell_NoChannel_VolumeSizeShape_CenterY,
-            Metadata_Cell_CenterZ = Cell_NoChannel_VolumeSizeShape_CenterZ
+            Metadata_Cell_CenterX = Metadata_Location_Cell_CenterX,
+            Metadata_Cell_CenterY = Metadata_Location_Cell_CenterY,
+            Metadata_Cell_CenterZ = Metadata_Location_Cell_CenterZ
         )
 }
 

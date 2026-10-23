@@ -80,7 +80,6 @@ paths_dict = {
     "3D": consensus_profiles_3D_paths,
     "2D": consensus_profiles_2D_paths,
 }
-paths_dict
 
 
 # In[5]:
@@ -102,8 +101,6 @@ patient_treatment_viabilty = df[
 
 for dimension in paths_dict.keys():
     for profile_path in paths_dict[dimension]:
-        print(f"Processing {profile_path.name} ({dimension})...")
-
         consensus_output_path = pathlib.Path(
             f"{root_dir}/3.viability_prediction_models/data/processed_profiles_{dimension}/{profile_path.stem.replace('_norm', '')}_consensus.parquet"
         ).resolve()
@@ -124,7 +121,10 @@ for dimension in paths_dict.keys():
             df[["Metadata_Experiment_ViabilityPercentage"]]
         )
         features_columns = [
-            col for col in df.columns if not col.startswith("Metadata_")
+            col
+            for col in df.columns
+            if not col.startswith("Metadata_")
+            and pd.api.types.is_numeric_dtype(df[col])
         ]
         consensus_df = aggregate(
             population_df=df,

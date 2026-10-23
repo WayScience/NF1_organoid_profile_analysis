@@ -16,7 +16,7 @@ from notebook_init_utils.notebook_init_utils import init_notebook
 root_dir, in_notebook = init_notebook()
 
 
-# In[ ]:
+# In[2]:
 
 
 path_2d_organoid = pathlib.Path(
@@ -110,15 +110,11 @@ def load_and_harmonize(path: pathlib.Path) -> pd.DataFrame:
     return harmonize_metadata(load_profile(path))
 
 
-# In[ ]:
+# In[3]:
 
 
 # TEMPORARY - remove once ZedProfiler's Texture-feature computation is fixed
-# upstream. Aggregation is already fixed (all types are 1 row/well now), but
-# ZedProfiler (organoid_handcrafted, sc_handcrafted) still has astronomically
-# large corrupted values in a subset of Texture features. This masks those so
-# calculate_mAP's existing "drop any column with a NaN" logic excludes them;
-# for every other profile type this is a no-op.
+# upstream.
 def temporary_clean_and_aggregate(df: pd.DataFrame) -> pd.DataFrame:
     feature_cols = [c for c in df.columns if not c.startswith("Metadata_")]
     meta_cols = [c for c in df.columns if c.startswith("Metadata_")]
@@ -318,7 +314,7 @@ def calculate_inter_patient_mAP(
     return output_df
 
 
-# In[ ]:
+# In[5]:
 
 
 # Intra and inter patient mAP by treatment and dose, for every profile type

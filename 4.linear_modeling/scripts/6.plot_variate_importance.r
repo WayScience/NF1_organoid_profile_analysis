@@ -159,5 +159,3 @@ ht_organoid_notitle <- cooccurrence_heatmap(
 png(file.path(multiresult_figure_subpanels_path, "cooccurrence_organoid_original.png"), width = 15, height = 10, units = "in", res = 600)
 ComplexHeatmap::draw(ht_organoid_notitle)
 dev.off()
-
-cat("multiresult-figure subpanels ->", multiresult_figure_subpanels_path, "\n")
