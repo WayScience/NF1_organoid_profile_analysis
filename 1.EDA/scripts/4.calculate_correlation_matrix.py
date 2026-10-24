@@ -186,9 +186,6 @@ samples_path = correlation_dir / "2D_sc_correlation_samples.parquet"
 pairs_df.to_parquet(pairs_path, index=False)
 samples_df.to_parquet(samples_path, index=False)
 
-print(f"Saved {pairs_path.name}: {len(pairs_df)} rows")
-print(f"Saved {samples_path.name}: {len(samples_df)} rows")
-
 
 # ## Group A -- 3D sc_agg / sc_consensus, replicate/treatment-level
 #
@@ -250,9 +247,6 @@ pairs_path_3d = correlation_dir / "3D_sc_correlation_pairs.parquet"
 samples_path_3d = correlation_dir / "3D_sc_correlation_samples.parquet"
 pairs_df_3d.to_parquet(pairs_path_3d, index=False)
 samples_df_3d.to_parquet(samples_path_3d, index=False)
-
-print(f"Saved {pairs_path_3d.name}: {len(pairs_df_3d)} rows")
-print(f"Saved {samples_path_3d.name}: {len(samples_df_3d)} rows")
 
 
 # ## Group B -- 3D sc_fs, single-cell, per patient
@@ -353,7 +347,4 @@ for variant in tqdm.tqdm(SC_FS_VARIANTS):
 if writer is not None:
     writer.close()
 
-print(
-    f"Saved {matrices_path.name}: {n_rows_written} rows (variant x patient combinations)"
-)
 print(pd.DataFrame(summary_rows).to_string(index=False))

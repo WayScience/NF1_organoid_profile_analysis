@@ -191,7 +191,7 @@ def covariate_sds(profile):
     raw["treatment_full"] = (
         raw["Metadata_Experiment_Treatment"].astype(str)
         + "_"
-        + raw["Metadata_Experiment_Dose"].astype(str)
+        + raw["Metadata_Experiment_Dose"].map("{:g}".format)
         + raw["Metadata_Experiment_Unit"].astype(str)
     )
     dmso = raw.loc[

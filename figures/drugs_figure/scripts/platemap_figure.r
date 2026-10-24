@@ -1,16 +1,25 @@
-suppressPackageStartupMessages(library(dplyr))
-suppressPackageStartupMessages(library(stringr))
-suppressPackageStartupMessages(library(ggplot2))
-suppressPackageStartupMessages(library(platetools))
-suppressPackageStartupMessages(library(patchwork))
+packages <- c("dplyr", "stringr", "ggplot2", "platetools", "patchwork")
+for (package in packages) {
+    suppressWarnings(
+        suppressPackageStartupMessages(
+            library(package, character.only = TRUE)
+        )
+    )
+}
 
-platemap_file_path <- file.path("../../../data/2D_profiles/NF0040_T1/platemap/platemap.csv")
+git_root <- system("git rev-parse --show-toplevel", intern = TRUE)
+
+platemap_figure_file_path <- file.path(git_root,"figures/drugs_figure/platemap_figure.png")
+if (!file.exists(platemap_figure_file_path)) {
+    dir.create(dirname(platemap_figure_file_path), recursive = TRUE)
+}
+platemap_file_path <- file.path(git_root,"config/platemaps/platemap2.csv")
 platemap <- read.csv(platemap_file_path, stringsAsFactors = FALSE)
 
 # Add leading zeros if needed (uncomment the commented code in your notebook)
 platemap <- platemap %>%
-  mutate(well_position = str_replace(well_position, "([A-H])([1-9])$", "\\10\\2"))
-platemap$dose_unit <- paste0(platemap$dose, " ", platemap$dose_unit)
+  mutate(well_position = str_replace(WellPosition, "([A-H])([1-9])$", "\\10\\2"))
+platemap$dose_unit <- paste0(platemap$Dose, " ", platemap$Unit)
 head(platemap)
 
 
@@ -22,7 +31,7 @@ axis_text_size <- font_size - 2
 # Now create the plot
 platemap_figure <- (
     platetools::raw_map(
-        data = platemap$treatment,
+        data = platemap$Treatment,
         well = platemap$well_position,
         # shape = platemap$dose_unit,
         plate = 96,
@@ -62,7 +71,7 @@ platemap_figure <- (
 
 )
 ggsave(
-    filename = file.path("../figures/platemap_figure.png"),
+    filename = platemap_figure_file_path,
     plot = platemap_figure,
     width = width,
     height = height,
@@ -70,5 +79,3 @@ ggsave(
     dpi = 600
 )
 platemap_figure
-
-

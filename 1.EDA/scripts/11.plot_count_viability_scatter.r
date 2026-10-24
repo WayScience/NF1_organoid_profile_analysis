@@ -51,11 +51,11 @@ plot_theme <- (
 # panel and were not interpretable.
 
 # --- 3D: mean cells per organoid vs. viability ---
-df <- read_parquet(file.path(results_dir, "count_viability_joined.parquet"))
-df$Treatment <- factor(df$Treatment, levels = intersect(custom_treatment_order, unique(df$Treatment)))
+df <- read_parquet(file.path(results_dir, "cell_counts", "count_viability_joined.parquet"))
+df$Treatment <- factor(df$Metadata_treatment, levels = intersect(custom_treatment_order, unique(df$Metadata_treatment)))
 
 p_pooled <- (
-    ggplot(df, aes(x = min_max_viability, y = mean_cell_count, shape = factor(Metadata_dose)))
+    ggplot(df, aes(x = Metadata_Experiment_ViabilityPercentage, y = mean_cell_count, shape = factor(Metadata_dose)))
     + rasterise(geom_point(size = 2, alpha = 0.8, color = "steelblue"), dpi = 300)
     + geom_smooth(aes(group = 1, shape = NULL), method = "lm", se = TRUE, color = "black", linewidth = 0.5)
     + facet_wrap(~Treatment)
@@ -67,7 +67,7 @@ p_pooled <- (
 )
 
 p_by_patient <- (
-    ggplot(df, aes(x = min_max_viability, y = mean_cell_count, color = Metadata_patient_tumor, shape = factor(Metadata_dose)))
+    ggplot(df, aes(x = Metadata_Experiment_ViabilityPercentage, y = mean_cell_count, color = Metadata_patient_tumor, shape = factor(Metadata_dose)))
     + rasterise(geom_point(size = 2, alpha = 0.8), dpi = 300)
     + scale_color_manual(values = tab20_palette_for_patients)
     + facet_wrap(~Treatment, scales = "free_y")
@@ -77,39 +77,10 @@ p_by_patient <- (
     )
     + plot_theme
 )
-
-# --- 3D: FOV-normalized total cell count vs. viability ---
-df_norm <- read_parquet(file.path(results_dir, "count_norm_viability_joined.parquet"))
-df_norm$Treatment <- factor(df_norm$Treatment, levels = intersect(custom_treatment_order, unique(df_norm$Treatment)))
-df_norm_3d <- df_norm %>% filter(modality == "3D")
-
-p_norm_pooled <- (
-    ggplot(df_norm_3d, aes(x = min_max_viability, y = total_cell_count_norm, shape = factor(Metadata_dose)))
-    + rasterise(geom_point(size = 2, alpha = 0.8, color = "steelblue"), dpi = 300)
-    + geom_smooth(aes(group = 1, shape = NULL), method = "lm", se = TRUE, color = "black", linewidth = 0.5)
-    + facet_wrap(~Treatment)
-    + labs(
-        title = "3D pooled (all patients): total cells per treatment (FOV-normalized) vs. viability",
-        x = "Viability (min-max normalized)", y = "Total cells per treatment (FOV-normalized)", shape = "Dose"
-    )
-    + plot_theme
-)
-
-p_norm_by_patient <- (
-    ggplot(df_norm_3d, aes(x = min_max_viability, y = total_cell_count_norm, color = Metadata_patient_tumor, shape = factor(Metadata_dose)))
-    + rasterise(geom_point(size = 2, alpha = 0.8), dpi = 300)
-    + scale_color_manual(values = tab20_palette_for_patients)
-    + facet_wrap(~Treatment, scales = "free_y")
-    + labs(
-        title = "3D: total cells per treatment (FOV-normalized) vs. viability, by treatment",
-        x = "Viability (min-max normalized)", y = "Total cells per treatment (FOV-normalized)", color = "Patient", shape = "Dose"
-    )
-    + plot_theme
-)
+p_pooled
+p_by_patient
 
 pdf(file.path(figures_dir, "3D_count_vs_viability.pdf"), width = 11, height = 8.5, onefile = TRUE)
 print(p_pooled)
 print(p_by_patient)
-print(p_norm_pooled)
-print(p_norm_by_patient)
 dev.off()

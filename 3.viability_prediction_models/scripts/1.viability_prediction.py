@@ -93,7 +93,6 @@ logging.basicConfig(
     force=True,  # re-applies config if this cell is re-run in the same kernel session
 )
 logging.info("Started viability prediction training run")
-logging.info(f"Logging to {LOG_DIR / year_month_day_hour_minute_log_name}")
 
 
 # ## Functions and helpers
@@ -549,9 +548,6 @@ def run_group_cv(
             MODEL_OUTPUT / f"{split_name}_model_fold{fold_idx}_{held_out}__{tag}.joblib"
         )
         if model_output_path.exists() and not retrain:
-            logging.info(
-                f"Model already exists at {model_output_path}, loading it instead of retraining."
-            )
             model = joblib.load(model_output_path)
             fold_alpha = getattr(model[-1], "alpha", fold_alpha)
             fold_l1_ratio = getattr(model[-1], "l1_ratio", fold_l1_ratio)
@@ -794,9 +790,6 @@ def run_random_split(
 
     model_output_path = MODEL_OUTPUT / f"{split_name}_model__{tag}.joblib"
     if model_output_path.exists() and not retrain:
-        logging.info(
-            f"Model already exists at {model_output_path}, loading it instead of retraining."
-        )
         model = joblib.load(model_output_path)
         tuned_alpha = getattr(model[-1], "alpha", None)
         tuned_l1_ratio = getattr(model[-1], "l1_ratio", None)
@@ -992,6 +985,13 @@ for image_mode, consensus_paths in censensus_profiles_all_dict.items():
         consensus_df = consensus_df.dropna(subset=[VIABILITY_COL]).reset_index(
             drop=True
         )
+        # e.g. 2D profiles whose patient column is a placeholder never match the
+        # per-patient viability data, leaving nothing to train on
+        if consensus_df.empty:
+            logging.warning(
+                f"  {consensus_profile_name}: no rows with viability - skipping"
+            )
+            continue
         # combine the two stratification columns into a single key
         consensus_df["Metadata_Experiment_FullTreatment"] = (
             consensus_df["Metadata_Experiment_Treatment"].astype(str)
@@ -1006,6 +1006,19 @@ for image_mode, consensus_paths in censensus_profiles_all_dict.items():
             for col in consensus_df.columns
             if col not in metadata_cols and col not in [VIABILITY_COL]
         ]
+        # ElasticNet cannot take NaN. Some consensus profiles carry feature
+        # columns that are empty (or nearly so) for most samples (e.g. columns
+        # present in only one patient's upstream profiles), so drop any feature
+        # column with a missing value rather than imputing it.
+        nan_feature_cols = [
+            col for col in feature_cols if consensus_df[col].isna().any()
+        ]
+        if nan_feature_cols:
+            logging.info(
+                f"  {consensus_profile_name}: dropping {len(nan_feature_cols)} "
+                "feature column(s) containing NaN"
+            )
+            feature_cols = [col for col in feature_cols if col not in nan_feature_cols]
         logging.info(
             f"  {consensus_profile_name}: {len(consensus_df)} rows, "
             f"{len(feature_cols)} feature columns"
@@ -1133,15 +1146,6 @@ for metric_name, pattern in METRIC_FILE_PATTERNS.items():
     combined_path = RESULTS_OUTPUT / f"combined_{metric_name}.parquet"
     combined_df.to_parquet(combined_path, index=False)
     combined_paths[metric_name] = combined_path
-
-    logging.info(
-        f"Wrote {len(combined_df)} rows from {len(matching_files)} file(s) to {combined_path}"
-    )
-
-logging.info(
-    f"Finished concatenating results into: {[str(p) for p in combined_paths.values()]}"
-)
-combined_paths
 
 
 # In[9]:

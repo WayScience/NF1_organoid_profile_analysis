@@ -57,7 +57,7 @@ load_2d_profiles <- function(patients, projections, path_fn, col_select) {
         for (patient in patients) {
             f <- path_fn(patient, prefix)
             if (!file.exists(f)) next
-            df <- read_parquet(f, col_select = col_select)
+            df <- read_parquet(f, col_select = all_of(col_select))
             df$patient <- patient
             df$projection <- proj
             rows[[paste(proj, patient)]] <- df
@@ -72,7 +72,7 @@ load_3d_profiles <- function(patients, path_fn, col_select) {
     for (patient in patients) {
         f <- path_fn(patient)
         if (!file.exists(f)) next
-        df <- read_parquet(f, col_select = col_select)
+        df <- read_parquet(f, col_select = all_of(col_select))
         df$patient <- patient
         rows[[patient]] <- df
     }
@@ -179,20 +179,20 @@ vol_df <- load_3d_profiles(
     path_fn = function(patient) {
         file.path(root_dir, "data", "profiles_3D", patient, "4.qc_profiles", "organoid_flagged_outliers.parquet")
     },
-    col_select = c("Metadata_Experiment_Treatment", "Organoid_NoChannel_AreaSizeShape_Volume")
+    col_select = c("Metadata_Experiment_Treatment", "Organoid_NoChannel_VolumeSizeShape_Volume")
 )
 colnames(vol_df)[colnames(vol_df) == "Metadata_Experiment_Treatment"] <- "Metadata_treatment"
 vol_df <- set_treatment_factor(vol_df)
 
 p_vol_patient <- violin_box_plot(
-    vol_df, x = "patient", y = "Organoid_NoChannel_AreaSizeShape_Volume", fill = "patient",
+    vol_df, x = "patient", y = "Organoid_NoChannel_VolumeSizeShape_Volume", fill = "patient",
     title = "3D: organoid volume by patient", ylab = "Organoid volume (log10 scale)", xlab = "Patient",
     log_scale = TRUE
 )
 save_fig(p_vol_patient, "3D_volume_per_patient.png", width = 10, height = 6)
 
 p_vol_pooled <- violin_box_plot(
-    vol_df, x = "Metadata_treatment", y = "Organoid_NoChannel_AreaSizeShape_Volume", fill = "Metadata_treatment",
+    vol_df, x = "Metadata_treatment", y = "Organoid_NoChannel_VolumeSizeShape_Volume", fill = "Metadata_treatment",
     title = "3D pooled (all patients): organoid volume by treatment",
     ylab = "Organoid volume (log10 scale)", xlab = "Treatment", palette = custom_treatment_palette,
     log_scale = TRUE
@@ -200,7 +200,7 @@ p_vol_pooled <- violin_box_plot(
 save_fig(p_vol_pooled, "3D_volume_pooled_by_treatment.png", width = 10, height = 6)
 
 p_vol_patient_treatment <- violin_box_plot(
-    vol_df, x = "Metadata_treatment", y = "Organoid_NoChannel_AreaSizeShape_Volume", fill = "Metadata_treatment",
+    vol_df, x = "Metadata_treatment", y = "Organoid_NoChannel_VolumeSizeShape_Volume", fill = "Metadata_treatment",
     title = "3D: organoid volume by treatment, faceted by patient",
     ylab = "Organoid volume (log10 scale)", xlab = "Treatment",
     facet = "patient", palette = custom_treatment_palette, log_scale = TRUE
@@ -213,20 +213,20 @@ sc_vol_df <- load_3d_profiles(
     path_fn = function(patient) {
         file.path(root_dir, "data", "profiles_3D", patient, "4.qc_profiles", "sc_flagged_outliers.parquet")
     },
-    col_select = c("Metadata_Experiment_Treatment", "Cell_NoChannel_AreaSizeShape_Volume")
+    col_select = c("Metadata_Experiment_Treatment", "Cell_NoChannel_VolumeSizeShape_Volume")
 )
 colnames(sc_vol_df)[colnames(sc_vol_df) == "Metadata_Experiment_Treatment"] <- "Metadata_treatment"
 sc_vol_df <- set_treatment_factor(sc_vol_df)
 
 p_sc_vol_patient <- violin_box_plot(
-    sc_vol_df, x = "patient", y = "Cell_NoChannel_AreaSizeShape_Volume", fill = "patient",
+    sc_vol_df, x = "patient", y = "Cell_NoChannel_VolumeSizeShape_Volume", fill = "patient",
     title = "3D: single-cell volume by patient", ylab = "Cell volume (log10 scale)", xlab = "Patient",
     log_scale = TRUE
 )
 save_fig(p_sc_vol_patient, "3D_sc_volume_per_patient.png", width = 10, height = 6)
 
 p_sc_vol_pooled <- violin_box_plot(
-    sc_vol_df, x = "Metadata_treatment", y = "Cell_NoChannel_AreaSizeShape_Volume", fill = "Metadata_treatment",
+    sc_vol_df, x = "Metadata_treatment", y = "Cell_NoChannel_VolumeSizeShape_Volume", fill = "Metadata_treatment",
     title = "3D pooled (all patients): single-cell volume by treatment",
     ylab = "Cell volume (log10 scale)", xlab = "Treatment", palette = custom_treatment_palette,
     log_scale = TRUE
@@ -234,7 +234,7 @@ p_sc_vol_pooled <- violin_box_plot(
 save_fig(p_sc_vol_pooled, "3D_sc_volume_pooled_by_treatment.png", width = 10, height = 6)
 
 p_sc_vol_patient_treatment <- violin_box_plot(
-    sc_vol_df, x = "Metadata_treatment", y = "Cell_NoChannel_AreaSizeShape_Volume", fill = "Metadata_treatment",
+    sc_vol_df, x = "Metadata_treatment", y = "Cell_NoChannel_VolumeSizeShape_Volume", fill = "Metadata_treatment",
     title = "3D: single-cell volume by treatment, faceted by patient",
     ylab = "Cell volume (log10 scale)", xlab = "Treatment",
     facet = "patient", palette = custom_treatment_palette, log_scale = TRUE

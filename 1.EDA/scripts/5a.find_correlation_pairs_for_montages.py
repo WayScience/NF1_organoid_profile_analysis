@@ -468,4 +468,4 @@ for quadrent_of_correlation_and_viability in tqdm.tqdm(
             image_2_label=image_label2,
             output_path=output_image_path,
         )
-        plt.close()
+        plt.close("all")

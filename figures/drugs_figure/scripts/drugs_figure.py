@@ -6,23 +6,10 @@
 
 import os
 import pathlib
-import sys
 
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
-
-cwd = pathlib.Path.cwd()
-
-if (cwd / ".git").is_dir():
-    root_dir = cwd
-else:
-    root_dir = None
-    for parent in cwd.parents:
-        if (parent / ".git").is_dir():
-            root_dir = parent
-            break
-sys.path.append(str(root_dir / "utils"))
 from notebook_init_utils import bandicoot_check, init_notebook
 
 root_dir, in_notebook = init_notebook()
@@ -37,7 +24,7 @@ profile_base_dir = bandicoot_check(
 
 platemap_dir = pathlib.Path(f"{profile_base_dir}/data").resolve()
 drug_information_file_path = pathlib.Path(
-    f"{root_dir}/data/drug_information.csv"
+    f"{root_dir}/config/drug_information/drug_information.csv"
 ).resolve(strict=True)
 drug_information = pd.read_csv(drug_information_file_path)
 # get a list of all dirs within the dir
@@ -55,7 +42,6 @@ platemap_file_paths_list = [path for path in platemap_file_paths_list if path.ex
 platemaps = pd.concat([pd.read_csv(path) for path in platemap_file_paths_list])
 platemaps.drop_duplicates(inplace=True)
 drugs = platemaps["treatment"].unique()
-drugs.sort()
 
 
 # In[3]:
@@ -157,13 +143,13 @@ custom_MOA_palette = {
 }
 
 
-# In[12]:
+# In[5]:
 
 
 drugs_df["drug"].unique()
 
 
-# In[ ]:
+# In[6]:
 
 
 # order the dataframe by Target
@@ -174,7 +160,7 @@ drugs_df.sort_values(
 )
 
 
-# In[18]:
+# In[7]:
 
 
 # plot the drug and the approval status as graph
@@ -211,6 +197,3 @@ plt.legend(title="FDA Status", bbox_to_anchor=(1.05, 1), loc="upper left")
 plt.tight_layout()
 plt.savefig(figures_dir / "drug_fda_approval_status.png", dpi=600)
 plt.show()
-
-
-# In[ ]:

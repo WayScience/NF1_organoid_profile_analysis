@@ -242,7 +242,7 @@ for profile in tqdm(profile_dict.keys(), desc="Loading profiles"):
     df["Metadata_treatment_full"] = (
         df["treatment"].astype(str)
         + "_"
-        + df["Metadata_Experiment_Dose"].astype(str)
+        + df["Metadata_Experiment_Dose"].map("{:g}".format)
         + df["Metadata_Experiment_Unit"].astype(str)
     )
     # map each combined treatment label back to its raw drug name and

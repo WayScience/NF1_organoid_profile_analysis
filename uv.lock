@@ -648,6 +648,21 @@ wheels = [
 ]
 
 [[package]]
+name = "copairs"
+version = "0.5.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "duckdb", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "pandas", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "statsmodels", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "tqdm", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/aa/9f/69336e8278122fd5d54b34f57fd0e95921e5490af8df1250e43841a5e4a6/copairs-0.5.5.tar.gz", hash = "sha256:a08834d70d53d27f8c63987483e4bee99d9768847eb3fd32afba53500a1a203a", size = 43744 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d4/b5/33504302d0d800a47e1fc4f0fe0afcfdaa560b30a32578ff34956bda0972/copairs-0.5.5-py3-none-any.whl", hash = "sha256:41b78768ce039873c22521c46121dc1700738d0df7d3b0b919ef66b0be60f65b", size = 34198 },
+]
+
+[[package]]
 name = "cycler"
 version = "0.12.1"
 source = { registry = "https://pypi.org/simple" }
@@ -682,6 +697,34 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/0f/d5/c66da9b79e5bdb124974bfe172b4daf3c984ebd9c2a06e2b8a4dc7331c72/defusedxml-0.7.1.tar.gz", hash = "sha256:1bb3032db185915b62d7c6209c5a8792be6a32ab2fedacc84e01b52c51aa3e69", size = 75520 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/07/6c/aa3f2f849e01cb6a001cd8554a88d4c77c5c1a31c95bdf1cf9301e6d9ef4/defusedxml-0.7.1-py2.py3-none-any.whl", hash = "sha256:a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61", size = 25604 },
+]
+
+[[package]]
+name = "duckdb"
+version = "1.5.6"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/59/0b/d65ea3be00ea79aa276a8388bec588a9cbf409ce637c6d306e5316210d15/duckdb-1.5.6.tar.gz", hash = "sha256:166a91dbfacfc0c9f08cc76c0243cb6d3d4296bfab5bad72a3cfb63140a5b7c8", size = 18032957 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/36/e5/01e03d30b7ba33a030a4269fdca16ce445ce10f9d29b84a10fdbe0636ad2/duckdb-1.5.6-cp311-cp311-macosx_10_9_universal2.whl", hash = "sha256:c88700d0ee68ad149a0cc624df21b0f21efc136ea2449aaadd7cd0c9a564962a", size = 32757482 },
+    { url = "https://files.pythonhosted.org/packages/ba/4f/7f7be626a4649a3948ca646c84d6afc1a00121f292f98e6f0d9ed68330df/duckdb-1.5.6-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:03e4f1b10a8b8ff476eb2b73955590fadbcef978da1167c593114c5edf763960", size = 17372997 },
+    { url = "https://files.pythonhosted.org/packages/1a/66/9d57573729348d800a0eebdd508f1a833d3714f72e984fef79b47f0e6c45/duckdb-1.5.6-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:34623eaabd2c66ba5c20f1a39486321c3b7d32e4e0e001ced95f81e3372dd361", size = 15514224 },
+    { url = "https://files.pythonhosted.org/packages/57/ec/97f595214b3a27b4ca42b8cab6d8121c06f3537dcc4d2da7bca0332de4c5/duckdb-1.5.6-cp311-cp311-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:56c0f71c6bee982e9c30568bb12371bf66b26bf129c75d8d7f60bc69d6590a2c", size = 19428776 },
+    { url = "https://files.pythonhosted.org/packages/68/4a/ab59f4c1f76fb89e28d23f19b2729538e0723c8d328a07e1b8c37f9ee128/duckdb-1.5.6-cp311-cp311-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:73b108c04c932b36c2fa4e41110cc1c3c8cd510eb49f065f92d050be8e6929fd", size = 21537771 },
+    { url = "https://files.pythonhosted.org/packages/d9/d5/d0ab77a0a1702a43171c93874f44c1f6481e30038bd3987df0d77a16a5c6/duckdb-1.5.6-cp312-cp312-macosx_10_13_universal2.whl", hash = "sha256:48d07d0651aaeac2c3974afd37599970154b7b79b54c18f27c319c14ccf98d9d", size = 32810486 },
+    { url = "https://files.pythonhosted.org/packages/9f/cd/b22201de5377faa3be6c38d5f3eaa504cb480392a448bed6a4d2239469b4/duckdb-1.5.6-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:79de3dfa8705b1ba0d59e7e3252e40ff399e0afd12f485502a6c7bf7c2fd809a", size = 17405278 },
+    { url = "https://files.pythonhosted.org/packages/9c/6d/f9cfb1493bbdc2f095693a402e42dce1192077f9e11573f00baed6a748de/duckdb-1.5.6-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:dcccce20965e6986cd083fdf192c461685ad0b93cd1ccd0b2a8207f1185f078b", size = 15532943 },
+    { url = "https://files.pythonhosted.org/packages/53/04/f65ccfaa5a833f2e570c4a140f03c8f95da416da9fe8ed08401f81f8242a/duckdb-1.5.6-cp312-cp312-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:ce89a1025a5317ebe9c520876c48032b5247ac574865486648b1a004f6009875", size = 19454940 },
+    { url = "https://files.pythonhosted.org/packages/4c/99/be75c788a492f8d77b7a1cdc1b19939ae7be0007f2028691ad371a1a33ee/duckdb-1.5.6-cp312-cp312-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:bc9619ed7d4ffa117b5155d84b44794366bb6635178d78ed5e13a6024845c757", size = 21568087 },
+    { url = "https://files.pythonhosted.org/packages/b1/5e/a476197fcba557738a588ec844747a19bc0a24b0e6f1809e308f29d68c0e/duckdb-1.5.6-cp313-cp313-macosx_10_13_universal2.whl", hash = "sha256:ae352646374cacf48e9981cf031191c494865192fc436d13667a2531fc5d1da3", size = 32810376 },
+    { url = "https://files.pythonhosted.org/packages/0c/6d/5466a2b53ddd557644dfa47a763f68748efccdf282e6ae7c4f1bcfb3da69/duckdb-1.5.6-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:5a1261e90785e9d29953293e44f60fa073bd1137098924e8de21a037a861b051", size = 17405385 },
+    { url = "https://files.pythonhosted.org/packages/d4/a0/bf87071170835ee4a34fe764fc11c1c6e7040a0e021b36c1b6f834a4c22f/duckdb-1.5.6-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:97dd7a555b8f5298b76bc7d48a11cb2c64336e8de9bfde783cffb86ea9f54807", size = 15533132 },
+    { url = "https://files.pythonhosted.org/packages/31/e0/38095c8e140ecfbe847519ac07bcba94301b8fbb76b2870015e33e07f179/duckdb-1.5.6-cp313-cp313-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:364992ba1089a2b327391cfcb68fd0bd0ce9090cf293baef861a0ba6847abfee", size = 19454994 },
+    { url = "https://files.pythonhosted.org/packages/70/21/61dd2876bbaa69cf77d7b5c620e52e8b25faae7096f4d2e4a812b52095d7/duckdb-1.5.6-cp313-cp313-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:644f54ce99b3b61844bc9a3fe80e0aecb1ea4084b1fffc4396d1569db6111679", size = 21568700 },
+    { url = "https://files.pythonhosted.org/packages/fb/62/a8a30a4c6b94c0861d348ed5633b963f6745a5525527530f02f3c1a7c931/duckdb-1.5.6-cp314-cp314-macosx_10_15_universal2.whl", hash = "sha256:aa21d2ad803b2524326e8622d7d96b2bb1ff1d5b60368e1978ee805df9c21fb3", size = 32828003 },
+    { url = "https://files.pythonhosted.org/packages/71/b7/1dcca0005eb8c67adf9fc06bf0cbb1d2bf4ea1974cc89e7a7c2ad66aac28/duckdb-1.5.6-cp314-cp314-macosx_10_15_x86_64.whl", hash = "sha256:8a1b2ad27d414068cbca06c55cfa802eece10f86ea4812ff082f8ab4cb25fc85", size = 17413912 },
+    { url = "https://files.pythonhosted.org/packages/93/b0/e3ac175443550f3464f2d95731a8b0aae9b4dc3875c3a186c352262b43c2/duckdb-1.5.6-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:c79c6d222b1d015cde73b5139087186b00db65357fb4e2c94c2308fbbf465a72", size = 15543122 },
+    { url = "https://files.pythonhosted.org/packages/9d/08/cc510a7952aba69d5cdca17f3ef61c95713d86143f2ee9aa3e097d38f50b/duckdb-1.5.6-cp314-cp314-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:1052b8050ef5696e2c0d8c836949c72f3dd11f0690466acbea739613e8e2750b", size = 19457946 },
+    { url = "https://files.pythonhosted.org/packages/ef/a5/6f8099d9a5a02ddff89e5c85875df3465054845b0920fb0703fbdf8dd2ec/duckdb-1.5.6-cp314-cp314-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:19c5e485e59613b8878d1670bcaa7a010f53c5a4da5ae8e08863e5e529ca6182", size = 21575132 },
 ]
 
 [[package]]
@@ -1917,6 +1960,7 @@ source = { editable = "." }
 dependencies = [
     { name = "arrow", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "certifi", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "copairs", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "huggingface-hub", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "iprogress", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "ipykernel", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
@@ -1948,6 +1992,7 @@ dependencies = [
 requires-dist = [
     { name = "arrow", specifier = ">=1.4.0" },
     { name = "certifi", specifier = ">=2026.5.20" },
+    { name = "copairs", specifier = ">=0.5.5" },
     { name = "huggingface-hub", specifier = ">=2.1.1" },
     { name = "iprogress", specifier = ">=0.4" },
     { name = "ipykernel", specifier = ">=6.31.0" },

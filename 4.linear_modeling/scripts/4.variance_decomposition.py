@@ -167,7 +167,6 @@ def plot_decomposed_variance(df, model_name, level_order=None, save_path=None):
 
 for lm_name, lm_dict in lm_results_dict.items():
     if not lm_dict["input_profile_path"].exists():
-        print(f"skipping {lm_name}: {lm_dict['input_profile_path']} not found")
         continue
     df = pd.read_parquet(lm_dict["input_profile_path"])
     # one row per (fitted model, term): the share of that model's total variance
@@ -219,7 +218,6 @@ for lm_name, lm_dict in lm_results_dict.items():
 model_dfs = []
 for name, (file_name, profile, model_type) in lm_files.items():
     if not (lm_results_path / file_name).exists():
-        print(f"skipping {name}: {file_name} not found")
         continue
     df = pd.read_parquet(lm_results_path / file_name).rename(columns=rename_map)
     # the technical model repeats the treatment term name in the `term` column;
@@ -300,7 +298,6 @@ plt.show()
 win_summary = []
 for lm_name, lm_dict in lm_results_dict.items():
     if not lm_dict["input_profile_path"].exists():
-        print(f"skipping {lm_name}: {lm_dict['input_profile_path']} not found")
         continue
     df = pd.read_parquet(lm_dict["input_profile_path"])
     # explained vs residual variance is a property of the whole model
@@ -366,7 +363,6 @@ family_cols = ["Compartment", "Channel", "Feature_type"]
 
 for lm_name, lm_dict in lm_results_dict.items():
     if not lm_dict["input_profile_path"].exists():
-        print(f"skipping {lm_name}: {lm_dict['input_profile_path']} not found")
         continue
     df = pd.read_parquet(lm_dict["input_profile_path"]).rename(columns=rename_map)
     df["model_id"] = df["patient"] + " | " + df["treatment"] + " | " + df["feature"]

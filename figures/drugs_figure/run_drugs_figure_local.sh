@@ -13,8 +13,6 @@ conda deactivate
 # deactivate any existing venv environment
 deactivate 2>/dev/null
 
-conda run -n GFF_analysis python "$git_root"/figures/drugs_figure/scripts/drugs_figure.py
+uv run python "$git_root"/figures/drugs_figure/scripts/drugs_figure.py
 
-# platemap_figure.r resolves its input relative to its own directory
-cd "$git_root"/figures/drugs_figure/scripts || exit
-conda run -n gff_figure_env Rscript platemap_figure.r
+uvr run "$git_root"/figures/drugs_figure/scripts/platemap_figure.r

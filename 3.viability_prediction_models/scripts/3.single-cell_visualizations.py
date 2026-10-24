@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[ ]:
+# In[1]:
 
 
 import pathlib
@@ -30,7 +30,7 @@ else:
 start_time = time.time()
 
 
-# In[ ]:
+# In[3]:
 
 
 # Raw 3D image stacks/segmentation masks live on the external Bandicoot
@@ -68,7 +68,7 @@ crop_output_dir = pathlib.Path(
 crop_output_dir.mkdir(parents=True, exist_ok=True)
 
 
-# In[ ]:
+# In[4]:
 
 
 # Load the hits saved from visualize_model_results.ipynb:
@@ -202,14 +202,13 @@ for _, hit in hits_to_plot.iterrows():
     well_fov = hit["Metadata_Experiment_WellFOV"]
     object_id = int(hit["Metadata_Object_ObjectID"])
     compartment = hit["compartment"]
-
+    print(well_fov)
     bbox = get_hit_bbox(hit)
 
     mip_images, cmaps, marker_names = [], [], []
     for wavelength, (marker, cmap) in CHANNEL_MARKER_MAP.items():
         channel_path = build_channel_path(patient, well_fov, wavelength)
         if not channel_path.exists():
-            print(f"Missing channel image {channel_path} - skipping this hit")
             break
         stack = tifffile.imread(channel_path)
         crop = crop_zstack(stack, bbox)

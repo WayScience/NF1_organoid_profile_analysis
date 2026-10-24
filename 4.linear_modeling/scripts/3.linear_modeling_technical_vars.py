@@ -142,33 +142,6 @@ lm_equation_terms = (
 )
 
 
-# In[6]:
-
-
-linear_modeling_results_df["feature"]
-
-
-# In[9]:
-
-
-[x for x in df.columns if "Metadata" in x]
-
-
-# In[10]:
-
-
-df["Metadata_Location_Organoid_CenterX"]
-
-
-# In[5]:
-
-
-linear_modeling_results_df["feature"].str.split("_", n=3, expand=True)
-
-
-# In[ ]:
-
-
 # In[4]:
 
 
@@ -343,7 +316,7 @@ for profile in tqdm(profile_dict.keys(), desc="Loading profiles"):
     df["Metadata_Experiment_TreatmentFull"] = (
         df["Metadata_Experiment_Treatment"].astype(str)
         + "_"
-        + df["Metadata_Experiment_Dose"].astype(str)
+        + df["Metadata_Experiment_Dose"].map("{:g}".format)
         + df["Metadata_Experiment_Unit"].astype(str)
     )
     # map each combined treatment label back to its raw drug name and
