@@ -2,7 +2,7 @@
 # coding: utf-8
 
 # # Calculate well correlation to DMSO per plate
-# For every well on every plate, calculate the Pearson correlation of its morphology profile to that plate's DMSO profile.
+# For every well on every plate, the Pearson correlation of its morphology profile to that plate's DMSO profile.
 #
 # The normalized profiles are centered on each plate's DMSO, so the DMSO profile is ~0 there and correlations to it are unstable.
 # Instead:

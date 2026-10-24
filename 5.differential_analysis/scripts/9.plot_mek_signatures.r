@@ -74,6 +74,14 @@ level_test_df <- read_parquet(level_test_path) %>%
             TRUE ~ "Lower in MEKi"
         )
     )
+# "All MEKi" (pooled) first, then each drug's doses together, in the same order
+# the Python side builds MEK_GROUPS.
+mek_drug_order <- c("Binimetinib", "Mirdametinib", "Trametinib", "Selumetinib")
+mek_group_levels <- c(
+    "All MEKi",
+    unlist(lapply(mek_drug_order, function(drug) paste0(drug, " ", c("1 uM", "10 uM"))))
+)
+level_test_df$mek_group <- factor(level_test_df$mek_group, levels = mek_group_levels)
 # patients grouped by tumor type, then tumor types, then the pooled rows
 group_label_levels <- level_test_df %>%
     distinct(level, tumor_type, group_label) %>%
@@ -89,13 +97,13 @@ category_palette <- setNames(
     colorRampPalette(brewer.pal(8, "Dark2"))(length(category_levels)),
     category_levels
 )
-level_test_df %>% count(compartment, level, contrast, wt = significant, name = "n_significant_tests")
+level_test_df %>% count(compartment, mek_group, level, contrast, wt = significant, name = "n_significant_tests")
 
 count_df <- level_test_df %>%
-    group_by(compartment, level, group_label, contrast) %>%
+    group_by(compartment, mek_group, level, group_label, contrast) %>%
     summarise(n_significant = sum(significant), .groups = "drop")
 
-options(repr.plot.width = 10, repr.plot.height = 11)
+options(repr.plot.width = 24, repr.plot.height = 11)
 count_plots <- lapply(levels(count_df$compartment), function(compartment_name) {
     (
         ggplot(
@@ -111,7 +119,7 @@ count_plots <- lapply(levels(count_df$compartment), function(compartment_name) {
             guide = guide_colourbar(barheight = unit(3, "in"))
         )
         + scale_y_discrete(limits = rev)
-        + facet_grid(level ~ ., scales = "free_y", space = "free_y")
+        + facet_grid(level ~ mek_group, scales = "free_y", space = "free_y")
         + labs(
             title = paste0(compartment_name, ": features with q < ", Q_THRESHOLD),
             x = NULL,
@@ -129,12 +137,13 @@ for (count_plot in count_plots) print(count_plot)
 upset_df <- level_test_df %>%
     filter(significant) %>%
     mutate(element = if_else(group == "all", feature, paste(group, feature, sep = " | "))) %>%
-    group_by(compartment, level, element) %>%
+    group_by(compartment, mek_group, level, element) %>%
     summarise(contrasts = list(sort(unique(as.character(contrast)))), .groups = "drop")
 
-upset_plot <- function(compartment_name, level_name) {
-    plot_df <- upset_df %>% filter(compartment == compartment_name, level == level_name)
-    title <- paste0(compartment_name, " | ", level_name)
+upset_plot <- function(compartment_name, mek_group_name, level_name) {
+    plot_df <- upset_df %>%
+        filter(compartment == compartment_name, mek_group == mek_group_name, level == level_name)
+    title <- paste0(compartment_name, " | ", mek_group_name, " | ", level_name)
     if (nrow(plot_df) == 0) {
         return(
             ggplot()
@@ -167,14 +176,17 @@ upset_plot <- function(compartment_name, level_name) {
 
 upset_pages <- expand.grid(
     level = levels(level_test_df$level),
+    mek_group = levels(level_test_df$mek_group),
     compartment = levels(level_test_df$compartment),
     stringsAsFactors = FALSE
 )
-upset_plots <- mapply(upset_plot, upset_pages$compartment, upset_pages$level, SIMPLIFY = FALSE)
+upset_plots <- mapply(
+    upset_plot, upset_pages$compartment, upset_pages$mek_group, upset_pages$level, SIMPLIFY = FALSE
+)
 save_plots_pdf(
     c(count_plots, upset_plots),
     significant_count_path,
-    width = 10,
+    width = c(rep(24, length(count_plots)), rep(10, length(upset_plots))),
     height = c(rep(11, length(count_plots)), rep(4, length(upset_plots)))
 )
 for (upset_page in upset_plots) print(upset_page)
@@ -182,16 +194,17 @@ for (upset_page in upset_plots) print(upset_page)
 category_df <- level_test_df %>%
     filter(significant) %>%
     mutate(row_label = if_else(group == "all", feature_object, as.character(group_label))) %>%
-    count(compartment, level, contrast, row_label, feature_category, direction)
+    count(compartment, mek_group, level, contrast, row_label, feature_category, direction)
 # patients / tumor types in the same order as section 1, then feature objects
 category_df$row_label <- factor(
     category_df$row_label,
     levels = union(levels(level_test_df$group_label), sort(unique(category_df$row_label)))
 )
 
-category_plot <- function(compartment_name, level_name) {
-    plot_df <- category_df %>% filter(compartment == compartment_name, level == level_name)
-    title <- paste0(compartment_name, " | ", level_name)
+category_plot <- function(compartment_name, mek_group_name, level_name) {
+    plot_df <- category_df %>%
+        filter(compartment == compartment_name, mek_group == mek_group_name, level == level_name)
+    title <- paste0(compartment_name, " | ", mek_group_name, " | ", level_name)
     if (nrow(plot_df) == 0) {
         return(
             ggplot()
@@ -214,17 +227,20 @@ category_plot <- function(compartment_name, level_name) {
 
 category_pages <- expand.grid(
     level = levels(level_test_df$level),
+    mek_group = levels(level_test_df$mek_group),
     compartment = levels(level_test_df$compartment),
     stringsAsFactors = FALSE
 )
-category_plots <- mapply(category_plot, category_pages$compartment, category_pages$level, SIMPLIFY = FALSE)
+category_plots <- mapply(
+    category_plot, category_pages$compartment, category_pages$mek_group, category_pages$level, SIMPLIFY = FALSE
+)
 options(repr.plot.width = 16, repr.plot.height = 8)
 save_plots_pdf(category_plots, category_path, width = 16, height = 8)
 for (category_plot_page in category_plots) print(category_plot_page)
 
 recurrence_df <- level_test_df %>%
     filter(level %in% level_labels[c("within_patient", "within_tumor_type")]) %>%
-    group_by(compartment, contrast, feature, level) %>%
+    group_by(compartment, mek_group, contrast, feature, level) %>%
     summarise(n_groups_significant = sum(significant), .groups = "drop") %>%
     mutate(
         pooled_level = if_else(
@@ -237,18 +253,25 @@ recurrence_df <- level_test_df %>%
     left_join(
         level_test_df %>%
             filter(group == "all") %>%
-            select(compartment, contrast, feature, pooled_level = level, pooled_significant = significant) %>%
+            select(compartment, mek_group, contrast, feature, pooled_level = level, pooled_significant = significant) %>%
             mutate(pooled_level = as.character(pooled_level)),
-        by = c("compartment", "contrast", "feature", "pooled_level")
+        by = c("compartment", "mek_group", "contrast", "feature", "pooled_level")
     )
 
-options(repr.plot.width = 16, repr.plot.height = 8)
-recurrence_plots <- lapply(levels(recurrence_df$compartment), function(compartment_name) {
-    (
-        ggplot(
-            recurrence_df %>% filter(compartment == compartment_name, n_groups_significant > 0),
-            aes(x = factor(n_groups_significant), fill = pooled_significant)
+recurrence_plot <- function(compartment_name, mek_group_name) {
+    title <- paste0(compartment_name, " | ", mek_group_name, ": recurrence of significant features")
+    plot_df <- recurrence_df %>%
+        filter(compartment == compartment_name, mek_group == mek_group_name, n_groups_significant > 0)
+    if (nrow(plot_df) == 0) {
+        return(
+            ggplot()
+            + annotate("text", x = 0, y = 0, label = "No features significant in any patient / tumor type", size = 6)
+            + labs(title = title)
+            + theme_manuscript_void(base_size = 12)
         )
+    }
+    (
+        ggplot(plot_df, aes(x = factor(n_groups_significant), fill = pooled_significant))
         + geom_bar(color = "white", linewidth = 0.3)
         + scale_fill_manual(
             values = c("FALSE" = "grey60", "TRUE" = "#d73027"),
@@ -256,28 +279,39 @@ recurrence_plots <- lapply(levels(recurrence_df$compartment), function(compartme
         )
         + facet_grid(unit ~ contrast, scales = "free", drop = FALSE)
         + labs(
-            title = paste0(compartment_name, ": recurrence of significant features"),
+            title = title,
             x = "Number of patients / tumor types in which the feature is significant",
             y = "Features",
             fill = "Pooled test\n(across patients /\ntumor type means)"
         )
         + theme_manuscript(base_size = 12)
     )
-})
+}
+
+options(repr.plot.width = 16, repr.plot.height = 8)
+recurrence_pages <- expand.grid(
+    mek_group = levels(recurrence_df$mek_group),
+    compartment = levels(recurrence_df$compartment),
+    stringsAsFactors = FALSE
+)
+recurrence_plots <- mapply(
+    recurrence_plot, recurrence_pages$compartment, recurrence_pages$mek_group, SIMPLIFY = FALSE
+)
 save_plots_pdf(recurrence_plots, recurrence_path, width = 16, height = 8)
-for (recurrence_plot in recurrence_plots) print(recurrence_plot)
+for (recurrence_plot_page in recurrence_plots) print(recurrence_plot_page)
 
 recurrence_df %>%
-    select(compartment, contrast, feature, unit, n_groups_significant, pooled_significant) %>%
+    select(compartment, mek_group, contrast, feature, unit, n_groups_significant, pooled_significant) %>%
     pivot_wider(
         names_from = unit,
         values_from = c(n_groups_significant, pooled_significant)
     ) %>%
-    group_by(compartment, contrast) %>%
+    group_by(compartment, mek_group, contrast) %>%
     slice_max(n_groups_significant_Patients, n = 5, with_ties = FALSE) %>%
     ungroup() %>%
     select(
         compartment,
+        mek_group,
         contrast,
         feature,
         n_patients_significant = n_groups_significant_Patients,
