@@ -32,5 +32,9 @@ linear-modeling:
 drugs-figure:
     ./figures/drugs_figure/run_drugs_figure_local.sh
 
+# Misc figures: clinical trial efficacy and response heterogeneity (repo-root figures/ dir).
+clinical-trial-figures:
+    ./figures/clinical_trial_data_plots/run_clinical_trial_figures_local.sh
+
 # Run every module end to end, in pipeline order.
-all: setup download-data eda twod-vs-threed viability linear-modeling drugs-figure
+all: setup download-data eda twod-vs-threed viability linear-modeling drugs-figure clinical-trial-figures
