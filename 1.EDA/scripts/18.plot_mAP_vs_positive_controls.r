@@ -36,10 +36,8 @@ source(file.path(root_dir, "utils/r_plot_themes.r"))
 results_dir <- file.path(root_dir, "1.EDA", "results", "mAP_vs_positive_controls")
 figures_dir <- file.path(root_dir, "1.EDA", "figures", "mAP_vs_positive_controls")
 dir.create(figures_dir, recursive = TRUE, showWarnings = FALSE)
-heatmap_figures_dir <- file.path(figures_dir, "heatmaps")
-dir.create(heatmap_figures_dir, recursive = TRUE, showWarnings = FALSE)
 
-# Every profile type from notebook 19
+# Every profile type from notebook 17
 profile_types <- tibble::tribble(
     ~label, ~slug,
     "2D Organoid", "2D_organoid",
@@ -144,7 +142,7 @@ for (reference_group in names(positive_controls)) {
 
 mAP_plot
 
-# Every treatment-dose takes a turn as the reference in notebook 19; collect
+# Every treatment-dose takes a turn as the reference in notebook 17; collect
 # every query vs reference mAP into one table per profile type
 heatmap_mAP <- list()
 for (i in seq_len(nrow(profile_types))) {
@@ -197,7 +195,9 @@ make_mAP_heatmap <- function(df, title, reference_on_columns) {
     )
 }
 
-# Two heatmaps per profile type: reference on the columns, then on the rows
+# Two heatmaps per profile type: reference on the columns, then on the rows;
+# every heatmap is a page of a single multi-page PDF
+pdf(file.path(figures_dir, "inter_patient_mAP_heatmaps.pdf"), width = 10, height = 10)
 for (i in seq_len(nrow(profile_types))) {
     slug <- profile_types$slug[i]
     label <- profile_types$label[i]
@@ -213,20 +213,14 @@ for (i in seq_len(nrow(profile_types))) {
         complete(Metadata_treatment_dose, reference_group)
 
     for (reference_on_columns in c(TRUE, FALSE)) {
-        orientation <- if (reference_on_columns) "reference_columns" else "reference_rows"
         heatmap_plot <- make_mAP_heatmap(
             plot_df,
             paste0("Inter-patient mAP - ", label),
             reference_on_columns
         )
-        ggsave(
-            file.path(heatmap_figures_dir, paste0(slug, "_inter_patient_mAP_heatmap_", orientation, ".png")),
-            heatmap_plot,
-            width = 10,
-            height = 10,
-            dpi = 600
-        )
+        print(heatmap_plot)
     }
 }
+invisible(dev.off())
 
 heatmap_plot

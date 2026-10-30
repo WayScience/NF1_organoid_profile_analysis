@@ -9,11 +9,11 @@
 # two most lethal treatments).
 # Uses the same mAP calculation as `2.2d_vs_3d_analysis` notebook 4, with
 # all patients pooled (inter-patient); only the reference group changes.
-# Notebook 20 plots the DMSO mAP against each positive-control mAP, and the
+# Notebook 18 plots the DMSO mAP against each positive-control mAP, and the
 # full treatment-dose by treatment-dose mAP heatmaps.
 #
 
-# In[ ]:
+# In[1]:
 
 
 import pathlib
@@ -28,7 +28,7 @@ from notebook_init_utils.notebook_init_utils import init_notebook
 root_dir, in_notebook = init_notebook()
 
 
-# In[ ]:
+# In[2]:
 
 
 path_2d_organoid = pathlib.Path(
@@ -83,12 +83,7 @@ results_dir = pathlib.Path(
 results_dir.mkdir(parents=True, exist_ok=True)
 
 
-def load_profile(path: pathlib.Path) -> pd.DataFrame:
-    """Load a profile parquet."""
-    return pd.read_parquet(path)
-
-
-def harmonize_metadata(df: pd.DataFrame) -> pd.DataFrame:
+def convert_2d_metadata_to_3d_metadata_style(df: pd.DataFrame) -> pd.DataFrame:
     """Harmonize 2D/3D metadata column names and derive analysis columns.
 
     The 3D pipeline's naming convention (Metadata_Biology_PatientTumor,
@@ -121,28 +116,10 @@ def harmonize_metadata(df: pd.DataFrame) -> pd.DataFrame:
 
 def load_and_harmonize(path: pathlib.Path) -> pd.DataFrame:
     """Load a profile parquet and harmonize its metadata columns."""
-    return harmonize_metadata(load_profile(path))
+    return convert_2d_metadata_to_3d_metadata_style(pd.read_parquet(path))
 
 
-# In[ ]:
-
-
-# TEMPORARY - remove once ZedProfiler's Texture-feature computation is fixed
-# upstream.
-def temporary_clean_and_aggregate(df: pd.DataFrame) -> pd.DataFrame:
-    feature_cols = [c for c in df.columns if not c.startswith("Metadata_")]
-    meta_cols = [c for c in df.columns if c.startswith("Metadata_")]
-
-    df[feature_cols] = df[feature_cols].mask(df[feature_cols].abs() > 1e10)
-
-    # No-op if already 1 row per well; kept as a safety net.
-    group_keys = ["Metadata_Biology_PatientTumor", "Metadata_Experiment_Well"]
-    agg_dict = {c: "first" for c in meta_cols if c not in group_keys}
-    agg_dict.update({c: "mean" for c in feature_cols})
-    return df.groupby(group_keys, as_index=False).agg(agg_dict)
-
-
-# In[ ]:
+# In[3]:
 
 
 def calculate_mAP(
@@ -267,7 +244,7 @@ def calculate_inter_patient_mAP(
     return output_df
 
 
-# In[ ]:
+# In[4]:
 
 
 # Inter-patient mAP by treatment and dose, with every treatment-dose taking a
@@ -275,9 +252,6 @@ def calculate_inter_patient_mAP(
 for label, slug, path in profile_types:
     print("===", label, "===")
     df = load_and_harmonize(path)
-    df = temporary_clean_and_aggregate(
-        df
-    )  # TEMPORARY - remove once upstream data is fixed
     metadata_cols = [c for c in df.columns if c.startswith("Metadata_")]
 
     for reference_group in sorted(df["Metadata_treatment_dose"].unique()):
