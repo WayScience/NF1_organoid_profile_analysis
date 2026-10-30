@@ -93,22 +93,6 @@ profiles = list(profile_files)
 # the two "full resolution" profiles carry most of the narrative
 main_profiles = ["organoid", "sc"]
 
-# the same tumor-type lookup used in 2.linear_modeling
-tumor_type_dict = {
-    "NF0014_T1": "cNF",
-    "NF0014_T2": "pNF",
-    "NF0016_T1": "pNF",
-    "NF0018_T6": "cNF",
-    "NF0021_T1": "cNF",
-    "NF0030_T1": "Other",
-    "NF0035_T1": "cNF",
-    "NF0037_T1": "cNF",
-    "NF0040_T1": "Other",
-    "NF0055_T1": "pNF",
-    "SARCO219_T2": "MPNST",
-    "SARCO361_T1": "MPNST",
-}
-
 # "hit" definition (see the 4.linear_modeling README)
 FDR_MAX = 0.05
 R2_MIN = 0.5
@@ -287,9 +271,6 @@ save_plot_data(
         ]
     ),
 )
-
-
-# In[ ]:
 
 
 # ## 6. Hit landscape

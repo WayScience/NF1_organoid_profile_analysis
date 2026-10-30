@@ -35,10 +35,7 @@ df = pd.read_parquet(
     ).resolve(strict=True)
 )
 df["model"] = df["patient"] + "_" + df["treatment"] + "_" + df["feature"]
-# df = df.loc[df['patient'] == "NF0014_T1"]
-# df = df.loc[df['treatment'] == "Trametinib_1uM"]
 df["hit"] = (df["pvalue_fdr"] < 0.05) & (df["coefficient"] > 0.1)
-df
 
 
 # In[3]:
@@ -88,7 +85,7 @@ feature_term_hit_counts
 #
 # The tables are saved to `variate_hit_venn_regions_all_scopes.parquet`, `variate_hit_upset_counts_all_scopes.parquet` and `variate_hit_set_sizes_all_scopes.parquet`, and plotted in `6.plot_variate_importance` (R / ggplot2).
 
-# In[ ]:
+# In[4]:
 
 
 technical_path = pathlib.Path(
@@ -105,25 +102,6 @@ TECHNICAL_TERMS = CORE_TERMS + [
     "cell_z_position",
     "cell_z_depth",
 ]
-
-# the same tumor-type lookup used in 2.linear_modeling / 3.linear_modeling_technical_vars /
-# 9.explore_linear_model_haystacks (and utils/r_plot_themes.r's tumor_type_lookup on the R side).
-# NF0030_T1 (myopericytoma) and NF0040_T1 (schwannoma) are not NF1 nerve-sheath tumors and are
-# grouped as "Other".
-TUMOR_TYPE_DICT = {
-    "NF0014_T1": "cNF",
-    "NF0014_T2": "pNF",
-    "NF0016_T1": "pNF",
-    "NF0018_T6": "cNF",
-    "NF0021_T1": "cNF",
-    "NF0030_T1": "Other",
-    "NF0035_T1": "cNF",
-    "NF0037_T1": "cNF",
-    "NF0040_T1": "Other",
-    "NF0055_T1": "pNF",
-    "SARCO219_T2": "MPNST",
-    "SARCO361_T1": "MPNST",
-}
 
 
 def load_technical_hits(path):
@@ -142,7 +120,6 @@ def load_technical_hits(path):
 def slim_hits(hits):
     """Only the columns the plots need, plus tumor_type (cNF / pNF / MPNST / Other) looked up by patient id."""
     out = hits[["term", "patient", "treatment", "feature", "hit"]].copy()
-    out["tumor_type"] = out["patient"].map(TUMOR_TYPE_DICT)
     return out
 
 
@@ -205,7 +182,7 @@ def set_sizes(membership, terms):
     )
 
 
-# In[ ]:
+# In[5]:
 
 
 # every scope: the columns that define one Venn + UpSet pair. tumor_type = TUMOR_TYPE_DICT lookup by patient id
