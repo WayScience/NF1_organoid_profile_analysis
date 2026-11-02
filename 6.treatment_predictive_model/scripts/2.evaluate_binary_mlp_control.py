@@ -3,17 +3,16 @@
 
 # This notebook evaluates the per-patient DMSO-vs-Staurosporine MLP classifiers trained in `1.train_binary_mlp_control.ipynb`.
 #
-# For each patient, the classifier's held-out test-set performance is re-derived (same train/val/test split, same per-patient feature standardization, saved model weights): per-cell predictions, precision-recall curve points, and pooled/per-patient summary metrics are all computed and saved here as parquet. Plotting is done separately in `3.plot_binary_mlp_control_performance.ipynb` (R).
+# For each patient, the classifier's held-out test-set performance is re-derived (same train/val/test split, saved `MLPClassifier` + `StandardScaler` loaded from the saved model file): per-cell predictions, precision-recall curve points, and pooled/per-patient summary metrics are all computed and saved here as parquet. Plotting is done separately in `3.plot_binary_mlp_control_performance.ipynb` (R).
 
 # In[1]:
 
 
 import pathlib
 
+import joblib
 import numpy as np
 import pandas as pd
-import torch
-import torch.nn as nn
 from notebook_init_utils import init_notebook
 from sklearn.metrics import (
     accuracy_score,
@@ -23,15 +22,11 @@ from sklearn.metrics import (
     precision_recall_curve,
     roc_auc_score,
 )
-from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 from tqdm.notebook import tqdm as tqdm_notebook
 
 root_dir, in_notebook = init_notebook()
 progress_bar = tqdm_notebook if in_notebook else tqdm
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-torch.manual_seed(0)
 
 
 # In[2]:
@@ -61,7 +56,7 @@ indices_df = pd.read_parquet(split_idx_file_path)
 df = pd.read_parquet(profile_file_path)
 
 
-# In[4]:
+# In[ ]:
 
 
 # get the train, validation, and test indices from the dataframe
@@ -73,9 +68,9 @@ train_df, val_df, test_df = df.iloc[train_idx], df.iloc[val_idx], df.iloc[test_i
 
 
 # ## Rebuild the same control-only train/val/test subsets used in training
-# This mirrors `1.train_binary_mlp_control.ipynb` exactly, so that refitting each patient's `StandardScaler` on `patient_train` reproduces the identical transform the saved model weights were trained under.
+# This mirrors `1.train_binary_mlp_control.ipynb` exactly, so `test_df` matches the held-out rows used to report test metrics during training. Each patient's `StandardScaler` is loaded directly from the saved model file rather than refit.
 
-# In[5]:
+# In[ ]:
 
 
 PATIENT_COL = "Metadata_Biology_PatientTumor"
@@ -100,72 +95,32 @@ print(
 print(f"Number of features: {len(feature_cols)}")
 
 
-# ## Model architecture
-# Must match `1.train_binary_mlp_control.ipynb` exactly so the saved `state_dict`s load correctly.
-
-# In[6]:
-
-
-HIDDEN_DIMS = (128, 64)
-
-
-class MLPClassifier(nn.Module):
-    """A feed-forward binary classifier over single-cell morphology features."""
-
-    def __init__(self, input_dim: int, hidden_dims: tuple = HIDDEN_DIMS):
-        super().__init__()
-        layers = []
-        prev_dim = input_dim
-        for hidden_dim in hidden_dims:
-            layers += [
-                nn.Linear(prev_dim, hidden_dim),
-                nn.BatchNorm1d(hidden_dim),
-                nn.ReLU(),
-                nn.Dropout(0.3),
-            ]
-            prev_dim = hidden_dim
-        layers.append(nn.Linear(prev_dim, 1))
-        self.network = nn.Sequential(*layers)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.network(x).squeeze(-1)
-
-
 # ## Score every held-out test cell with its patient's trained model
 # Patients with a saved model (i.e. that had both classes present in every split during training) are scored; `NF0016_T1` has no `Staurosporine` wells and was skipped in training, so it is skipped here too.
 
-# In[7]:
+# In[ ]:
 
 
 patients = sorted(train_df[PATIENT_COL].unique())
 per_cell_records = []
 
 for patient in progress_bar(patients, desc="Scoring per-patient test sets"):
-    model_path = model_output_dir / f"binary_mlp_control_{patient}.pt"
+    model_path = model_output_dir / f"binary_mlp_control_{patient}.joblib"
     if not model_path.exists():
         print(f"Skipping {patient}: no saved model (skipped during training).")
         continue
 
-    patient_train = train_df[train_df[PATIENT_COL] == patient]
     patient_test = test_df[test_df[PATIENT_COL] == patient]
     if patient_test.empty:
         print(f"Skipping {patient}: no test rows.")
         continue
 
-    # Refit on the training rows only - deterministic given the same input,
-    # so this reproduces the exact transform used when the model was trained.
-    scaler = StandardScaler()
-    scaler.fit(patient_train[feature_cols].values)
+    saved = joblib.load(model_path)
+    model, scaler = saved["model"], saved["scaler"]
+
     X_test = scaler.transform(patient_test[feature_cols].values)
     y_test = patient_test[LABEL_COL].values
-
-    model = MLPClassifier(input_dim=len(feature_cols)).to(device)
-    model.load_state_dict(torch.load(model_path, map_location=device))
-    model.eval()
-
-    with torch.no_grad():
-        logits = model(torch.tensor(X_test, dtype=torch.float32, device=device))
-    probs = torch.sigmoid(logits).cpu().numpy()
+    probs = model.predict_proba(X_test)[:, 1]
 
     per_cell_records.append(
         pd.DataFrame(
@@ -184,7 +139,7 @@ per_cell_df["Metadata_predicted_label"] = (
 per_cell_df.head()
 
 
-# In[8]:
+# In[ ]:
 
 
 per_cell_predictions_path = (
@@ -196,46 +151,33 @@ per_cell_df.to_parquet(per_cell_predictions_path, index=False)
 # ## Save precision-recall curve data
 # More informative than ROC when the two classes are imbalanced (DMSO outnumbers Staurosporine for most patients).
 
-# In[9]:
+# In[ ]:
 
 
-pr_records = []
-for patient, group in per_cell_df.groupby(PATIENT_COL):
+def pr_curve_frame(group: pd.DataFrame) -> pd.DataFrame:
     precision, recall, _ = precision_recall_curve(
         group["Metadata_true_label"], group["Metadata_predicted_probability"]
     )
     ap = average_precision_score(
         group["Metadata_true_label"], group["Metadata_predicted_probability"]
     )
-    pr_records.append(
-        pd.DataFrame(
-            {
-                "series": patient,
-                "recall": recall,
-                "precision": precision,
-                "average_precision": ap,
-            }
-        )
+    return pd.DataFrame(
+        {"recall": recall, "precision": precision, "average_precision": ap}
     )
 
-pooled_precision, pooled_recall, _ = precision_recall_curve(
-    per_cell_df["Metadata_true_label"], per_cell_df["Metadata_predicted_probability"]
-)
-pooled_ap = average_precision_score(
-    per_cell_df["Metadata_true_label"], per_cell_df["Metadata_predicted_probability"]
-)
-pr_records.append(
-    pd.DataFrame(
-        {
-            "series": "pooled",
-            "recall": pooled_recall,
-            "precision": pooled_precision,
-            "average_precision": pooled_ap,
-        }
-    )
+
+pr_curve_df = (
+    per_cell_df.groupby(PATIENT_COL, group_keys=True)
+    .apply(pr_curve_frame, include_groups=False)
+    .reset_index(level=0)
+    .rename(columns={PATIENT_COL: "series"})
+    .reset_index(drop=True)
 )
 
-pr_curve_df = pd.concat(pr_records, ignore_index=True)
+pooled_pr_curve_df = pr_curve_frame(per_cell_df)
+pooled_pr_curve_df.insert(0, "series", "pooled")
+
+pr_curve_df = pd.concat([pr_curve_df, pooled_pr_curve_df], ignore_index=True)
 pr_curve_df.to_parquet(
     model_results_dir / "binary_mlp_control_pr_curve_points.parquet", index=False
 )
@@ -245,7 +187,7 @@ pr_curve_df.head()
 # ## Summary metrics table
 # Per-patient and pooled accuracy, F1, ROC-AUC, average precision, and Brier score, computed directly from the re-derived per-cell test predictions above.
 
-# In[10]:
+# In[ ]:
 
 
 def summarize(group: pd.DataFrame) -> pd.Series:
