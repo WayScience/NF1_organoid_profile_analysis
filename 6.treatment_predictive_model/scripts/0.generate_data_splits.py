@@ -6,7 +6,7 @@
 # We are particularly interested in cells that differ from DMSO but do not resemble the cytotoxic phenotype, as these may reflect treatment-specific, non-toxic responses.
 # To identify these cells, we [describe approach, e.g., combine the classifier probability with each cell's distance from the DMSO profile].
 
-# In[ ]:
+# In[1]:
 
 
 import pathlib
@@ -75,7 +75,7 @@ df.head()
 # ## Data splitting
 # 70 % training, 15 % validation, 15 % test split. The training and validation sets will be used to train the model, while the test set will be used to evaluate its performance on unseen data.
 
-# In[ ]:
+# In[5]:
 
 
 # data splitting
@@ -100,6 +100,11 @@ train_df, val_df = train_test_split(
 train_idx = train_df.index
 val_idx = val_df.index
 test_idx = test_df.index
+
+# ensure that the indices are ints
+train_idx = train_idx.astype(int)
+val_idx = val_idx.astype(int)
+test_idx = test_idx.astype(int)
 
 print(f"Train set size: {len(train_idx)}")
 print(f"Validation set size: {len(val_idx)}")

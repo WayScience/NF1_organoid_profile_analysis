@@ -56,7 +56,7 @@ indices_df = pd.read_parquet(split_idx_file_path)
 df = pd.read_parquet(profile_file_path)
 
 
-# In[ ]:
+# In[4]:
 
 
 # get the train, validation, and test indices from the dataframe
@@ -70,7 +70,7 @@ train_df, val_df, test_df = df.iloc[train_idx], df.iloc[val_idx], df.iloc[test_i
 # ## Rebuild the same control-only train/val/test subsets used in training
 # This mirrors `1.train_binary_mlp_control.ipynb` exactly, so `test_df` matches the held-out rows used to report test metrics during training. Each patient's `StandardScaler` is loaded directly from the saved model file rather than refit.
 
-# In[ ]:
+# In[5]:
 
 
 PATIENT_COL = "Metadata_Biology_PatientTumor"
@@ -98,7 +98,7 @@ print(f"Number of features: {len(feature_cols)}")
 # ## Score every held-out test cell with its patient's trained model
 # Patients with a saved model (i.e. that had both classes present in every split during training) are scored; `NF0016_T1` has no `Staurosporine` wells and was skipped in training, so it is skipped here too.
 
-# In[ ]:
+# In[6]:
 
 
 patients = sorted(train_df[PATIENT_COL].unique())
@@ -139,7 +139,7 @@ per_cell_df["Metadata_predicted_label"] = (
 per_cell_df.head()
 
 
-# In[ ]:
+# In[7]:
 
 
 per_cell_predictions_path = (
@@ -151,7 +151,7 @@ per_cell_df.to_parquet(per_cell_predictions_path, index=False)
 # ## Save precision-recall curve data
 # More informative than ROC when the two classes are imbalanced (DMSO outnumbers Staurosporine for most patients).
 
-# In[ ]:
+# In[8]:
 
 
 def pr_curve_frame(group: pd.DataFrame) -> pd.DataFrame:
@@ -187,7 +187,7 @@ pr_curve_df.head()
 # ## Summary metrics table
 # Per-patient and pooled accuracy, F1, ROC-AUC, average precision, and Brier score, computed directly from the re-derived per-cell test predictions above.
 
-# In[ ]:
+# In[9]:
 
 
 def summarize(group: pd.DataFrame) -> pd.Series:

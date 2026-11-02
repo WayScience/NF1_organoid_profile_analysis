@@ -5,7 +5,7 @@
 #
 # This is a coarser-grained version of `6.train_multiclass_mlp_treatment_dose.ipynb`'s question - grouping individual drugs by shared mechanism should be an easier target to predict from morphology than the exact drug identity, since drugs sharing a MOA are expected to produce more similar phenotypes. It reuses the same train/val/test split from `0.generate_data_splits.ipynb`.
 
-# In[1]:
+# In[ ]:
 
 
 import pathlib
@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 from joblib import dump
 from notebook_init_utils import init_notebook
+from sklearn.metrics import balanced_accuracy_score, f1_score
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 
@@ -150,10 +151,8 @@ history_df.head()
 # ## Quick test-set check
 # A full evaluation (confusion matrix, per-class precision/recall, top-k accuracy) is done separately in `10.evaluate_multiclass_mlp_target.ipynb`; this is just a sanity check that training worked.
 
-# In[7]:
+# In[ ]:
 
-
-from sklearn.metrics import balanced_accuracy_score, f1_score
 
 y_pred = model.predict(X_test)
 print(f"Test balanced accuracy: {balanced_accuracy_score(y_test, y_pred):.4f}")
