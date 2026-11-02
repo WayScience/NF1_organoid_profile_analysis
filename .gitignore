@@ -192,3 +192,6 @@ shippable_dir.zip
 4.linear_modeling/results/
 5.differential_analysis/results/
 interactive_dashboard/data/
+6.treatment_predictive_model/trained_models/
+6.treatment_predictive_model/model_results/
+6.treatment_predictive_model/data_splits/
