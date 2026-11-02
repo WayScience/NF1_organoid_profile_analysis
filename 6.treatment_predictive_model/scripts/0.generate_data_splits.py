@@ -6,7 +6,7 @@
 # We are particularly interested in cells that differ from DMSO but do not resemble the cytotoxic phenotype, as these may reflect treatment-specific, non-toxic responses.
 # To identify these cells, we [describe approach, e.g., combine the classifier probability with each cell's distance from the DMSO profile].
 
-# In[1]:
+# In[ ]:
 
 
 import pathlib
@@ -14,6 +14,7 @@ import pathlib
 import numpy as np
 import pandas as pd
 from notebook_init_utils import init_notebook
+from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 from tqdm.notebook import tqdm as tqdm_notebook
 
@@ -64,14 +65,17 @@ strata_dependency_cols = [
     "Metadata_Experiment_Treatment",
     "Metadata_Experiment_Dose",
 ]
+prior_shape = df.shape
 df.dropna(subset=feature_cols + strata_dependency_cols, inplace=True)
+posterior_shape = df.shape
+print(f"Dropped {prior_shape[0] - posterior_shape[0]} rows with missing values.")
 df.head()
 
 
 # ## Data splitting
 # 70 % training, 15 % validation, 15 % test split. The training and validation sets will be used to train the model, while the test set will be used to evaluate its performance on unseen data.
 
-# In[5]:
+# In[ ]:
 
 
 # data splitting
@@ -80,7 +84,6 @@ val_frac = 0.15
 test_frac = 0.15
 strata_col = "Metadata_patient_treatment_dose"
 
-from sklearn.model_selection import train_test_split
 
 train_df, test_df = train_test_split(
     df, test_size=test_frac, stratify=df[strata_col], random_state=0, shuffle=True
