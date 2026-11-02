@@ -13,7 +13,7 @@ Provide feedback on the code, including potential improvements, best practices, 
 
 ## Data and figures
 - All results, intermediate files, data, etc. should be saved as parquet files, not any other format.
-- Figures should be saved as `.png` only, with `dpi=600`.
+- Figures should be saved as multi-page `.pdf` only, with `dpi=600`.
 
 ## R / ggplot2
 Preferred style: each layer indented on its own line, with the `+` operator at the start of the line.
