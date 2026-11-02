@@ -131,6 +131,9 @@ confusion_df <- predictions_df %>%
         Metadata_split, Metadata_true_label = class_levels, Metadata_predicted_label = class_levels,
         fill = list(n = 0)
     ) %>%
+    group_by(Metadata_split, Metadata_true_label) %>%
+    mutate(row_total = sum(n), row_accuracy = if_else(row_total > 0, n / row_total, NA_real_)) %>%
+    ungroup() %>%
     mutate(
         Metadata_true_label = factor(Metadata_true_label, levels = class_levels),
         Metadata_predicted_label = factor(Metadata_predicted_label, levels = class_levels),
@@ -138,6 +141,27 @@ confusion_df <- predictions_df %>%
     )
 
 confusion_matrix_plot <- (
+    ggplot(confusion_df, aes(x = Metadata_predicted_label, y = Metadata_true_label, fill = row_accuracy))
+    + geom_tile()
+    + geom_text(aes(label = n), size = 2.5)
+    + scale_fill_distiller(palette = "Blues", direction = 1, name = "Row accuracy", limits = c(0, 1), na.value = "grey90")
+    + scale_y_discrete(limits = rev(class_levels))
+    + facet_wrap(~Metadata_split)
+    + labs(
+        x = "Predicted label", y = "True label",
+        title = "Target/MOA confusion matrix (count labels, colored by row accuracy, train vs test)"
+    )
+    + theme_manuscript(base_size = 10, x_text = "angled")
+    + theme(panel.grid = element_blank())
+)
+
+ggsave(
+    file.path(figures_dir, paste0(TASK_PREFIX, "_confusion_matrix.png")),
+    confusion_matrix_plot, width = 16, height = 9, dpi = 600, bg = "white"
+)
+confusion_matrix_plot
+
+confusion_matrix_counts_plot <- (
     ggplot(confusion_df, aes(x = Metadata_predicted_label, y = Metadata_true_label, fill = n))
     + geom_tile()
     + geom_text(aes(label = n), size = 2.5)
@@ -153,7 +177,7 @@ confusion_matrix_plot <- (
 )
 
 ggsave(
-    file.path(figures_dir, paste0(TASK_PREFIX, "_confusion_matrix.png")),
-    confusion_matrix_plot, width = 16, height = 9, dpi = 600, bg = "white"
+    file.path(figures_dir, paste0(TASK_PREFIX, "_confusion_matrix_counts.png")),
+    confusion_matrix_counts_plot, width = 16, height = 9, dpi = 600, bg = "white"
 )
-confusion_matrix_plot
+confusion_matrix_counts_plot
