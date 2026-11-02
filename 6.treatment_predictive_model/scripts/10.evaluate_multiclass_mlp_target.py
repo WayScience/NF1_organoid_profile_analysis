@@ -5,7 +5,7 @@
 #
 # It re-derives the train- and test-set predictions (same split, same deterministically-refit `StandardScaler`, saved model) and saves: per-cell predictions, overall and per-class accuracy/precision/recall/F1, and top-k accuracy - each tagged with its split (`train`/`test`) so performance can be compared across splits in `11.plot_multiclass_mlp_target.ipynb` (R).
 
-# In[1]:
+# In[ ]:
 
 
 import pathlib
@@ -48,7 +48,7 @@ model_results_dir.mkdir(parents=True, exist_ok=True)
 # ## Rebuild the same data/label setup used in training
 # This mirrors `9.train_multiclass_mlp_target.ipynb` exactly, so refitting the `StandardScaler` and `LabelEncoder` on `train_df` reproduces what the saved model was trained under.
 
-# In[3]:
+# In[ ]:
 
 
 LABEL_COL = "Metadata_Experiment_Target"
@@ -74,7 +74,7 @@ print(f"Train: {len(train_df)} rows, Test: {len(test_df)} rows, {num_classes} cl
 
 # ## Load the trained model
 
-# In[4]:
+# In[ ]:
 
 
 model = load(model_output_dir / "multiclass_mlp_target.joblib")
@@ -83,7 +83,7 @@ model = load(model_output_dir / "multiclass_mlp_target.joblib")
 # ## Score each split
 # Train and test are scored the same way so the plotting notebook can compare them directly (e.g. to spot overfitting or systematic over-prediction of particular MoA classes).
 
-# In[5]:
+# In[ ]:
 
 
 TOP_K_VALUES = [1, 2, 3, 5]
@@ -127,6 +127,7 @@ for split_name, split_df in splits.items():
             classification_report(
                 y_split,
                 preds,
+                labels=np.arange(num_classes),
                 target_names=label_encoder.classes_,
                 output_dict=True,
                 zero_division=0,
@@ -146,7 +147,7 @@ for split_name, split_df in splits.items():
 
 # ## Save per-cell predictions
 
-# In[6]:
+# In[ ]:
 
 
 predictions_df = pd.concat(predictions_parts, ignore_index=True)
@@ -158,7 +159,7 @@ predictions_df.head()
 
 # ## Save top-k accuracy
 
-# In[7]:
+# In[ ]:
 
 
 top_k_df = pd.concat(top_k_parts, ignore_index=True)
@@ -170,7 +171,7 @@ top_k_df
 
 # ## Save per-class precision/recall/F1
 
-# In[8]:
+# In[ ]:
 
 
 report_df = pd.concat(report_parts, ignore_index=True)
