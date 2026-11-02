@@ -41,13 +41,6 @@ root_dir <- find_git_root()
 source(file.path(root_dir, "utils", "r_plot_funcs.r"))
 source(file.path(root_dir, "utils", "r_plot_themes.r"))
 
-figures_path <- file.path(root_dir, "6.technical_platemap_analysis/figures/pca_per_well")
-if (!dir.exists(figures_path)) {
-  dir.create(figures_path, recursive = TRUE)
-}
-
-pca_results_dir <- file.path(root_dir, "1.EDA/results/pca")
-
 # platetools::raw_map expects well IDs like "A01" (zero-padded column number);
 # the PCA embeddings store wells as "A1" (matches platemap_figure.r).
 add_leading_zero <- function(well) {
@@ -84,6 +77,13 @@ build_patient_platemap_pages <- function(df, well_col, patient_col, title_prefix
     }
     patient_plots
 }
+
+figures_path <- file.path(root_dir, "6.technical_platemap_analysis/figures/pca_per_well")
+if (!dir.exists(figures_path)) {
+  dir.create(figures_path, recursive = TRUE)
+}
+
+pca_results_dir <- file.path(root_dir, "1.EDA/results/pca")
 
 slice_specs <- list(
     list(file_prefix = "2D_max_projection", title_label = "2D MIP"),
