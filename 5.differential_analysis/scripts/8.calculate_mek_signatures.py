@@ -42,41 +42,7 @@ from scipy import stats
 root_dir, in_notebook = init_notebook()
 
 
-# In[ ]:
-
-
-results_dir = pathlib.Path(root_dir, "5.differential_analysis/results")
-log2fc_path_dict = {
-    "organoid": pathlib.Path(results_dir, "organoid_log2fc.parquet"),
-    "single_cell": pathlib.Path(results_dir, "single_cell_log2fc.parquet"),
-}
-well_log2fc_path_dict = {
-    "organoid": pathlib.Path(results_dir, "organoid_well_log2fc.parquet"),
-    "single_cell": pathlib.Path(results_dir, "single_cell_well_log2fc.parquet"),
-}
-feature_test_output_path = pathlib.Path(
-    results_dir, "mek_contrast_feature_tests.parquet"
-)
-patient_value_output_path = pathlib.Path(
-    results_dir, "mek_contrast_patient_values.parquet"
-)
-mek_condition_output_path = pathlib.Path(
-    results_dir, "mek_condition_feature_means.parquet"
-)
-level_test_output_path = pathlib.Path(results_dir, "mek_contrast_level_tests.parquet")
-
-MEK_DRUGS = ["Binimetinib", "Mirdametinib", "Trametinib", "Selumetinib"]
-MEK_DOSES = (1.0, 10.0)
-MEK_GROUPS = {"All MEKi": [(drug, dose) for drug in MEK_DRUGS for dose in MEK_DOSES]}
-MEK_GROUPS.update(
-    {f"{drug} {dose:g} uM": [(drug, dose)] for drug in MEK_DRUGS for dose in MEK_DOSES}
-)
-COMPARATORS = {"Staurosporine": "MEKi vs Staurosporine", "Digoxin": "MEKi vs Digoxin"}
-DMSO_CONTRAST = "MEKi vs DMSO"
-TUMOR_TYPES = ["cNF", "pNF", "MPNST", "Other"]
-
-
-# In[ ]:
+# In[2]:
 
 
 def bh_fdr(p_values: np.ndarray) -> np.ndarray:
@@ -458,9 +424,43 @@ def level_tests(
     return level_df
 
 
+# In[3]:
+
+
+results_dir = pathlib.Path(root_dir, "5.differential_analysis/results")
+log2fc_path_dict = {
+    "organoid": pathlib.Path(results_dir, "organoid_log2fc.parquet"),
+    "single_cell": pathlib.Path(results_dir, "single_cell_log2fc.parquet"),
+}
+well_log2fc_path_dict = {
+    "organoid": pathlib.Path(results_dir, "organoid_well_fc.parquet"),
+    "single_cell": pathlib.Path(results_dir, "single_cell_well_fc.parquet"),
+}
+feature_test_output_path = pathlib.Path(
+    results_dir, "mek_contrast_feature_tests.parquet"
+)
+patient_value_output_path = pathlib.Path(
+    results_dir, "mek_contrast_patient_values.parquet"
+)
+mek_condition_output_path = pathlib.Path(
+    results_dir, "mek_condition_feature_means.parquet"
+)
+level_test_output_path = pathlib.Path(results_dir, "mek_contrast_level_tests.parquet")
+
+MEK_DRUGS = ["Binimetinib", "Mirdametinib", "Trametinib", "Selumetinib"]
+MEK_DOSES = (1.0, 10.0)
+MEK_GROUPS = {"All MEKi": [(drug, dose) for drug in MEK_DRUGS for dose in MEK_DOSES]}
+MEK_GROUPS.update(
+    {f"{drug} {dose:g} uM": [(drug, dose)] for drug in MEK_DRUGS for dose in MEK_DOSES}
+)
+COMPARATORS = {"Staurosporine": "MEKi vs Staurosporine", "Digoxin": "MEKi vs Digoxin"}
+DMSO_CONTRAST = "MEKi vs DMSO"
+TUMOR_TYPES = ["cNF", "pNF", "MPNST", "Other"]
+
+
 # ## Contrasts and per-feature tests
 
-# In[ ]:
+# In[4]:
 
 
 test_list, patient_list, condition_list, level_list = [], [], [], []
@@ -539,7 +539,7 @@ print(
 )
 
 
-# In[ ]:
+# In[5]:
 
 
 top_columns = [
@@ -562,7 +562,7 @@ for (compartment, mek_group, contrast), block in feature_test_df.groupby(
 
 # ## Significant features per level
 
-# In[ ]:
+# In[6]:
 
 
 level_summary_df = (
@@ -577,7 +577,7 @@ level_summary_df
 
 # ## Feature categories among significant features
 
-# In[ ]:
+# In[7]:
 
 
 category_df = (

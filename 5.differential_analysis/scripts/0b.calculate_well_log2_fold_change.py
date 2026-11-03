@@ -4,9 +4,7 @@
 # # Calculate well-level fold changes vs DMSO per patient
 # Companion to `0.calculate_log2_fold_change`, which collapses every well and organoid/cell into a single consensus value per patient x treatment x dose. That consensus grain gives `5.calculate_mek_signatures` only one data point per patient for a single MEK drug x dose, so within-patient significance there is undefined (n=1).
 #
-# This notebook keeps one row per **well** instead: for each patient, treated wells are aggregated (median across their organoids/cells) and compared against that same patient's DMSO reference (median across all of that patient's DMSO rows, identical reference to `0.calculate_log2_fold_change`). Real replicate wells exist per patient x treatment x dose (2 for the MEK drugs, 8 for DMSO, 2-4 for the comparators), so a single MEK drug x dose now has n=2 real within-patient replicates instead of 1.
-#
-# As in `0.calculate_log2_fold_change`, the consensus/normalized profiles are already normalized and centered (many values negative), so these are differences on the normalized scale, not log2 fold changes; the `log2fc` file and column names are kept only so the naming matches the existing per-patient files.
+# This notebook keeps one row per **well** instead: for each patient, treated wells are aggregated (median across their organoids/cells) and compared against that same patient's DMSO reference (median across all of that patient's DMSO rows, identical reference to `0.calculate_log2_fold_change`). Real replicate wells exist per patient x treatment x dose (2 for the MEK drugs, 8 for DMSO, 2-4 for the comparators), so a single MEK drug x dose now has n=2 real within-patient replicates instead of 1
 
 # In[ ]:
 

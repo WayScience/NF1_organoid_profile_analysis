@@ -280,6 +280,7 @@ recurrence_plot <- function(compartment_name, mek_group_name) {
         + facet_grid(unit ~ contrast, scales = "free", drop = FALSE)
         + labs(
             title = title,
+            subtitle = "Rows = two separate tests (within patient / within tumor type); features not significant anywhere are excluded.\nx = how many patients/tumor types a feature is significant in on its own. Color = whether it is ALSO significant pooled (independent of x).",
             x = "Number of patients / tumor types in which the feature is significant",
             y = "Features",
             fill = "Pooled test\n(across patients /\ntumor type means)"
