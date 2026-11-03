@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 from joblib import dump
 from notebook_init_utils import init_notebook
-from sklearn.metrics import balanced_accuracy_score, f1_score
+from sklearn.metrics import balanced_accuracy_score, f1_score, log_loss
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 
@@ -75,10 +75,10 @@ print(f"Number of features: {len(feature_cols)}, number of classes: {num_classes
 print(f"Classes: {list(label_encoder.classes_)}")
 
 
-# ## MLP model
-# A single global model (not per-patient): features are standardized once, fit on the full training split.
+# ## MLP model and training helper
+# A single global model (not per-patient): features are standardized once, fit on the full training split. Training uses `sklearn.neural_network.MLPClassifier` via `partial_fit`, one epoch at a time, mirroring `1.train_binary_mlp_control.ipynb`/`6.train_multiclass_mlp_treatment_dose.ipynb`'s pattern so that early stopping watches the same held-out `val_df` split used elsewhere in this pipeline, rather than sklearn's own `early_stopping` option, which would carve its validation fold out of the training data instead (and, since that option only exposes a validation *score* rather than a validation *loss*, couldn't be plotted on the same loss axis as the other training curves in `11.plot_multiclass_mlp_target.ipynb`).
 
-# In[4]:
+# In[ ]:
 
 
 MAX_EPOCHS = 100
@@ -89,10 +89,62 @@ HIDDEN_DIMS = (128, 64)
 BATCH_SIZE = 128
 
 
-# ## Train the model
-# `MLPClassifier.fit()` only accepts one dataset, so instead of the explicit val split being used directly, train and val are combined and `validation_fraction` is set to match the val split's size - `early_stopping=True` then carves out a stratified validation subset internally (matching `PATIENCE` via `n_iter_no_change`) rather than monitoring loss on the original fixed val split.
+def train_mlp(
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    X_val: np.ndarray,
+    y_val: np.ndarray,
+    classes: np.ndarray,
+) -> tuple[MLPClassifier, dict]:
+    model = MLPClassifier(
+        hidden_layer_sizes=HIDDEN_DIMS,
+        activation="relu",
+        solver="adam",
+        alpha=WEIGHT_DECAY,
+        batch_size=BATCH_SIZE,
+        learning_rate_init=LEARNING_RATE,
+        max_iter=1,
+        warm_start=True,
+        random_state=RANDOM_STATE,
+    )
 
-# In[5]:
+    best_val_loss = float("inf")
+    best_params = None
+    epochs_without_improvement = 0
+    history = {"train_loss": [], "val_loss": []}
+    rng = np.random.RandomState(RANDOM_STATE)
+
+    for epoch in range(MAX_EPOCHS):
+        perm = rng.permutation(len(X_train))
+        if epoch == 0:
+            model.partial_fit(X_train[perm], y_train[perm], classes=classes)
+        else:
+            model.partial_fit(X_train[perm], y_train[perm])
+
+        train_loss = log_loss(y_train, model.predict_proba(X_train), labels=classes)
+        val_loss = log_loss(y_val, model.predict_proba(X_val), labels=classes)
+        history["train_loss"].append(train_loss)
+        history["val_loss"].append(val_loss)
+
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            best_params = (
+                [w.copy() for w in model.coefs_],
+                [b.copy() for b in model.intercepts_],
+            )
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+            if epochs_without_improvement >= PATIENCE:
+                break
+
+    model.coefs_, model.intercepts_ = best_params
+    return model, history
+
+
+# ## Train the model
+
+# In[ ]:
 
 
 scaler = StandardScaler()
@@ -104,32 +156,15 @@ y_train = label_encoder.transform(train_df[LABEL_COL])
 y_val = label_encoder.transform(val_df[LABEL_COL])
 y_test = label_encoder.transform(test_df[LABEL_COL])
 
-X_fit = np.vstack([X_train, X_val])
-y_fit = np.concatenate([y_train, y_val])
-validation_fraction = len(val_df) / len(X_fit)
+model, history = train_mlp(X_train, y_train, X_val, y_val, np.arange(num_classes))
 
-model = MLPClassifier(
-    hidden_layer_sizes=HIDDEN_DIMS,
-    activation="relu",
-    solver="adam",
-    alpha=WEIGHT_DECAY,
-    batch_size=BATCH_SIZE,
-    learning_rate_init=LEARNING_RATE,
-    max_iter=MAX_EPOCHS,
-    early_stopping=True,
-    validation_fraction=validation_fraction,
-    n_iter_no_change=PATIENCE,
-    random_state=RANDOM_STATE,
-)
-model.fit(X_fit, y_fit)
-
-print(f"Trained for {model.n_iter_} epochs")
+print(f"Trained for {len(history['train_loss'])} epochs")
 
 
 # ## Save the model and training curve
 # Plotting is done separately in `11.plot_multiclass_mlp_target.ipynb` (R).
 
-# In[6]:
+# In[ ]:
 
 
 model_output_path = model_output_dir / "multiclass_mlp_target.joblib"
@@ -137,9 +172,9 @@ dump(model, model_output_path)
 
 history_df = pd.DataFrame(
     {
-        "epoch": range(1, len(model.loss_curve_) + 1),
-        "train_loss": model.loss_curve_,
-        "val_score": model.validation_scores_,
+        "epoch": range(1, len(history["train_loss"]) + 1),
+        "train_loss": history["train_loss"],
+        "val_loss": history["val_loss"],
     }
 )
 history_df.to_parquet(
