@@ -40,5 +40,9 @@ drugs-figure:
 update-app:
     (cd interactive_dashboard && just all_data)
 
-# Run every module end to end. Pass clean=true to wipe outputs first.
-all clean="false": (clean clean) setup download-data eda viability linear-modeling drugs-figure update-app
+# Misc figures: clinical trial efficacy and response heterogeneity (repo-root figures/ dir).
+clinical-trial-figures:
+    ./figures/clinical_trial_data_plots/run_clinical_trial_figures_local.sh
+
+# Run every module end to end, in pipeline order.
+all: setup download-data eda twod-vs-threed viability linear-modeling drugs-figure clinical-trial-figures

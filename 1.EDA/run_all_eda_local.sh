@@ -43,3 +43,5 @@ uv run python "$git_root"/1.EDA/scripts/13.calculate_neighbor_features.py
 uvr run "$git_root"/1.EDA/scripts/14.plot_neighbor_features.r
 uv run python "$git_root"/1.EDA/scripts/15.calculate_intensity_values.py
 uvr run "$git_root"/1.EDA/scripts/16.plot_intensity_facets.r
+uv run python "$git_root"/1.EDA/scripts/17.calculate_mAP_vs_positive_controls.py
+uvr run "$git_root"/1.EDA/scripts/18.plot_mAP_vs_positive_controls.r

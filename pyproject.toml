@@ -47,6 +47,7 @@ dependencies = [
     "scipy>=1.17.1",
     "copairs>=0.5.5",
     "huggingface-hub>=2.1.1",
+    "torch>=2.15.0",
 ]
 
 
