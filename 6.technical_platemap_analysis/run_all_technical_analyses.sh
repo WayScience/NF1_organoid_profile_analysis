@@ -33,4 +33,4 @@ deactivate >/dev/null 2>&1 || true
 
 uvr run  "$module_dir/scripts/0.plot_PCs_per_well.r"
 uvr run  "$module_dir/scripts/1.plot_PCs_against_z_dim.r"
-
+uvr run  "$module_dir/scripts/2.plot_counts_per_well_platemap.r"
