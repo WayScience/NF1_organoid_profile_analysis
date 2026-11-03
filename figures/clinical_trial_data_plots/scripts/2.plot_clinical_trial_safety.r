@@ -1,4 +1,4 @@
-list_of_packages <- c("ggplot2", "dplyr", "tidyr", "arrow", "RColorBrewer")
+list_of_packages <- c("ggplot2", "dplyr", "tidyr", "stringr", "RColorBrewer")
 for (package in list_of_packages) {
     suppressPackageStartupMessages(
         suppressWarnings(
@@ -32,12 +32,12 @@ data_dir <- file.path(module_dir, "data")
 figures_dir <- file.path(module_dir, "figures")
 dir.create(figures_dir, recursive = TRUE, showWarnings = FALSE)
 
-dropout_summary_path <- file.path(data_dir, "trial_dropout_summary.parquet")
-adverse_events_detail_path <- file.path(data_dir, "trial_adverse_events_detail.parquet")
+dropout_summary_path <- file.path(data_dir, "trial_dropout_summary.csv")
+adverse_events_detail_path <- file.path(data_dir, "trial_adverse_events_detail.csv")
 dropout_figure_path <- file.path(figures_dir, "clinical_trial_dropout_rates.png")
 adverse_events_figure_path <- file.path(figures_dir, "clinical_trial_adverse_events.png")
 
-dropout_df <- read_parquet(dropout_summary_path)
+dropout_df <- read.csv(dropout_summary_path, stringsAsFactors = FALSE)
 
 dropout_long_df <- dropout_df %>%
     mutate(
@@ -82,17 +82,23 @@ dropout_plot
 
 save_ggplot(dropout_plot, dropout_figure_path, width = 12, height = 7)
 
-adverse_events_df <- read_parquet(adverse_events_detail_path)
+adverse_events_df <- read.csv(adverse_events_detail_path, stringsAsFactors = FALSE)
 
 ae_heatmap_df <- adverse_events_df %>%
     mutate(
         arm_label = paste0(trial, "\n", population, ", ", arm),
         arm_label = factor(arm_label, levels = unique(arm_label[order(trial, drug != "Placebo")])),
-        ae_term = factor(ae_term, levels = rev(sort(unique(ae_term))))
+        ae_term_wrapped = str_wrap(ae_term, width = 20),
+        ae_term_wrapped = factor(ae_term_wrapped, levels = rev(sort(unique(ae_term_wrapped))))
     )
 
+ae_heatmap_caption <- str_wrap(
+    "ReNeu shows treatment-related adverse events occurring in >=5% of either cohort; KOMET shows all adverse events occurring in >=10% of either arm. SPRINT II reports toxicity narratively, without a per-term frequency table, so it is excluded here.",
+    width = 110
+)
+
 ae_heatmap_plot <- (
-    ggplot(ae_heatmap_df, aes(x = arm_label, y = ae_term, fill = pct_all_grades))
+    ggplot(ae_heatmap_df, aes(x = arm_label, y = ae_term_wrapped, fill = pct_all_grades))
     + geom_tile(color = "white", linewidth = 0.6)
     + geom_text(aes(label = paste0(round(pct_all_grades), "%"), color = pct_all_grades > 50), size = 3.5, show.legend = FALSE)
     + scale_fill_gradient(low = "#FFFFFF", high = "#2B2B2B", limits = c(0, 100))
@@ -103,7 +109,7 @@ ae_heatmap_plot <- (
         fill = "All-grade\nincidence (%)",
         title = "Most common adverse events by trial arm",
         subtitle = "ReNeu (mirdametinib) and KOMET (selumetinib vs placebo)",
-        caption = "SPRINT II reports toxicity narratively, without a per-term frequency table, so it is excluded here."
+        caption = ae_heatmap_caption
     )
     + theme_manuscript(base_size = 14, x_text = "angled")
     + theme(panel.grid = element_blank())

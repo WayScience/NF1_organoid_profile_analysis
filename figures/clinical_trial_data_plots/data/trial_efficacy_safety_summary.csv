@@ -1,0 +1,7 @@
+trial,nct_id,year,drug,population,arm,design,n,orr_pct,orr_ci_low,orr_ci_high,median_best_pct_change,min_pct_change,max_pct_change,durable_response_pct,deep_response_gt50pct_of_responders,median_time_to_response_months,any_ae_pct,grade3plus_ae_pct,grade3plus_ae_basis,discontinued_for_ae_pct
+SPRINT Phase I,NCT01362803,2016,Selumetinib,Children,Selumetinib,"Single-arm, phase I",24,71.0,,,-31.0,-47.0,-6.0,,,,,,,
+SPRINT Phase II,NCT01362803,2020,Selumetinib,Children,Selumetinib,"Single-arm, phase II",50,70.0,,,-27.9,-55.1,2.2,56.0,,,,,,10.0
+ReNeu,NCT03962543,2024,Mirdametinib,Adults,Mirdametinib,"Single-arm, phase IIb",58,41.0,29.0,55.0,-41.0,-90.0,13.0,96.0,62.0,7.8,100.0,16.0,treatment-related,22.0
+ReNeu,NCT03962543,2024,Mirdametinib,Children,Mirdametinib,"Single-arm, phase IIb",56,52.0,38.0,65.0,-42.0,-91.0,48.0,100.0,52.0,7.9,100.0,25.0,treatment-related,9.0
+KOMET,NCT04924608,2025,Selumetinib,Adults,Selumetinib,"Randomized, placebo-controlled, phase III",71,20.0,11.2,30.9,,,,86.0,,3.7,100.0,32.0,all-cause,13.0
+KOMET,NCT04924608,2025,Placebo,Adults,Placebo,"Randomized, placebo-controlled, phase III",74,5.0,1.5,13.3,,,,,,,92.0,18.0,all-cause,7.0

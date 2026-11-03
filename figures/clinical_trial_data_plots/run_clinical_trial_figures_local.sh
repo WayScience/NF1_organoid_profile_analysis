@@ -33,3 +33,4 @@ deactivate >/dev/null 2>&1 || true
 
 "$venv_python" "$module_dir/scripts/0.extract_clinical_trial_stats.py"
 uvr run "$module_dir/scripts/1.plot_clinical_trial_efficacy_heterogeneity.r"
+uvr run "$module_dir/scripts/2.plot_clinical_trial_safety.r"

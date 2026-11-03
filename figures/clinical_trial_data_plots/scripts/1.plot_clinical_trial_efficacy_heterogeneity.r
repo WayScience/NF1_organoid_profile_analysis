@@ -1,4 +1,4 @@
-list_of_packages <- c("ggplot2", "dplyr", "arrow", "RColorBrewer")
+list_of_packages <- c("ggplot2", "dplyr", "RColorBrewer")
 for (package in list_of_packages) {
     suppressPackageStartupMessages(
         suppressWarnings(
@@ -32,8 +32,8 @@ data_dir <- file.path(module_dir, "data")
 figures_dir <- file.path(module_dir, "figures")
 dir.create(figures_dir, recursive = TRUE, showWarnings = FALSE)
 
-trial_summary_path <- file.path(data_dir, "trial_efficacy_safety_summary.parquet")
-response_distribution_path <- file.path(data_dir, "trial_response_heterogeneity.parquet")
+trial_summary_path <- file.path(data_dir, "trial_efficacy_safety_summary.csv")
+response_distribution_path <- file.path(data_dir, "trial_response_heterogeneity.csv")
 orr_figure_path <- file.path(figures_dir, "clinical_trial_orr_efficacy.png")
 heterogeneity_figure_path <- file.path(figures_dir, "clinical_trial_response_heterogeneity.png")
 
@@ -43,7 +43,7 @@ drug_arm_palette <- c(
     "Placebo" = "#C2C2C2"
 )
 
-trial_summary_df <- read_parquet(trial_summary_path)
+trial_summary_df <- read.csv(trial_summary_path, stringsAsFactors = FALSE)
 
 orr_df <- trial_summary_df %>%
     mutate(
@@ -76,7 +76,7 @@ orr_plot
 
 save_ggplot(orr_plot, orr_figure_path, width = 12, height = 7)
 
-response_distribution_df <- read_parquet(response_distribution_path)
+response_distribution_df <- read.csv(response_distribution_path, stringsAsFactors = FALSE)
 
 heterogeneity_df <- response_distribution_df %>%
     mutate(
