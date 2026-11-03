@@ -69,9 +69,8 @@ label_encoder = LabelEncoder()
 label_encoder.fit(train_df[LABEL_COL])
 num_classes = len(label_encoder.classes_)
 
-scaler = StandardScaler()
-scaler.fit(train_df[feature_cols].values)
-X_test = scaler.transform(test_df[feature_cols].values)
+
+X_test = test_df[feature_cols].values
 y_test = label_encoder.transform(test_df[LABEL_COL])
 
 print(f"Test: {len(test_df)} rows, {num_classes} classes")

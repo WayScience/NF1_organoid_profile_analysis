@@ -152,9 +152,9 @@ def train_mlp(
 
 
 scaler = StandardScaler()
-X_train = scaler.fit_transform(train_df[feature_cols].values)
-X_val = scaler.transform(val_df[feature_cols].values)
-X_test = scaler.transform(test_df[feature_cols].values)
+X_train = train_df[feature_cols].values
+X_val = val_df[feature_cols].values
+X_test = test_df[feature_cols].values
 
 y_train = label_encoder.transform(train_df[LABEL_COL])
 y_val = label_encoder.transform(val_df[LABEL_COL])
