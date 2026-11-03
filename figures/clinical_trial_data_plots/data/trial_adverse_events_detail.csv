@@ -1,0 +1,53 @@
+trial,drug,population,arm,n,ae_term,pct_all_grades,pct_grade3plus,ae_basis
+ReNeu,Mirdametinib,Adults,Mirdametinib,58,Dermatitis acneiform,78.0,9.0,treatment-related
+ReNeu,Mirdametinib,Adults,Mirdametinib,58,Diarrhea,48.0,0.0,treatment-related
+ReNeu,Mirdametinib,Adults,Mirdametinib,58,Nausea,36.0,0.0,treatment-related
+ReNeu,Mirdametinib,Adults,Mirdametinib,58,Vomiting,28.0,0.0,treatment-related
+ReNeu,Mirdametinib,Adults,Mirdametinib,58,Fatigue,21.0,2.0,treatment-related
+ReNeu,Mirdametinib,Adults,Mirdametinib,58,Alopecia,12.0,0.0,treatment-related
+ReNeu,Mirdametinib,Adults,Mirdametinib,58,Dry skin,14.0,0.0,treatment-related
+ReNeu,Mirdametinib,Adults,Mirdametinib,58,Rash,7.0,0.0,treatment-related
+ReNeu,Mirdametinib,Adults,Mirdametinib,58,Paronychia,2.0,0.0,treatment-related
+ReNeu,Mirdametinib,Adults,Mirdametinib,58,Pruritus,9.0,0.0,treatment-related
+ReNeu,Mirdametinib,Adults,Mirdametinib,58,Headache,0.0,0.0,treatment-related
+ReNeu,Mirdametinib,Adults,Mirdametinib,58,Constipation,7.0,0.0,treatment-related
+ReNeu,Mirdametinib,Adults,Mirdametinib,58,Blood creatine phosphokinase increased,10.0,2.0,treatment-related
+ReNeu,Mirdametinib,Children,Mirdametinib,56,Dermatitis acneiform,43.0,2.0,treatment-related
+ReNeu,Mirdametinib,Children,Mirdametinib,56,Diarrhea,38.0,2.0,treatment-related
+ReNeu,Mirdametinib,Children,Mirdametinib,56,Nausea,21.0,0.0,treatment-related
+ReNeu,Mirdametinib,Children,Mirdametinib,56,Vomiting,14.0,0.0,treatment-related
+ReNeu,Mirdametinib,Children,Mirdametinib,56,Fatigue,9.0,0.0,treatment-related
+ReNeu,Mirdametinib,Children,Mirdametinib,56,Alopecia,12.0,0.0,treatment-related
+ReNeu,Mirdametinib,Children,Mirdametinib,56,Dry skin,14.0,0.0,treatment-related
+ReNeu,Mirdametinib,Children,Mirdametinib,56,Rash,12.0,2.0,treatment-related
+ReNeu,Mirdametinib,Children,Mirdametinib,56,Paronychia,30.0,0.0,treatment-related
+ReNeu,Mirdametinib,Children,Mirdametinib,56,Pruritus,5.0,0.0,treatment-related
+ReNeu,Mirdametinib,Children,Mirdametinib,56,Headache,11.0,0.0,treatment-related
+ReNeu,Mirdametinib,Children,Mirdametinib,56,Constipation,5.0,0.0,treatment-related
+ReNeu,Mirdametinib,Children,Mirdametinib,56,Blood creatine phosphokinase increased,20.0,7.0,treatment-related
+KOMET,Selumetinib,Adults,Selumetinib,71,Dermatitis acneiform,59.0,,all-cause
+KOMET,Selumetinib,Adults,Selumetinib,71,Diarrhea,42.0,,all-cause
+KOMET,Selumetinib,Adults,Selumetinib,71,Nausea,25.0,,all-cause
+KOMET,Selumetinib,Adults,Selumetinib,71,Vomiting,25.0,,all-cause
+KOMET,Selumetinib,Adults,Selumetinib,71,Fatigue,20.0,,all-cause
+KOMET,Selumetinib,Adults,Selumetinib,71,Alopecia,18.0,,all-cause
+KOMET,Selumetinib,Adults,Selumetinib,71,Dry skin,18.0,,all-cause
+KOMET,Selumetinib,Adults,Selumetinib,71,Rash,15.0,,all-cause
+KOMET,Selumetinib,Adults,Selumetinib,71,Paronychia,13.0,,all-cause
+KOMET,Selumetinib,Adults,Selumetinib,71,Pruritus,10.0,,all-cause
+KOMET,Selumetinib,Adults,Selumetinib,71,Headache,11.0,,all-cause
+KOMET,Selumetinib,Adults,Selumetinib,71,Constipation,10.0,,all-cause
+KOMET,Selumetinib,Adults,Selumetinib,71,Blood creatine phosphokinase increased,45.0,,all-cause
+KOMET,Placebo,Adults,Placebo,74,Dermatitis acneiform,11.0,,all-cause
+KOMET,Placebo,Adults,Placebo,74,Diarrhea,12.0,,all-cause
+KOMET,Placebo,Adults,Placebo,74,Nausea,16.0,,all-cause
+KOMET,Placebo,Adults,Placebo,74,Vomiting,8.0,,all-cause
+KOMET,Placebo,Adults,Placebo,74,Fatigue,14.0,,all-cause
+KOMET,Placebo,Adults,Placebo,74,Alopecia,11.0,,all-cause
+KOMET,Placebo,Adults,Placebo,74,Dry skin,5.0,,all-cause
+KOMET,Placebo,Adults,Placebo,74,Rash,4.0,,all-cause
+KOMET,Placebo,Adults,Placebo,74,Paronychia,12.0,,all-cause
+KOMET,Placebo,Adults,Placebo,74,Pruritus,7.0,,all-cause
+KOMET,Placebo,Adults,Placebo,74,Headache,12.0,,all-cause
+KOMET,Placebo,Adults,Placebo,74,Constipation,1.0,,all-cause
+KOMET,Placebo,Adults,Placebo,74,Blood creatine phosphokinase increased,5.0,,all-cause
