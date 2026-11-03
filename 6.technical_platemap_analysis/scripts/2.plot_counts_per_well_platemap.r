@@ -60,8 +60,9 @@ add_leading_zero <- function(well) {
 }
 
 # Count rows (= objects: single cells or organoids) per well and draw it as
-# a 96-well platemap.
-plot_count_platemap <- function(df, well_col, title) {
+# a 96-well platemap. object_type labels the fill key (e.g. "Single cell count"),
+# so the legend is still clear if this panel is viewed on its own.
+plot_count_platemap <- function(df, well_col, title, object_type) {
     well_counts <- df %>%
         mutate(.well = add_leading_zero(.data[[well_col]])) %>%
         count(.well, name = "n")
@@ -69,7 +70,8 @@ plot_count_platemap <- function(df, well_col, title) {
     (
         raw_map(data = well_counts$n, well = well_counts$.well, plate = 96)
         + ggtitle(title)
-        + labs(fill = "Count")
+        + labs(fill = paste0(object_type, " count"))
+        + scale_fill_viridis_c(option = "A")
         + theme_manuscript(base_size = 10)
         + theme(axis.text = element_text(size = 8))
     )
@@ -78,8 +80,8 @@ plot_count_platemap <- function(df, well_col, title) {
 # Single cell count + organoid count platemaps, side by side.
 build_combined_count_plot <- function(sc_df, organoid_df, well_col, title_prefix) {
     (
-        plot_count_platemap(sc_df, well_col, paste0(title_prefix, ": Single Cell Count"))
-        + plot_count_platemap(organoid_df, well_col, paste0(title_prefix, ": Organoid Count"))
+        plot_count_platemap(sc_df, well_col, paste0(title_prefix, ": Single Cell Count"), "Single cell")
+        + plot_count_platemap(organoid_df, well_col, paste0(title_prefix, ": Organoid Count"), "Organoid")
     )
 }
 
