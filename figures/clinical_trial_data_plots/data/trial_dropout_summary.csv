@@ -1,0 +1,6 @@
+trial,drug,population,arm,n,discontinued_any_reason_pct,discontinued_any_reason_n,discontinued_for_ae_pct,discontinued_for_ae_n,dose_reduction_pct,dose_interruption_pct,notes
+SPRINT Phase II,Selumetinib,Children,Selumetinib,50,42.0,21.0,10.0,5,28.0,,"Discontinuation reasons: progressive disease 5, stable (non-progressive) disease 2, toxic effects 5, PI discretion 4, patient declined 2, nonadherence 1, intercurrent illness (MPNST) 2."
+ReNeu,Mirdametinib,Adults,Mirdametinib,58,,,22.0,13,17.0,31.0,Overall (any-reason) discontinuation count not reported separately from AE-related discontinuation in the results text.
+ReNeu,Mirdametinib,Children,Mirdametinib,56,,,9.0,5,12.0,30.0,Overall (any-reason) discontinuation count not reported separately from AE-related discontinuation in the results text.
+KOMET,Selumetinib,Adults,Selumetinib,71,25.0,18.0,14.0,10,14.0,27.0,"Discontinuation reasons (Fig 1B): adverse event 10, withdrawal by participant 5, progressive disease 2, lost to follow-up 1."
+KOMET,Placebo,Adults,Placebo,74,20.0,15.0,8.0,6,4.0,11.0,"Discontinuation reasons (Fig 1B, before protocol-specified crossover): adverse event 6, withdrawal by participant 9. 66 of 74 placebo participants crossed over to selumetinib."

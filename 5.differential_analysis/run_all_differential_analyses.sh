@@ -8,7 +8,7 @@ if [ -z "$git_root" ]; then
     exit 1
 fi
 
-module_dir="$git_root/5.differential_analysis/"
+module_dir="$git_root/5.differential_analysis"
 venv_python="$git_root/.venv/bin/python"
 
 if [[ ! -x "$venv_python" ]]; then
@@ -34,7 +34,7 @@ deactivate >/dev/null 2>&1 || true
 
 
 uv run python "$module_dir/scripts/0.calculate_log2_fold_change.py"
-uv run python "$module_dir/scripts/0.calculate_log2_fold_change.py"
+uv run python "$module_dir/scripts/0b.calculate_well_fold_change.py"
 uvr run "$module_dir/scripts/1.plot_log2_fold_change.r"
 uv run "$module_dir/scripts/2.calculate_viability_by_tumor_type.py"
 uvr run "$module_dir/scripts/3.plot_viability_by_tumor_type.r"

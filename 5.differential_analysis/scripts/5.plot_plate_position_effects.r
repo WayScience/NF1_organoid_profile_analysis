@@ -95,6 +95,7 @@ feature_plots <- lapply(levels(position_feature_df$compartment), function(compar
         + scale_color_manual(values = c("FALSE" = "grey60", "TRUE" = "#d73027"), labels = c("FALSE" = "q >= 0.05", "TRUE" = "q < 0.05"))
         + labs(
             title = compartment_name,
+            subtitle = "Outer = outermost ring of used wells (rows B/G, cols 2/11); inner = all other used wells.\nAll grey = no feature's position effect survives FDR correction (the clean result).",
             x = "Mean outer - inner difference\n(normalized feature units)",
             y = "-log10 permutation p",
             color = NULL
