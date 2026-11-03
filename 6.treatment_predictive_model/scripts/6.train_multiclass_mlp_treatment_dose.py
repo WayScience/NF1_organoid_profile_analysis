@@ -12,19 +12,15 @@ import pathlib
 
 import numpy as np
 import pandas as pd
-import torch
-import torch.nn as nn
+from joblib import dump
 from notebook_init_utils import init_notebook
+from sklearn.metrics import accuracy_score, f1_score, log_loss
+from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import LabelEncoder, StandardScaler
-from torch.utils.data import DataLoader, TensorDataset
-from tqdm import tqdm
-from tqdm.notebook import tqdm as tqdm_notebook
 
 root_dir, in_notebook = init_notebook()
-progress_bar = tqdm_notebook if in_notebook else tqdm
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-torch.manual_seed(0)
+RANDOM_STATE = 0
 
 
 # In[2]:
@@ -82,7 +78,9 @@ print(f"Number of features: {len(feature_cols)}, number of classes: {num_classes
 
 
 # ## MLP model and training/evaluation helpers
-# A single global model (not per-patient): features are standardized once, fit on the full training split.
+# A single global model (not per-patient): features are standardized once, fit on the full training split. Training uses `sklearn.neural_network.MLPClassifier` via `partial_fit`, one epoch at a time, mirroring `1.train_binary_mlp_control.ipynb`'s pattern (generalized here from two classes to `num_classes`) so that early stopping watches the same held-out `val_df` split used elsewhere in this pipeline, rather than sklearn's own `early_stopping` option, which would carve its validation fold out of the training data instead.
+#
+# Unlike `1.train_binary_mlp_control.ipynb`, class imbalance here is *not* corrected by oversampling: treatment+dose classes range from several hundred to several thousand cells each (~14x imbalance ratio, vs. ~3x for the binary control task), and oversampling the rarest classes up to the majority count at that ratio caused the model to overfit the duplicated rows within a single epoch (val loss rose from epoch 1 onward, so early stopping kept the undertrained epoch-1 weights and test accuracy/F1 both dropped well below the uncorrected baseline). `9.train_multiclass_mlp_target.ipynb` likewise does not correct for class imbalance.
 
 # In[4]:
 
@@ -95,118 +93,60 @@ WEIGHT_DECAY = 1e-4
 HIDDEN_DIMS = (256, 128)
 
 
-class MulticlassMLP(nn.Module):
-    """A feed-forward multiclass classifier over single-cell morphology features."""
-
-    def __init__(
-        self, input_dim: int, num_classes: int, hidden_dims: tuple = HIDDEN_DIMS
-    ):
-        super().__init__()
-        layers = []
-        prev_dim = input_dim
-        for hidden_dim in hidden_dims:
-            layers += [
-                nn.Linear(prev_dim, hidden_dim),
-                nn.BatchNorm1d(hidden_dim),
-                nn.ReLU(),
-                nn.Dropout(0.3),
-            ]
-            prev_dim = hidden_dim
-        layers.append(nn.Linear(prev_dim, num_classes))
-        self.network = nn.Sequential(*layers)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.network(x)
-
-
-def make_loader(
-    X: np.ndarray,
-    y: np.ndarray,
-    batch_size: int,
-    shuffle: bool,
-    drop_last: bool = False,
-) -> DataLoader:
-    dataset = TensorDataset(
-        torch.tensor(X, dtype=torch.float32), torch.tensor(y, dtype=torch.long)
-    )
-    # drop_last avoids handing BatchNorm1d a final batch of size 1 while
-    # training (it requires >1 sample per channel to compute batch statistics).
-    return DataLoader(
-        dataset, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last
-    )
-
-
 def train_mlp(
-    model: nn.Module,
-    train_loader: DataLoader,
-    val_loader: DataLoader,
-    class_weight: torch.Tensor,
-) -> tuple:
-    optimizer = torch.optim.Adam(
-        model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    X_val: np.ndarray,
+    y_val: np.ndarray,
+    classes: np.ndarray,
+) -> tuple[MLPClassifier, dict]:
+    model = MLPClassifier(
+        hidden_layer_sizes=HIDDEN_DIMS,
+        activation="relu",
+        solver="adam",
+        alpha=WEIGHT_DECAY,
+        batch_size=BATCH_SIZE,
+        learning_rate_init=LEARNING_RATE,
+        max_iter=1,
+        warm_start=True,
+        random_state=RANDOM_STATE,
     )
-    criterion = nn.CrossEntropyLoss(weight=class_weight)
 
     best_val_loss = float("inf")
-    best_state = None
+    best_params = None
     epochs_without_improvement = 0
     history = {"train_loss": [], "val_loss": []}
+    rng = np.random.RandomState(RANDOM_STATE)
 
-    for _ in range(MAX_EPOCHS):
-        model.train()
-        running_loss = 0.0
-        n_train_seen = 0
-        for X_batch, y_batch in train_loader:
-            X_batch, y_batch = X_batch.to(device), y_batch.to(device)
-            optimizer.zero_grad()
-            loss = criterion(model(X_batch), y_batch)
-            loss.backward()
-            optimizer.step()
-            running_loss += loss.item() * X_batch.size(0)
-            n_train_seen += X_batch.size(0)
-        train_loss = running_loss / n_train_seen
+    for epoch in range(MAX_EPOCHS):
+        perm = rng.permutation(len(X_train))
+        if epoch == 0:
+            model.partial_fit(X_train[perm], y_train[perm], classes=classes)
+        else:
+            model.partial_fit(X_train[perm], y_train[perm])
 
-        model.eval()
-        val_running_loss = 0.0
-        with torch.no_grad():
-            for X_batch, y_batch in val_loader:
-                X_batch, y_batch = X_batch.to(device), y_batch.to(device)
-                val_running_loss += criterion(
-                    model(X_batch), y_batch
-                ).item() * X_batch.size(0)
-        val_loss = val_running_loss / len(val_loader.dataset)
-
+        train_loss = log_loss(y_train, model.predict_proba(X_train), labels=classes)
+        val_loss = log_loss(y_val, model.predict_proba(X_val), labels=classes)
         history["train_loss"].append(train_loss)
         history["val_loss"].append(val_loss)
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            best_state = {k: v.detach().clone() for k, v in model.state_dict().items()}
+            best_params = (
+                [w.copy() for w in model.coefs_],
+                [b.copy() for b in model.intercepts_],
+            )
             epochs_without_improvement = 0
         else:
             epochs_without_improvement += 1
             if epochs_without_improvement >= PATIENCE:
                 break
 
-    model.load_state_dict(best_state)
+    model.coefs_, model.intercepts_ = best_params
     return model, history
 
 
-def predict(model: nn.Module, data_loader: DataLoader) -> tuple:
-    model.eval()
-    all_logits, all_labels = [], []
-    with torch.no_grad():
-        for X_batch, y_batch in data_loader:
-            all_logits.append(model(X_batch.to(device)).cpu())
-            all_labels.append(y_batch)
-    logits = torch.cat(all_logits).numpy()
-    labels = torch.cat(all_labels).numpy()
-    preds = logits.argmax(axis=1)
-    return labels, preds, logits
-
-
 # ## Train the model
-# Class weights (inverse frequency, computed from the training split) counteract the imbalance across treatments/doses (e.g. `DMSO_1.0` has far more cells than `Vistusertib_1.0`).
 
 # In[5]:
 
@@ -220,17 +160,7 @@ y_train = label_encoder.transform(train_df[LABEL_COL])
 y_val = label_encoder.transform(val_df[LABEL_COL])
 y_test = label_encoder.transform(test_df[LABEL_COL])
 
-train_loader = make_loader(X_train, y_train, BATCH_SIZE, shuffle=True, drop_last=True)
-val_loader = make_loader(X_val, y_val, BATCH_SIZE, shuffle=False)
-test_loader = make_loader(X_test, y_test, BATCH_SIZE, shuffle=False)
-
-class_counts = np.bincount(y_train, minlength=num_classes)
-class_weight = torch.tensor(
-    len(y_train) / (num_classes * class_counts), dtype=torch.float32, device=device
-)
-
-model = MulticlassMLP(input_dim=len(feature_cols), num_classes=num_classes).to(device)
-model, history = train_mlp(model, train_loader, val_loader, class_weight)
+model, history = train_mlp(X_train, y_train, X_val, y_val, np.arange(num_classes))
 
 print(f"Trained for {len(history['train_loss'])} epochs")
 
@@ -241,8 +171,8 @@ print(f"Trained for {len(history['train_loss'])} epochs")
 # In[6]:
 
 
-model_output_path = model_output_dir / "multiclass_mlp_treatment_dose.pt"
-torch.save(model.state_dict(), model_output_path)
+model_output_path = model_output_dir / "multiclass_mlp_treatment_dose.joblib"
+dump(model, model_output_path)
 
 history_df = pd.DataFrame(
     {
@@ -264,8 +194,6 @@ history_df.head()
 # In[7]:
 
 
-from sklearn.metrics import accuracy_score, f1_score
-
-y_true, y_pred, _ = predict(model, test_loader)
-print(f"Test accuracy: {accuracy_score(y_true, y_pred):.4f}")
-print(f"Test macro F1: {f1_score(y_true, y_pred, average='macro'):.4f}")
+y_pred = model.predict(X_test)
+print(f"Test accuracy: {accuracy_score(y_test, y_pred):.4f}")
+print(f"Test macro F1: {f1_score(y_test, y_pred, average='macro'):.4f}")

@@ -3,7 +3,7 @@
 
 # This notebook evaluates the global treatment+dose multiclass MLP trained in `6.train_multiclass_mlp_treatment_dose.ipynb`.
 #
-# It re-derives the held-out test-set predictions (same split, same deterministically-refit `StandardScaler`, saved model weights) and saves: per-cell predictions, overall and per-class accuracy/precision/recall/F1, and top-k accuracy (since a wrong top-1 guess that still lands on the correct mechanism-of-action neighbor, e.g. confusing two MEK inhibitors, is a very different kind of error than a wrong guess altogether). Plotting (including the confusion matrix) is done separately in `8.plot_multiclass_mlp_treatment_dose.ipynb` (R).
+# It re-derives the held-out test-set predictions (same split, same deterministically-refit `StandardScaler`, saved model) and saves: per-cell predictions, overall and per-class accuracy/precision/recall/F1, and top-k accuracy (since a wrong top-1 guess that still lands on the correct mechanism-of-action neighbor, e.g. confusing two MEK inhibitors, is a very different kind of error than a wrong guess altogether). Plotting (including the confusion matrix) is done separately in `8.plot_multiclass_mlp_treatment_dose.ipynb` (R).
 
 # In[1]:
 
@@ -12,8 +12,7 @@ import pathlib
 
 import numpy as np
 import pandas as pd
-import torch
-import torch.nn as nn
+from joblib import load
 from notebook_init_utils import init_notebook
 from sklearn.metrics import (
     accuracy_score,
@@ -22,12 +21,8 @@ from sklearn.metrics import (
     top_k_accuracy_score,
 )
 from sklearn.preprocessing import LabelEncoder, StandardScaler
-from torch.utils.data import DataLoader, TensorDataset
 
 root_dir, in_notebook = init_notebook()
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-torch.manual_seed(0)
 
 
 # In[2]:
@@ -51,7 +46,7 @@ model_results_dir.mkdir(parents=True, exist_ok=True)
 
 
 # ## Rebuild the same data/label setup used in training
-# This mirrors `6.train_multiclass_mlp_treatment_dose.ipynb` exactly, so refitting the `StandardScaler` and `LabelEncoder` on `train_df` reproduces what the saved model weights were trained under.
+# This mirrors `6.train_multiclass_mlp_treatment_dose.ipynb` exactly, so refitting the `StandardScaler` and `LabelEncoder` on `train_df` reproduces what the saved model was trained under.
 
 # In[3]:
 
@@ -82,46 +77,12 @@ y_test = label_encoder.transform(test_df[LABEL_COL])
 print(f"Test: {len(test_df)} rows, {num_classes} classes")
 
 
-# ## Model architecture
-# Must match `6.train_multiclass_mlp_treatment_dose.ipynb` exactly so the saved `state_dict` loads correctly.
+# ## Load the trained model
 
 # In[4]:
 
 
-HIDDEN_DIMS = (256, 128)
-
-
-class MulticlassMLP(nn.Module):
-    """A feed-forward multiclass classifier over single-cell morphology features."""
-
-    def __init__(
-        self, input_dim: int, num_classes: int, hidden_dims: tuple = HIDDEN_DIMS
-    ):
-        super().__init__()
-        layers = []
-        prev_dim = input_dim
-        for hidden_dim in hidden_dims:
-            layers += [
-                nn.Linear(prev_dim, hidden_dim),
-                nn.BatchNorm1d(hidden_dim),
-                nn.ReLU(),
-                nn.Dropout(0.3),
-            ]
-            prev_dim = hidden_dim
-        layers.append(nn.Linear(prev_dim, num_classes))
-        self.network = nn.Sequential(*layers)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.network(x)
-
-
-model = MulticlassMLP(input_dim=len(feature_cols), num_classes=num_classes).to(device)
-model.load_state_dict(
-    torch.load(
-        model_output_dir / "multiclass_mlp_treatment_dose.pt", map_location=device
-    )
-)
-model.eval()
+model = load(model_output_dir / "multiclass_mlp_treatment_dose.joblib")
 
 
 # ## Score the test set
@@ -129,28 +90,12 @@ model.eval()
 # In[5]:
 
 
-test_loader = DataLoader(
-    TensorDataset(
-        torch.tensor(X_test, dtype=torch.float32),
-        torch.tensor(y_test, dtype=torch.long),
-    ),
-    batch_size=128,
-    shuffle=False,
-)
-
-all_logits, all_labels = [], []
-with torch.no_grad():
-    for X_batch, y_batch in test_loader:
-        all_logits.append(model(X_batch.to(device)).cpu())
-        all_labels.append(y_batch)
-logits = torch.cat(all_logits).numpy()
-labels = torch.cat(all_labels).numpy()
-preds = logits.argmax(axis=1)
-probs = torch.softmax(torch.tensor(logits), dim=1).numpy()
+preds = model.predict(X_test)
+probs = model.predict_proba(X_test)
 
 test_predictions_df = pd.DataFrame(
     {
-        "Metadata_true_label": label_encoder.inverse_transform(labels),
+        "Metadata_true_label": label_encoder.inverse_transform(y_test),
         "Metadata_predicted_label": label_encoder.inverse_transform(preds),
     }
 )
@@ -171,7 +116,7 @@ top_k_rows = [
     {
         "k": k,
         "top_k_accuracy": top_k_accuracy_score(
-            labels, probs, k=k, labels=np.arange(num_classes)
+            y_test, probs, k=k, labels=np.arange(num_classes)
         ),
     }
     for k in top_k_values
@@ -182,9 +127,9 @@ top_k_df.to_parquet(
     index=False,
 )
 
-print(f"Accuracy: {accuracy_score(labels, preds):.4f}")
-print(f"Macro F1: {f1_score(labels, preds, average='macro'):.4f}")
-print(f"Weighted F1: {f1_score(labels, preds, average='weighted'):.4f}")
+print(f"Accuracy: {accuracy_score(y_test, preds):.4f}")
+print(f"Macro F1: {f1_score(y_test, preds, average='macro'):.4f}")
+print(f"Weighted F1: {f1_score(y_test, preds, average='weighted'):.4f}")
 top_k_df
 
 
@@ -194,8 +139,9 @@ top_k_df
 
 
 report_dict = classification_report(
-    labels,
+    y_test,
     preds,
+    labels=np.arange(num_classes),
     target_names=label_encoder.classes_,
     output_dict=True,
     zero_division=0,
