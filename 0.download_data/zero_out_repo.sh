@@ -1,4 +1,9 @@
 #!/bin/bash
+
+# zero-out the repo removes all intermediate files, figures etc to avoid
+# any caching that has been implemented
+# this refreshes the run for the repo with new runs
+
 set -euo pipefail
 
 git_root=$(git rev-parse --show-toplevel) || { echo "Not inside a git repo" >&2; exit 1; }
