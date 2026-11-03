@@ -59,6 +59,7 @@ options(repr.plot.width = 12, repr.plot.height = 8)
 training_curves_df <- read_parquet(
     file.path(results_dir, "binary_mlp_control_training_curves.parquet")
 ) %>%
+    filter(!grepl("CQ1", .data[[PATIENT_COL]])) %>%
     mutate(patient_label = label_patient(.data[[PATIENT_COL]])) %>%
     tidyr::pivot_longer(cols = c(train_loss, val_loss), names_to = "split", values_to = "loss")
 
@@ -83,6 +84,7 @@ options(repr.plot.width = 7, repr.plot.height = 7)
 pr_curve_df <- read_parquet(
     file.path(results_dir, "binary_mlp_control_pr_curve_points.parquet")
 ) %>%
+    filter(!grepl("CQ1", series)) %>%
     mutate(
         colour = series_colour(series),
         label = series_label(series, average_precision, "AP"),
@@ -97,7 +99,7 @@ pr_colour_values <- setNames(
 pr_curves_plot <- (
     ggplot(pr_curve_df, aes(x = recall, y = precision, colour = label, group = label))
     + geom_line(data = filter(pr_curve_df, !is_pooled), linewidth = 0.5, alpha = 0.7)
-    + geom_line(data = filter(pr_curve_df, is_pooled), linewidth = 1.2, colour = "black")
+    + geom_line(data = filter(pr_curve_df, is_pooled), linewidth = 1.2)
     + scale_colour_manual(values = pr_colour_values, name = NULL)
     + labs(
         x = "Recall", y = "Precision",
