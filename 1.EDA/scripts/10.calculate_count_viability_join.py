@@ -166,12 +166,20 @@ pivoted = pivoted.rename(
         "organoid": "total_organoid_count_norm",
     }
 )
-pivoted = pivoted.merge(
+# mean_counts holds 3D-only measurements (derived from organoid_cell_counts.parquet),
+# so only attach them to 3D rows; 2D rows keep those columns as NaN.
+pivoted_3d = pivoted[pivoted["modality"] == "3D"].merge(
     mean_counts,
-    left_on=["Metadata_patient_tumor", "Metadata_treatment", "Metadata_dose"],
-    right_on=["Metadata_patient_tumor", "Metadata_treatment", "Metadata_dose"],
+    on=["Metadata_patient_tumor", "Metadata_treatment", "Metadata_dose"],
     how="left",
-).drop_duplicates()
+)
+pivoted_2d = pivoted[pivoted["modality"] != "3D"].copy()
+for col in mean_counts.columns.difference(
+    ["Metadata_patient_tumor", "Metadata_treatment", "Metadata_dose"]
+):
+    pivoted_2d[col] = pd.NA
+
+pivoted = pd.concat([pivoted_3d, pivoted_2d], ignore_index=True).drop_duplicates()
 
 pivoted.to_parquet(
     results_dir / "cell_counts" / "count_viability_joined.parquet", index=False
