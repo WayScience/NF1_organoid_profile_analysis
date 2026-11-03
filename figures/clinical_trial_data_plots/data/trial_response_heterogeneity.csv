@@ -1,0 +1,6 @@
+trial,drug,population,subgroup,n,median_pct_change,min_pct_change,max_pct_change
+SPRINT Phase II,Selumetinib,Children,All patients,50,-27.9,-55.1,2.2
+ReNeu,Mirdametinib,Adults,All patients,58,-41.0,-90.0,13.0
+ReNeu,Mirdametinib,Children,All patients,56,-42.0,-91.0,48.0
+KOMET,Selumetinib,Adults,Objective responders,14,-33.9,-58.1,-22.6
+KOMET,Selumetinib,Adults,Non-responders,51,-11.4,-26.7,24.0
