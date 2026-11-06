@@ -24,7 +24,7 @@ from pycytominer.cyto_utils import infer_cp_features
 root_dir, in_notebook = init_notebook()
 
 
-# In[4]:
+# In[2]:
 
 
 # Data Paths
@@ -67,40 +67,28 @@ pooled_profile_paths = {
             ).resolve(),
         },
     },
-    # "3D": {
-    #     "sc_fs": {
-    #         "input": pathlib.Path(
-    #             f"{root_dir}/data/profiles_3D/all_patients/1.feature_selected_profiles/sc_norm_fs_profiles.parquet"
-    #         ).resolve(strict=True),
-    #         "output": pathlib.Path(
-    #             f"{root_dir}/1.EDA/results/umap/3D_scfs_umap.parquet"
-    #         ).resolve(),
-    #     },
-    #     "sc_consensus": {
-    #         "input": pathlib.Path(
-    #             f"{root_dir}/data/profiles_3D/all_patients/3.consensus_profiles/sc_norm_sc_consensus_profiles.parquet"
-    #         ).resolve(strict=True),
-    #         "output": pathlib.Path(
-    #             f"{root_dir}/1.EDA/results/umap/3D_scconsensus_umap.parquet"
-    #         ).resolve(),
-    #     },
-    # },
+    "3D": {
+        "sc_fs": {
+            "input": pathlib.Path(
+                f"{root_dir}/data/profiles_3D/all_patients/1.feature_selected_profiles/sc_norm_fs_profiles.parquet"
+            ).resolve(strict=True),
+            "output": pathlib.Path(
+                f"{root_dir}/1.EDA/results/umap/3D_scfs_umap.parquet"
+            ).resolve(),
+        },
+        "sc_consensus": {
+            "input": pathlib.Path(
+                f"{root_dir}/data/profiles_3D/all_patients/3.consensus_profiles/sc_norm_sc_consensus_profiles.parquet"
+            ).resolve(strict=True),
+            "output": pathlib.Path(
+                f"{root_dir}/1.EDA/results/umap/3D_scconsensus_umap.parquet"
+            ).resolve(),
+        },
+    },
 }
 
 # Create output directory
 pathlib.Path(f"{root_dir}/1.EDA/results/umap").mkdir(parents=True, exist_ok=True)
-
-
-# In[7]:
-
-
-pd.read_parquet(pooled_profile_paths["2D_max_projection"]["sc_consensus"]["input"])
-pd.read_parquet(pooled_profile_paths["2D_max_projection"]["sc_fs"]["input"])[
-    "Metadata_patient"
-]
-
-
-# In[ ]:
 
 
 # In[3]:
@@ -118,6 +106,8 @@ for projection_key in pooled_profile_paths:
         else "Metadata_patient_tumor"
     )
     for profile_variant, profile_paths in pooled_profile_paths[projection_key].items():
+        if profile_paths["output"].exists():
+            continue
         # Load the data
         profile_df = pd.read_parquet(profile_paths["input"])
 
@@ -165,7 +155,7 @@ patients = pd.read_csv(
 )["patient"].to_list()
 
 
-# In[ ]:
+# In[5]:
 
 
 # Individual patients, 2D and 3D, feature-selected and aggregated
@@ -242,7 +232,7 @@ patient_specific_output_paths = {
 }
 
 
-# In[ ]:
+# In[6]:
 
 
 patient_specific_results = {
@@ -260,6 +250,8 @@ for patient in patient_profile_paths:
         for profile_variant, profile_paths in patient_profile_paths[patient][
             projection_key
         ].items():
+            if patient_specific_output_paths[projection_key][profile_variant].exists():
+                continue
             # Load the data
             profile_df = pd.read_parquet(profile_paths["input"])
             metadata_columns = infer_cp_features(profile_df, metadata=True)
@@ -304,6 +296,8 @@ for patient in patient_profile_paths:
 # Concatenate all patients' results into one file per projection/variant combo
 for projection_key, variants in patient_specific_results.items():
     for profile_variant, patient_dfs in variants.items():
+        if patient_specific_output_paths[projection_key][profile_variant].exists():
+            continue
         combined_df = pd.concat(patient_dfs, ignore_index=True)
         combined_df.to_parquet(
             patient_specific_output_paths[projection_key][profile_variant],

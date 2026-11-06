@@ -29,7 +29,7 @@
 #   correlation values and per-cell treatment labels as nested list columns.
 #   **1 file total** (down from one file per patient).
 #
-# Preprocessing (`NF0037_T1_CQ1` exclusion, `_Texture_` feature drop,
+# Preprocessing (`NF0037_T1_CQ1` exclusion,
 # `pycytominer.feature_select` outlier drop) matches `0.generate_umap.ipynb` /
 # `2.generate_pca.ipynb`, via a shared helper used by both groups.
 #

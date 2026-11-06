@@ -17,7 +17,7 @@ else
     exit 1
 fi
 
-jupyter nbconvert --to=script --FilesWriter.build_directory="$git_root"/1.EDA/scripts/ "$git_root"/1.EDA/notebooks/*.ipynb
+uv run jupyter nbconvert --to=script --FilesWriter.build_directory="$git_root"/1.EDA/scripts/ "$git_root"/1.EDA/notebooks/*.ipynb
 
 # deactivate any existing conda environment
 conda deactivate 2>/dev/null || true

@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 from notebook_init_utils import bandicoot_check, init_notebook
+from python_plot_themes import custom_MOA_palette
 
 root_dir, in_notebook = init_notebook()
 
@@ -118,29 +119,6 @@ drugs_df = pd.merge(
     right_on="Treatment",
     validate="one_to_one",
 )
-
-
-# In[4]:
-
-
-# set custom colors for each MOA
-custom_MOA_palette = {
-    "Control": "#5a5c5d",
-    "MEK1/2 inhibitor": "#882E8B",
-    "HDAC inhibitor": "#1E6B61",
-    "PI3K and HDAC inhibitor": "#2E6B8B",
-    "PI3K inhibitor": "#0092E0",
-    "receptor tyrosine kinase inhibitor": "#576A20",
-    "tyrosine kinase inhibitor": "#646722",
-    "mTOR inhibitor": "#ACE089",
-    "IGF-1R inhibitor": "#ACE040",
-    "HSP90 inhibitor": "#33206A",
-    "Apoptosis induction": "#272267",
-    "Na+/K+ pump inhibitor": "#A16C28",
-    "histamine H1 receptor antagonist": "#3A8F00",
-    "DNA binding": "#174F17",
-    "BRD4 inhibitor": "#ff0000",
-}
 
 
 # In[5]:

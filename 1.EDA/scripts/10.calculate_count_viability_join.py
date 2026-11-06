@@ -6,7 +6,7 @@
 # combined_platemaps.parquet. Reports and logs dropped patients (those in
 # profiles but not in the platemap, and vice versa).
 
-# In[5]:
+# In[1]:
 
 
 import pathlib
@@ -17,7 +17,7 @@ import pandas as pd
 warnings.filterwarnings("ignore")
 
 
-# In[6]:
+# In[2]:
 
 
 from notebook_init_utils import init_notebook
@@ -88,7 +88,7 @@ mean_counts.to_parquet(
 )
 
 
-# In[7]:
+# In[3]:
 
 
 # --- Additional metrics: total cells and total organoids per treatment,

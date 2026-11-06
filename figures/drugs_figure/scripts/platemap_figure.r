@@ -8,6 +8,7 @@ for (package in packages) {
 }
 
 git_root <- system("git rev-parse --show-toplevel", intern = TRUE)
+source(file.path(git_root, "utils", "r_plot_themes.r"))
 
 platemap_figure_file_path <- file.path(git_root,"figures/drugs_figure/platemap_figure.png")
 if (!file.exists(platemap_figure_file_path)) {
@@ -51,6 +52,7 @@ platemap_figure <- (
         )
     + ggplot2::geom_point(aes(shape = platemap$dose_unit), size = 3)
     + ggplot2::scale_shape_discrete(name = "Dose")
+    + ggplot2::scale_fill_manual(values = custom_treatment_palette)
     # make the legend three columns
     + guides(
         fill  = guide_legend(

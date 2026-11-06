@@ -16,6 +16,7 @@
 # In[1]:
 
 
+import logging
 import pathlib
 from typing import Union
 
@@ -25,7 +26,14 @@ from copairs import map
 from copairs.matching import assign_reference_index
 from notebook_init_utils.notebook_init_utils import init_notebook
 
+logging.getLogger("copairs").setLevel(logging.WARNING)
+
 root_dir, in_notebook = init_notebook()
+
+if in_notebook:
+    import tqdm.notebook as tqdm
+else:
+    import tqdm
 
 
 # In[2]:
@@ -102,15 +110,15 @@ def convert_2d_metadata_to_3d_metadata_style(df: pd.DataFrame) -> pd.DataFrame:
     # Keep the full patient_tumor value: some patients (e.g. NF0014) have multiple
     # tumor samples, so stripping to bare patient would merge distinct tumors together.
     df["Metadata_patient"] = df["Metadata_Biology_PatientTumor"]
+    # Drop rows with no treatment recorded (e.g. failed wells with all-NaN
+    # experiment metadata) rather than letting NaN propagate into
+    # Metadata_treatment_dose and break downstream sorting/grouping.
+    df = df.dropna(subset=["Metadata_Experiment_Treatment"]).reset_index(drop=True)
     df["Metadata_treatment_dose"] = (
         df["Metadata_Experiment_Treatment"]
         + "_"
         + df["Metadata_Experiment_Dose"].fillna(0).astype(float).astype(int).astype(str)
     )
-    # Some upstream Texture features contain corrupted inf values; treat like NaN
-    # so the existing NaN-handling in calculate_mAP covers them too.
-    feature_cols = [c for c in df.columns if not c.startswith("Metadata_")]
-    df[feature_cols] = df[feature_cols].replace([np.inf, -np.inf], np.nan)
     return df
 
 
@@ -255,6 +263,11 @@ for label, slug, path in profile_types:
     metadata_cols = [c for c in df.columns if c.startswith("Metadata_")]
 
     for reference_group in sorted(df["Metadata_treatment_dose"].unique()):
+        output_path = (
+            results_dir / f"{slug}_inter_patient_mAP_vs_{reference_group}.parquet"
+        )
+        if output_path.exists():
+            continue
         calculate_inter_patient_mAP(
             df,
             metadata_columns=metadata_cols,

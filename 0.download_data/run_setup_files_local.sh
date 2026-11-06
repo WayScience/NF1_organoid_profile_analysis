@@ -10,7 +10,7 @@ if [ -z "$git_root" ]; then
     exit 1
 fi
 
-jupyter nbconvert --to=script --FilesWriter.build_directory="$git_root"/0.download_data/scripts/ "$git_root"/0.download_data/notebooks/*.ipynb
+uv run jupyter nbconvert --to=script --FilesWriter.build_directory="$git_root"/0.download_data/scripts/ "$git_root"/0.download_data/notebooks/*.ipynb
 
 
 if [ "$OVERWRITE" = true ]; then

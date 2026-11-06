@@ -56,6 +56,13 @@ MANIFEST: list[tuple[str, str, str]] = [
     ),
     # not read by the app yet -- staged ahead of a future 2D-vs-3D section
     ("2.2d_vs_3d_analysis/results", "2d_vs_3d", "dir"),
+    ("6.technical_replicates/results", "technical_replicates", "dir"),
+    # not read by the app yet -- staged ahead of a future treatment-prediction section
+    (
+        "7.treatment_predictive_model/model_results",
+        "treatment_predictive_model",
+        "dir",
+    ),
 ]
 
 _IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc")

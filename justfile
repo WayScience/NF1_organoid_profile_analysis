@@ -32,6 +32,18 @@ viability:
 linear-modeling:
     bash 4.linear_modeling/run_all_linear_modeling_local.sh
 
+# module 5: differential analysis
+differential-analysis:
+    bash 5.differential_analysis/run_all_differential_analyses.sh
+
+# module 6: technical platemap analysis
+platemap-analysis:
+    bash 6.technical_platemap_analysis/run_all_technical_analyses.sh
+
+# module 7: treatment prediction analysis
+treatment-prediction:
+    bash 7.treatment_predictive_model/run_training_locally.sh
+
 # Misc figures: drug FDA-approval status and platemap figures (repo-root figures/ dir).
 drugs-figure:
     bash misc_figures/drugs_figure/run_drugs_figure_local.sh
@@ -44,5 +56,19 @@ update-app:
 clinical-trial-figures:
     ./figures/clinical_trial_data_plots/run_clinical_trial_figures_local.sh
 
+# Run every module end to end, in pipeline order. Logs full output to logs/all_<timestamp>.log.
+all:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p logs
+    logfile="logs/all_$(date +%Y%m%d_%H%M%S).log"
+    just setup download-data eda twod-vs-threed viability linear-modeling differential-analysis platemap-analysis treatment-prediction drugs-figure clinical-trial-figures 2>&1 | tee "$logfile"
+
 # Run every module end to end, in pipeline order.
-all: setup download-data eda twod-vs-threed viability linear-modeling drugs-figure clinical-trial-figures
+all-clean:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p logs
+    logfile="logs/all_clean_$(date +%Y%m%d_%H%M%S).log"
+    { just setup; just clean true; just download-data eda twod-vs-threed viability linear-modeling differential-analysis platemap-analysis treatment-predictionw drugs-figure clinical-trial-figures; } 2>&1 | tee "$logfile"
+

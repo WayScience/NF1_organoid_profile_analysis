@@ -16,28 +16,14 @@ import pandas as pd
 import scipy
 import scipy.spatial.distance
 import sklearn.metrics.pairwise
+from notebook_init_utils.notebook_init_utils import init_notebook
 
-# Get the current working directory
-cwd = pathlib.Path.cwd()
-
-if (cwd / ".git").is_dir():
-    root_dir = cwd
-
-else:
-    root_dir = None
-    for parent in cwd.parents:
-        if (parent / ".git").is_dir():
-            root_dir = parent
-            break
-
-# Check if a Git root directory was found
-if root_dir is None:
-    raise FileNotFoundError("No Git root directory found.")
+root_dir, in_notebook = init_notebook()
 
 
 # ## Load Data / Set Paths
 
-# In[2]:
+# In[ ]:
 
 
 path_2d_organoid = pathlib.Path(
@@ -121,10 +107,7 @@ def harmonize_metadata(df: pd.DataFrame) -> pd.DataFrame:
         + "_"
         + df["Metadata_Experiment_Dose"].fillna(0).astype(float).astype(int).astype(str)
     )
-    # Some upstream Texture features contain corrupted inf values; treat like NaN
-    # so the existing NaN-handling in the distance functions covers them too.
-    feature_cols = [c for c in df.columns if not c.startswith("Metadata_")]
-    df[feature_cols] = df[feature_cols].replace([np.inf, -np.inf], np.nan)
+
     return df
 
 
@@ -133,27 +116,9 @@ def load_and_harmonize(path: pathlib.Path) -> pd.DataFrame:
     return harmonize_metadata(load_profile(path))
 
 
-# In[3]:
-
-
-# TEMPORARY - remove once ZedProfiler's Texture-feature computation is fixed
-# upstream.
-def temporary_clean_and_aggregate(df: pd.DataFrame) -> pd.DataFrame:
-    feature_cols = [c for c in df.columns if not c.startswith("Metadata_")]
-    meta_cols = [c for c in df.columns if c.startswith("Metadata_")]
-
-    df[feature_cols] = df[feature_cols].mask(df[feature_cols].abs() > 1e10)
-
-    # No-op if already 1 row per well; kept as a safety net.
-    group_keys = ["Metadata_Biology_PatientTumor", "Metadata_Experiment_Well"]
-    agg_dict = {c: "first" for c in meta_cols if c not in group_keys}
-    agg_dict.update({c: "mean" for c in feature_cols})
-    return df.groupby(group_keys, as_index=False).agg(agg_dict)
-
-
 # ## Define the functions
 
-# In[4]:
+# In[3]:
 
 
 def calculate_intra_patient_distance_metrics(
@@ -299,16 +264,14 @@ def calculate_inter_patient_distance_metrics(
 
 # ## Run the functions
 
-# In[5]:
+# In[4]:
 
 
 # Inter and intra patient distances for every profile type, saved with a slug prefix
 for label, slug, path in profile_types:
     print("===", label, "===")
     df = load_and_harmonize(path)
-    df = temporary_clean_and_aggregate(
-        df
-    )  # TEMPORARY - remove once upstream data is fixed
+
     metadata_cols = [c for c in df.columns if c.startswith("Metadata_")]
 
     calculate_intra_patient_distance_metrics(

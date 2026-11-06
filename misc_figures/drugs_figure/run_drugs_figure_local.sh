@@ -6,7 +6,7 @@ if [ -z "$git_root" ]; then
     exit 1
 fi
 
-jupyter nbconvert --to=script --FilesWriter.build_directory="$git_root"/figures/drugs_figure/scripts/ "$git_root"/figures/drugs_figure/notebooks/*.ipynb
+uv run jupyter nbconvert --to=script --FilesWriter.build_directory="$git_root"/figures/drugs_figure/scripts/ "$git_root"/figures/drugs_figure/notebooks/*.ipynb
 
 # deactivate any existing conda environment
 conda deactivate
