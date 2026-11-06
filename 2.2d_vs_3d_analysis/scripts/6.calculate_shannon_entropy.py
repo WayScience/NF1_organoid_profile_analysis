@@ -1,3 +1,14 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# # Calculate Shannon Entropy
+#
+# Compute per-feature Shannon entropy for 2D and 3D profiles (organoid, single-cell, and all 3D feature-extraction methods).
+# Entropy is estimated by discretizing each feature into 50 histogram bins and computing the entropy of the resulting probability distribution.
+
+# In[1]:
+
+
 from typing import Dict, List
 
 import numpy as np
@@ -6,7 +17,10 @@ from notebook_init_utils.notebook_init_utils import init_notebook
 from scipy.stats import entropy
 
 root_dir, in_notebook = init_notebook()
-print(f"Root directory: {root_dir}")
+
+
+# In[2]:
+
 
 _2d_base_dir = root_dir / "data" / "profiles_2D" / "all_patients"
 _3d_dir = root_dir / "data" / "profiles_3D" / "all_patients"
@@ -93,13 +107,19 @@ for slug, group_label, resolution, file_prefix in _3d_types:
         }
 
 
+# In[3]:
+
+
 def compute_feature_entropy(
     df: pd.DataFrame,
     n_bins: int = 50,
 ) -> pd.DataFrame:
     """Compute Shannon entropy for each feature column in the DataFrame.
 
-    Feature columns are identified as those without the ``Metadata_`` prefix.
+    Feature columns are identified as numeric columns without the
+    ``Metadata_`` prefix (some raw, pre-feature-selection profiles carry
+    non-numeric, non-``Metadata_`` columns, e.g. ``Image_FileName_*`` path
+    strings, which are excluded here).
     Each feature's distribution is discretized into ``n_bins`` histogram bins,
     and Shannon entropy (base 2, in bits) is computed from the resulting
     probability distribution.
@@ -120,7 +140,9 @@ def compute_feature_entropy(
     """
     # Separate feature columns from metadata columns
     feature_columns: List[str] = [
-        col for col in df.columns if not col.startswith("Metadata_")
+        col
+        for col in df.columns
+        if not col.startswith("Metadata_") and pd.api.types.is_numeric_dtype(df[col])
     ]
 
     results: Dict[str, List] = {"feature_name": [], "entropy": []}
@@ -147,9 +169,14 @@ def compute_feature_entropy(
     return pd.DataFrame(results)
 
 
+# In[4]:
+
+
 _entropy_dir.mkdir(parents=True, exist_ok=True)
 
 for key, config in data_dict.items():
+    if config["output"].exists():
+        continue
     df = pd.read_parquet(config["input"])
 
     entropy_df = compute_feature_entropy(df, n_bins=50)
@@ -159,7 +186,9 @@ for key, config in data_dict.items():
     entropy_df["stage"] = config["stage"]
 
     entropy_df.to_parquet(config["output"], index=False)
-    print(config["output"])
+
+
+# In[5]:
 
 
 def derive_patient_column(df: pd.DataFrame) -> pd.DataFrame:
@@ -189,6 +218,9 @@ def derive_patient_column(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+# In[6]:
+
+
 def compute_feature_entropy_per_patient(
     df: pd.DataFrame,
     patient_col: str = "Metadata_patient",
@@ -215,7 +247,9 @@ def compute_feature_entropy_per_patient(
         DataFrame with columns ``patient``, ``feature_name``, and ``entropy``.
     """
     feature_columns: List[str] = [
-        col for col in df.columns if not col.startswith("Metadata_")
+        col
+        for col in df.columns
+        if not col.startswith("Metadata_") and pd.api.types.is_numeric_dtype(df[col])
     ]
 
     records: List[dict] = []
@@ -237,14 +271,18 @@ def compute_feature_entropy_per_patient(
     return pd.DataFrame(records)
 
 
+# In[7]:
+
+
 # Compute and save results
 for key, config in data_dict.items():
-    df = pd.read_parquet(config["input"])
-    df = derive_patient_column(df)
-
     per_patient_output = config["output"].parent / config["output"].name.replace(
         "_entropy.parquet", "_per_patient_entropy.parquet"
     )
+    if per_patient_output.exists():
+        continue
+    df = pd.read_parquet(config["input"])
+    df = derive_patient_column(df)
 
     per_patient_df = compute_feature_entropy_per_patient(df, n_bins=50)
     per_patient_df["imaging_modality"] = config["modality"]
@@ -253,4 +291,3 @@ for key, config in data_dict.items():
     per_patient_df["stage"] = config["stage"]
 
     per_patient_df.to_parquet(per_patient_output, index=False)
-    print(per_patient_output)

@@ -96,4 +96,3 @@ intensity_values_3d = intensity_values_3d.dropna(subset=["value"])
 
 out_path = results_dir / "intensity_values_3D.parquet"
 intensity_values_3d.to_parquet(out_path, index=False)
-print(f"Wrote {out_path.relative_to(root_dir)} ({len(intensity_values_3d)} rows)")

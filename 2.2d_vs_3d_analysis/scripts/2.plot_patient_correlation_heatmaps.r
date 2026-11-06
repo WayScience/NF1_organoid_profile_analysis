@@ -1,9 +1,3 @@
-# %% [markdown]
-# # Plot profile correlations
-#
-# Plot defined correlations from notebook 1 in a single PDF.
-
-# %%
 # Load libraries
 if (!requireNamespace("BiocManager", quietly = TRUE))
     install.packages("BiocManager")
@@ -18,7 +12,6 @@ suppressPackageStartupMessages({
     library(grid)
 })
 
-# %%
 # Get the current working directory and find Git root
 find_git_root <- function() {
     # Get current working directory
@@ -65,7 +58,6 @@ projection_labels <- c(
     middle_n_slice = "Middle N slices"
 )
 
-# %%
 build_correlation_matrix <- function(corr_long_df) {
     #' Pivot long-form correlations into a 2D x 3D matrix.
     #'
@@ -157,7 +149,6 @@ cluster_correlation_matrix <- function(corr_matrix) {
     hclust(correlation_distances(corr_matrix), method = "ward.D2")
 }
 
-# %%
 plot_correlation_heatmap <- function(corr_long_df, comparison) {
     #' Draw a clustered heatmap of Pearson correlations between 2D and 3D
     #' features onto the open graphics device.
@@ -263,7 +254,6 @@ plot_correlation_heatmap <- function(corr_long_df, comparison) {
     invisible(TRUE)
 }
 
-# %%
 # Plot comparisons from the correlation manifest
 manifest <- as.data.frame(arrow::read_parquet(manifest_path))
 
@@ -282,9 +272,7 @@ if (!is.null(cohorts_to_plot)) {
 
 cat(sprintf("Plotting %d comparisons\n", nrow(manifest)))
 
-# Each comparison is rendered to its own single-page PDF, then merged into one
-# file with Ghostscript -- Jupyter's R kernel collapses every page onto the
-# first if drawn into one long-lived pdf() device instead.
+# Merge every page into one combined PDF, in manifest order
 page_dir <- file.path(tempdir(), "correlation_heatmap_pages")
 dir.create(page_dir, showWarnings = FALSE)
 page_paths <- character(0)
@@ -308,7 +296,7 @@ for (i in seq_len(nrow(manifest))) {
     }
 }
 
-# Merge every page into one combined PDF, in manifest order
+# Each comparison is rendered to its own single-page PDF, then merged into one file with Ghostscript.
 gs_bin <- Sys.which("gs")
 if (gs_bin == "") {
     gs_candidate <- file.path(dirname(dirname(R.home())), "bin", "gs")

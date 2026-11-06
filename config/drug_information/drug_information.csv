@@ -1,0 +1,23 @@
+Treatment,Target,Class,TherapeuticCategories,FDA_status
+ARV-825,BRD4 inhibitor,PROTAC,PROTAC,Investigational
+Binimetinib,MEK1/2 inhibitor,Small Molecule,Kinase Inhibitor,Approved
+Cabozantinib,receptor tyrosine kinase inhibitor,Small Molecule,Kinase Inhibitor,Approved
+Copanlisib,PI3K inhibitor,Small Molecule,Kinase Inhibitor,Withdrawn
+DMSO,Control,Control,Control,Control
+Digoxin,Na+/K+ pump inhibitor,Small Molecule,Cardiac Glycosides,Approved
+Everolimus,mTOR inhibitor,Small Molecule,Kinase Inhibitor,Approved
+Fimepinostat,PI3K and HDAC inhibitor,Small Molecule,Investigational,Phase 1/2
+Imatinib,tyrosine kinase inhibitor,Small Molecule,Kinase Inhibitor,Approved
+Ketotifen,histamine H1 receptor antagonist,Small Molecule,Anti-Allergic Agents,Approved
+Linsitinib,IGF-1R inhibitor,Small Molecule,Investigational,Phase 3
+Mirdametinib,MEK1/2 inhibitor,Small Molecule,Kinase Inhibitor,NF1 Approved
+Nilotinib,tyrosine kinase inhibitor,Small Molecule,Investigational,Approved
+Onalespib,HSP90 inhibitor,Small Molecule,Investigational,Approved
+Panobinostat,HDAC inhibitor,Small Molecule,Histone Deacetylase Inhibitors,Approved
+Rapamycin,mTOR inhibitor,Small Molecule,Kinase Inhibitor,Approved
+Sapanisertib,mTOR inhibitor,Small Molecule,Investigational,Phase 2
+Selumetinib,MEK1/2 inhibitor,Small Molecule,Kinase Inhibitor,NF1 Approved
+Staurosporine,Apoptosis induction,Small Molecule,Experimental,Withdrawn
+Trabectedin,DNA binding,Small Molecule,Alkylating Drugs,Approved
+Trametinib,MEK1/2 inhibitor,Small Molecule,Kinase Inhibitor,Approved
+Vistusertib,mTOR inhibitor,Small Molecule,Investigational,Withdrawn

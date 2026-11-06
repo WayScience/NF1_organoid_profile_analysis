@@ -11,8 +11,8 @@
 # Nuclei_Neighbors_FirstClosestDistance-style columns and no
 # Organoid_Neighbors_NumberOfNeighbors_Adjacent equivalent in the profiles
 # themselves. Instead 3D sc profiles carry shell/distance-from-center based
-# neighbor metadata: Metadata_Neighbors_NeighborsCountAdjacent,
-# Metadata_Neighbors_DistancesFromCenter, Metadata_Neighbors_DistancesFromExterior
+# neighbor metadata: Metadata_Neighbors_NucleiNoChannelNeighborsNeighborsCountAdjacent,
+# Metadata_Neighbors_NucleiNoChannelNeighborsDistancesFromCenter, Metadata_Neighbors_NucleiNoChannelNeighborsDistancesFromExterior
 # (the latter two are plain scalars per nucleus, not per-neighbor arrays), plus
 # nucleus volume. These are genuinely different concepts (distance from organoid
 # center/exterior + count of adjacent neighbors within a nucleus's local 3D
@@ -128,15 +128,15 @@ org_2d.to_parquet(results_dir / "organoid_neighbors_2D.parquet", index=False)
 patients_3d = list_patient_dirs(root_dir / "data" / "profiles_3D")
 sc3_rows = []
 SHELL_COLS_3D = [
-    "Metadata_Neighbors_NeighborsCountAdjacent",
-    "Metadata_Neighbors_DistancesFromCenter",
-    "Metadata_Neighbors_DistancesFromExterior",
-    "Metadata_Neighbors_NormalizedDistancesFromCenter",
+    "Metadata_Neighbors_NucleiNoChannelNeighborsNeighborsCountAdjacent",
+    "Metadata_Neighbors_NucleiNoChannelNeighborsDistancesFromCenter",
+    "Metadata_Neighbors_NucleiNoChannelNeighborsDistancesFromExterior",
+    "Metadata_Neighbors_NucleiNoChannelNeighborsNormalizedDistancesFromCenter",
 ]
 # Nucleus volume, joined here (rather than kept only in the organoid-level
 # volume table) so single-cell volume can be related to single-cell adjacent
 # neighbor count directly, without needing an object ID to merge on.
-NUCLEUS_SIZE_COLS_3D = ["Nuclei_NoChannel_AreaSizeShape_Volume"]
+NUCLEUS_SIZE_COLS_3D = ["Nuclei_NoChannel_VolumeSizeShape_Volume"]
 for patient in patients_3d:
     f = (
         root_dir
@@ -157,9 +157,9 @@ for patient in patients_3d:
     # a scalar per nucleus (not a per-neighbor array), so no aggregation is
     # needed - just coerce to float.
     for col in [
-        "Metadata_Neighbors_DistancesFromCenter",
-        "Metadata_Neighbors_DistancesFromExterior",
-        "Metadata_Neighbors_NormalizedDistancesFromCenter",
+        "Metadata_Neighbors_NucleiNoChannelNeighborsDistancesFromCenter",
+        "Metadata_Neighbors_NucleiNoChannelNeighborsDistancesFromExterior",
+        "Metadata_Neighbors_NucleiNoChannelNeighborsNormalizedDistancesFromCenter",
     ]:
         if col in df.columns:
             df[col] = df[col].apply(
@@ -194,7 +194,10 @@ for patient in patients_3d:
     if not f.exists():
         continue
     df = pd.read_parquet(f)
-    cols = ["Metadata_Experiment_Treatment", "Organoid_NoChannel_AreaSizeShape_Volume"]
+    cols = [
+        "Metadata_Experiment_Treatment",
+        "Organoid_NoChannel_VolumeSizeShape_Volume",
+    ]
     cols = [c for c in cols if c in df.columns]
     df = df[cols]
     df = harmonize_metadata(df, "3D", patient)
@@ -320,19 +323,18 @@ org_nbr_3d.to_parquet(results_dir / "organoid_neighbors_3D.parquet", index=False
 # need to be in real (non-normalized, non-z-scored) units for this ratio to
 # mean anything, so this reads from 4.qc_profiles (pre-normalization) rather
 # than the 5.normalized_profiles used elsewhere in this notebook. Organoids
-# flagged by QC (NaN features, too-small/too-large outliers) are excluded, to
+# flagged by QC (NaN features, too-small outliers) are excluded, to
 # match what the normalized profiles keep. Volume is converted from voxels to
 # um^3 using the per-image resolution metadata (constant across patients:
 # 0.101 x 0.101 x 1.0 um/voxel).
 DENSITY_COLS_3D = [
     "Metadata_Object_OrganoidSingleCellCount",
-    "Organoid_NoChannel_AreaSizeShape_Volume",
+    "Organoid_NoChannel_VolumeSizeShape_Volume",
     "Metadata_Microscopy_XResolutionUm",
     "Metadata_Microscopy_YResolutionUm",
     "Metadata_Microscopy_ZResolutionUm",
     "Metadata_cqc_nan_detected",
     "Metadata_cqc_small_organoid_outlier",
-    "Metadata_cqc_large_organoid_outlier",
 ]
 org_density_rows = []
 for patient in patients_3d:
@@ -350,16 +352,11 @@ for patient in patients_3d:
     cols = ["Metadata_Experiment_Treatment"] + DENSITY_COLS_3D
     df = df[cols]
     df = df[
-        ~(
-            df["Metadata_cqc_nan_detected"]
-            | df["Metadata_cqc_small_organoid_outlier"]
-            | df["Metadata_cqc_large_organoid_outlier"]
-        )
+        ~(df["Metadata_cqc_nan_detected"] | df["Metadata_cqc_small_organoid_outlier"])
     ].drop(
         columns=[
             "Metadata_cqc_nan_detected",
             "Metadata_cqc_small_organoid_outlier",
-            "Metadata_cqc_large_organoid_outlier",
         ]
     )
     voxel_volume_um3 = (
@@ -367,7 +364,7 @@ for patient in patients_3d:
         * df["Metadata_Microscopy_YResolutionUm"]
         * df["Metadata_Microscopy_ZResolutionUm"]
     )
-    volume_um3 = df["Organoid_NoChannel_AreaSizeShape_Volume"] * voxel_volume_um3
+    volume_um3 = df["Organoid_NoChannel_VolumeSizeShape_Volume"] * voxel_volume_um3
     df["Organoid_CellDensity_CellsPerUm3"] = (
         df["Metadata_Object_OrganoidSingleCellCount"] / volume_um3
     )

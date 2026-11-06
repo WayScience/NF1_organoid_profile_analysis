@@ -106,6 +106,8 @@ for projection_key in pooled_profile_paths:
         else "Metadata_patient_tumor"
     )
     for profile_variant, profile_paths in pooled_profile_paths[projection_key].items():
+        if profile_paths["output"].exists():
+            continue
         # Load the data
         profile_df = pd.read_parquet(profile_paths["input"])
 
@@ -153,7 +155,7 @@ patients = pd.read_csv(
 )["patient"].to_list()
 
 
-# In[ ]:
+# In[5]:
 
 
 # Individual patients, 2D and 3D, feature-selected and aggregated
@@ -248,6 +250,8 @@ for patient in patient_profile_paths:
         for profile_variant, profile_paths in patient_profile_paths[patient][
             projection_key
         ].items():
+            if patient_specific_output_paths[projection_key][profile_variant].exists():
+                continue
             # Load the data
             profile_df = pd.read_parquet(profile_paths["input"])
             metadata_columns = infer_cp_features(profile_df, metadata=True)
@@ -292,6 +296,8 @@ for patient in patient_profile_paths:
 # Concatenate all patients' results into one file per projection/variant combo
 for projection_key, variants in patient_specific_results.items():
     for profile_variant, patient_dfs in variants.items():
+        if patient_specific_output_paths[projection_key][profile_variant].exists():
+            continue
         combined_df = pd.concat(patient_dfs, ignore_index=True)
         combined_df.to_parquet(
             patient_specific_output_paths[projection_key][profile_variant],

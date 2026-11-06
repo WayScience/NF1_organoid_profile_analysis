@@ -7,19 +7,37 @@
 # In[1]:
 
 
+import argparse
 import pathlib
 import shutil
 
-from notebook_init_utils import init_notebook
+from notebook_init_utils import bandicoot_check, init_notebook
 
 root_dir, in_notebook = init_notebook()
+bandicoot_path = pathlib.Path("~/mnt/bandicoot").expanduser().resolve()
+profile_base_dir = bandicoot_check(bandicoot_path, root_dir)
 
 
-# In[ ]:
+# In[2]:
 
 
-OVERWRITE = True
-shippable_zip_path = pathlib.Path(f"{root_dir}/data/shippable_dir.zip").resolve()
+if not in_notebook:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--overwrite", action="store_true", help="Overwrite existing files"
+    )
+    args = parser.parse_args()
+    OVERWRITE = args.overwrite
+else:
+    OVERWRITE = True
+
+
+# In[3]:
+
+
+shippable_zip_path = pathlib.Path(
+    f"{profile_base_dir}/data/shippable_dir.zip"
+).resolve()
 if not shippable_zip_path.exists():
     print("Shippable zip not found")
     raise FileNotFoundError(
@@ -27,7 +45,7 @@ if not shippable_zip_path.exists():
     )
 
 
-# In[ ]:
+# In[4]:
 
 
 unpack_dir = pathlib.Path(f"{root_dir}/data/").resolve(strict=False)

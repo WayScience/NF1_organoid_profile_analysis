@@ -98,11 +98,11 @@ patient_by_treatment_panel <- function(df, y_col, y_label, title, y_trans = "ide
 }
 
 p_volume_organoid <- patient_by_treatment_panel(
-    org_volume_3d, "Organoid_NoChannel_AreaSizeShape_Volume", "Organoid volume (z-scored, pseudo-log scale)",
+    org_volume_3d, "Organoid_NoChannel_VolumeSizeShape_Volume", "Organoid volume (z-scored, pseudo-log scale)",
     "Organoid size", y_trans = scales::pseudo_log_trans(sigma = 1)
 )
 p_crowding_nuc <- patient_by_treatment_panel(
-    nuc_3d, "Metadata_Neighbors_NeighborsCountAdjacent", "Adjacent neighbor count",
+    nuc_3d, "Metadata_Neighbors_NucleiNoChannelNeighborsNeighborsCountAdjacent", "Adjacent neighbor count",
     "Nuclei number of neighbors"
 )
 p_crowding_organoid <- patient_by_treatment_panel(

@@ -78,7 +78,7 @@ for (patient in patients_3d) {
     if (!file.exists(f)) next
     df <- read_parquet(f, col_select = c(
         "Metadata_Experiment_Treatment", "Metadata_Experiment_Dose",
-        "Metadata_Object_OrganoidSingleCellCount", "Organoid_NoChannel_AreaSizeShape_Volume"
+        "Metadata_Object_OrganoidSingleCellCount", "Organoid_NoChannel_VolumeSizeShape_Volume"
     ))
     df$Metadata_patient_tumor <- patient
     vol_rows[[patient]] <- df
@@ -116,7 +116,7 @@ make_faceted_scatter <- function(df, x_col, y_col, facet_col, color_col, color_v
 }
 
 p_vol_by_patient <- make_faceted_scatter(
-    joined_3d, "Metadata_Object_OrganoidSingleCellCount", "Organoid_NoChannel_AreaSizeShape_Volume",
+    joined_3d, "Metadata_Object_OrganoidSingleCellCount", "Organoid_NoChannel_VolumeSizeShape_Volume",
     facet_col = "Metadata_patient_tumor", color_col = "Metadata_treatment",
     color_values = custom_treatment_palette, legend_name = "Treatment",
     title = "3D: organoid volume vs. cells per organoid\nfaceted by patient, colored by treatment",
@@ -125,7 +125,7 @@ p_vol_by_patient <- make_faceted_scatter(
 )
 
 p_vol_by_treatment <- make_faceted_scatter(
-    joined_3d, "Metadata_Object_OrganoidSingleCellCount", "Organoid_NoChannel_AreaSizeShape_Volume",
+    joined_3d, "Metadata_Object_OrganoidSingleCellCount", "Organoid_NoChannel_VolumeSizeShape_Volume",
     facet_col = "Metadata_treatment", color_col = "Metadata_patient_tumor",
     color_values = tab20_palette_for_patients, legend_name = "Patient",
     title = "3D: organoid volume vs. cells per organoid\nfaceted by treatment, colored by patient",
@@ -138,7 +138,7 @@ sc_vol_rows <- list()
 for (patient in patients_3d) {
     f <- file.path(root_dir, "data", "profiles_3D", patient, "4.qc_profiles", "sc_flagged_outliers.parquet")
     if (!file.exists(f)) next
-    df <- read_parquet(f, col_select = c("Metadata_Experiment_Treatment", "Metadata_Experiment_Dose", "Cell_NoChannel_AreaSizeShape_Volume"))
+    df <- read_parquet(f, col_select = c("Metadata_Experiment_Treatment", "Metadata_Experiment_Dose", "Cell_NoChannel_VolumeSizeShape_Volume"))
     df$Metadata_patient_tumor <- patient
     sc_vol_rows[[patient]] <- df
 }
@@ -152,7 +152,7 @@ joined_sc$Metadata_treatment <- factor(joined_sc$Metadata_treatment,
                                           levels = intersect(custom_treatment_order, unique(joined_sc$Metadata_treatment)))
 
 p_sc_vol_by_patient <- make_faceted_scatter(
-    joined_sc, "total_cell_count_norm", "Cell_NoChannel_AreaSizeShape_Volume",
+    joined_sc, "total_cell_count_norm", "Cell_NoChannel_VolumeSizeShape_Volume",
     facet_col = "Metadata_patient_tumor", color_col = "Metadata_treatment",
     color_values = custom_treatment_palette, legend_name = "Treatment",
     title = "3D: single-cell volume vs. total cell count (FOV-normalized)\nfaceted by patient, colored by treatment",
@@ -161,7 +161,7 @@ p_sc_vol_by_patient <- make_faceted_scatter(
 )
 
 p_sc_vol_by_treatment <- make_faceted_scatter(
-    joined_sc, "total_cell_count_norm", "Cell_NoChannel_AreaSizeShape_Volume",
+    joined_sc, "total_cell_count_norm", "Cell_NoChannel_VolumeSizeShape_Volume",
     facet_col = "Metadata_treatment", color_col = "Metadata_patient_tumor",
     color_values = tab20_palette_for_patients, legend_name = "Patient",
     title = "3D: single-cell volume vs. total cell count (FOV-normalized)\nfaceted by treatment, colored by patient",

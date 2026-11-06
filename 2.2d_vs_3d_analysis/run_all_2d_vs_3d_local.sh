@@ -8,7 +8,7 @@ if [ -z "$git_root" ]; then
     exit 1
 fi
 
-jupyter nbconvert --to=script --FilesWriter.build_directory="$git_root"/2.2d_vs_3d_analysis/scripts/ "$git_root"/2.2d_vs_3d_analysis/notebooks/*.ipynb
+uv run jupyter nbconvert --to=script --FilesWriter.build_directory="$git_root"/2.2d_vs_3d_analysis/scripts/ "$git_root"/2.2d_vs_3d_analysis/notebooks/*.ipynb
 
 # deactivate any existing conda environment
 conda deactivate

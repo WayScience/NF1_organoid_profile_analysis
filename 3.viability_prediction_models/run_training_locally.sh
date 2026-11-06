@@ -2,7 +2,7 @@
 
 git_root=$(git rev-parse --show-toplevel)
 
-jupyter nbconvert --to=script --FilesWriter.build_directory="$git_root"/3.viability_prediction_models/scripts/ "$git_root"/3.viability_prediction_models/notebooks/*.ipynb
+uv run jupyter nbconvert --to=script --FilesWriter.build_directory="$git_root"/3.viability_prediction_models/scripts/ "$git_root"/3.viability_prediction_models/notebooks/*.ipynb
 
 echo "Running pre-processing..."
 uv run python "$git_root"/3.viability_prediction_models/scripts/0.pre-processing_profiles_for_viability_models.py

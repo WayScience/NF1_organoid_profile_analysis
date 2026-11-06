@@ -13,7 +13,7 @@ Keep this in mind when reading any `*_fc.parquet` / `*_log2fc` column: check whe
 
 ## Pipeline
 
-Every step is a notebook in `notebooks/`; `run_all_differential_analyses.sh` regenerates the mirrored `scripts/` (same base names) from them with `jupyter nbconvert` before running.
+Every step is a notebook in `notebooks/`; `run_all_differential_analyses.sh` regenerates the mirrored `scripts/` (same base names) from them with `uv run jupyter nbconvert` before running.
 Python steps run in the `uv` environment and R (ggplot2) steps run in the `uvr` environment (see the [root README](../README.md#computational-environment)).
 
 | Step | Language | What it does | Main outputs |
@@ -37,4 +37,4 @@ source uv_setup.sh                                   # once: uv + uvr environmen
 bash 5.differential_analysis/run_all_differential_analyses.sh
 ```
 
-`run_all_differential_analyses.sh` regenerates `scripts/` from `notebooks/` with `jupyter nbconvert`, then runs every step in order.
+`run_all_differential_analyses.sh` regenerates `scripts/` from `notebooks/` with `uv run jupyter nbconvert`, then runs every step in order.

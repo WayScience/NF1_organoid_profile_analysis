@@ -38,6 +38,7 @@ source(file.path(root_dir, "utils", "r_plot_themes.r"))
 data_to_plot_file_path <- file.path(root_dir, "1.EDA/results/correlation/3D_sc_correlation_pairs_sc_norm_agg_with_meta_and_viability.parquet")
 correlation_viability_df <- arrow::read_parquet(data_to_plot_file_path)
 figures_base_dir <- file.path(root_dir, "1.EDA", "figures")
+montage_dir <- file.path(figures_base_dir, "montages")
 
 high_correlation_cutoff <- 0.9
 low_correlation_cutoff <- 0.1
@@ -130,12 +131,22 @@ p_base <- correlation_viability_plot +
     plot.background = element_rect(fill = "white", color = NA)
   )
 
-img_paths <- list(
-  top_left     = file.path(root_dir, "1.EDA/figures/montages/low_correlation_dissimilar_viability/NF0014_T1__E7__Cabozantinib__1__NF0014_T2__G2__Staurosporine__10_corr-0-333_viabilitydiff1-000.png"),
-  top_right    = file.path(root_dir, "1.EDA/figures/montages/high_correlation_dissimilar_viability/NF0014_T1__G11__Staurosporine__10__NF0014_T1__G6__Ketotifen__1_corr0-847_viabilitydiff0-947.png"),
-  bottom_left  = file.path(root_dir, "1.EDA/figures/montages/low_correlation_similar_viability/NF0021_T1__F4__DMSO__1__NF0037_T1__G10__Selumetinib__1_corr-0-379_viabilitydiff0-047.png"),
-  bottom_right = file.path(root_dir, "1.EDA/figures/montages/high_correlation_similar_viability/NF0014_T2__G10__Selumetinib__1__NF0035_T1__F6__Nilotinib__1_corr0-945_viabilitydiff0-079.png")
+# montage filenames change whenever the data change (script 5a encodes the
+# sample IDs and correlation/viability values in each name), so pick one
+# montage per quadrant from what 5a wrote instead of hardcoding filenames.
+quadrant_montage_dirs <- list(
+  top_left     = "low_correlation_dissimilar_viability",
+  top_right    = "high_correlation_dissimilar_viability",
+  bottom_left  = "low_correlation_similar_viability",
+  bottom_right = "high_correlation_similar_viability"
 )
+img_paths <- lapply(quadrant_montage_dirs, function(d) {
+  pngs <- sort(list.files(file.path(montage_dir, d), pattern = "\\.png$", full.names = TRUE))
+  if (length(pngs) == 0) {
+    stop(sprintf("No montages found for quadrant '%s' -- run script 5a first.", d))
+  }
+  pngs[[1]]
+})
 
 # resize to fill the box, then add a colored border matching the quadrant
 # (reuses quadrant_palette defined above, for the scatterplot legend)

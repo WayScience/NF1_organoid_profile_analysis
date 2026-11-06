@@ -117,23 +117,6 @@ load_and_match <- function(path_2d, path_3d) {
     list(df_2d = df_2d_matched, df_3d = df_3d_matched, metadata = metadata)
 }
 
-# TEMPORARY - remove once ZedProfiler's Texture-feature computation is fixed
-# upstream. Both handcrafted pairs currently have a single sample with
-# astronomically large corrupted feature values (visible as a single outlier
-# point at ~1e23-1e94 in the score scatter plots), which by itself drags the
-# canonical correlation around. This masks those values to NA so prep_features'
-# existing mean-imputation covers them instead; for every other pair (DL,
-# nucleocentric) this is a no-op.
-mask_extreme_values <- function(df) {
-    meta_cols <- grep("^Metadata_", colnames(df), value = TRUE)
-    feat_cols <- setdiff(colnames(df), meta_cols)
-    df[feat_cols] <- lapply(df[feat_cols], function(x) {
-        if (is.numeric(x)) x[abs(x) > 1e10] <- NA
-        x
-    })
-    df
-}
-
 # Cleans a profile dataframe into a numeric feature matrix ready for CCA:
 # drops metadata/constant/all-NA columns, then mean-imputes remaining NAs.
 prep_features <- function(df) {
@@ -242,8 +225,8 @@ for (i in seq_len(nrow(profile_pairs))) {
     cat("===", pair$label, "===\n")
 
     matched <- load_and_match(pair$path_2d, pair$path_3d)
-    mat_2d <- as.matrix(prep_features(mask_extreme_values(matched$df_2d)))  # TEMPORARY - remove once upstream data is fixed
-    mat_3d <- as.matrix(prep_features(mask_extreme_values(matched$df_3d)))  # TEMPORARY - remove once upstream data is fixed
+    mat_2d <- as.matrix(prep_features((matched$df_2d)))
+    mat_3d <- as.matrix(prep_features((matched$df_3d)))
     cat("Matched samples:", nrow(mat_2d), " | 2D features:", ncol(mat_2d), " | 3D features:", ncol(mat_3d), "\n")
 
     result <- run_sparse_cca(mat_2d, mat_3d, matched$metadata, pair$slug, results_dir)
