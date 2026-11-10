@@ -17,6 +17,7 @@
 
 
 import pathlib
+import warnings
 from typing import Union
 
 import numpy as np
@@ -24,11 +25,25 @@ import pandas as pd
 from copairs import map
 from copairs.matching import assign_reference_index
 from notebook_init_utils.notebook_init_utils import init_notebook
+from tqdm.std import TqdmExperimentalWarning
+
+warnings.filterwarnings("ignore", category=TqdmExperimentalWarning)
 
 root_dir, in_notebook = init_notebook()
+if in_notebook:
+    import tqdm.notebook as tqdm
+else:
+    import tqdm
 
 
 # In[2]:
+
+
+REFERENCE_COL = "reference_index"
+PATIENT_COL = "Metadata_patient"
+
+
+# In[3]:
 
 
 path_2d_organoid = pathlib.Path(
@@ -48,32 +63,32 @@ profile_types = [
     (
         "3D Organoid - Handcrafted",
         "3D_organoid_handcrafted",
-        dir_3d_agg / "organoid_norm_sc_agg_profiles.parquet",
+        dir_3d_agg / "organoid_norm_agg_from_norm.parquet",
     ),
     (
         "3D Organoid - DL (SAM-Med3D)",
         "3D_organoid_sammed",
-        dir_3d_agg / "sammed_organoid_norm_sc_agg_profiles.parquet",
+        dir_3d_agg / "sammed_organoid_norm_agg_from_norm.parquet",
     ),
     (
         "3D Single-cell - Handcrafted",
         "3D_sc_handcrafted",
-        dir_3d_agg / "sc_norm_sc_agg_profiles.parquet",
+        dir_3d_agg / "sc_norm_agg_from_norm.parquet",
     ),
     (
         "3D Single-cell - DL (SAM-Med3D)",
         "3D_sc_sammed",
-        dir_3d_agg / "sammed_sc_norm_sc_agg_profiles.parquet",
+        dir_3d_agg / "sammed_sc_norm_agg_from_norm.parquet",
     ),
     (
         "3D Single-cell - Nucleocentric DL (SAM-Med3D)",
         "3D_sc_sammed_nucleocentric",
-        dir_3d_agg / "sammed_nucleocentric_norm_sc_agg_profiles.parquet",
+        dir_3d_agg / "sammed_nucleocentric_norm_agg_from_norm.parquet",
     ),
     (
         "3D Single-cell - Nucleocentric DL (MorphEM)",
         "3D_sc_nucleocentric_morphem",
-        dir_3d_agg / "nucleocentric_morphem_norm_sc_agg_profiles.parquet",
+        dir_3d_agg / "nucleocentric_morphem_norm_agg_from_norm.parquet",
     ),
 ]
 
@@ -119,7 +134,7 @@ def load_and_harmonize(path: pathlib.Path) -> pd.DataFrame:
     return convert_2d_metadata_to_3d_metadata_style(pd.read_parquet(path))
 
 
-# In[3]:
+# In[4]:
 
 
 def calculate_mAP(
@@ -147,28 +162,26 @@ def calculate_mAP(
     Union[None, pd.DataFrame]
         DataFrame with mAP results, or None if calculation fails.
     """
-    reference_col = "reference_index"
-
     df = assign_reference_index(
         df,
         f"{col_for_reference} == '{reference_group}'",
-        reference_col=reference_col,
+        reference_col=REFERENCE_COL,
         default_value=-1,
     )
     feature_cols = [
         col
         for col in df.columns
-        if not col.startswith("Metadata_") and col != reference_col
+        if not col.startswith("Metadata_") and col != REFERENCE_COL
     ]
     df = df.drop(columns=[col for col in feature_cols if df[col].isna().any()])
-    metadata_columns_with_ref = metadata_columns + [reference_col]
+    metadata_columns_with_ref = metadata_columns + [REFERENCE_COL]
     metadata = df[metadata_columns_with_ref]
     profiles = df.drop(columns=metadata_columns_with_ref).values
 
-    pos_sameby = [col_for_reference, reference_col]
+    pos_sameby = [col_for_reference, REFERENCE_COL]
     pos_diffby = []
     neg_sameby = []
-    neg_diffby = [col_for_reference, reference_col]
+    neg_diffby = [col_for_reference, REFERENCE_COL]
 
     try:
         df_ap = map.average_precision(
@@ -195,7 +208,8 @@ def calculate_inter_patient_mAP(
     output_path: Union[None, pathlib.Path] = None,
 ) -> Union[None, pd.DataFrame]:
     """
-    Calculate inter-patient mAP across all patients for each treatment.
+    Calculate inter-patient mAP across all patients pooled, for every
+    treatment-dose against a single reference group.
 
     Parameters
     ----------
@@ -206,32 +220,73 @@ def calculate_inter_patient_mAP(
     col_for_reference : str
         Column name for treatment grouping.
     reference_group : str
-        Reference treatment label (e.g., "DMSO").
+        Reference treatment-dose label (e.g., "DMSO_1").
     output_path : Union[None, pathlib.Path]
         Path to save results as parquet.
 
     Returns
     ----------
     Union[None, pd.DataFrame]
-        DataFrame with mAP results per treatment across all patients.
+        DataFrame with mAP results per treatment-dose across all patients.
+    """
+    mAP = calculate_mAP(
+        df,
+        metadata_columns=metadata_columns,
+        col_for_reference=col_for_reference,
+        reference_group=reference_group,
+    )
+    if mAP is None:
+        print("No mAP results computed.")
+        return None
+
+    mAP[PATIENT_COL] = "all_patients"
+    if output_path is not None:
+        mAP.to_parquet(output_path, index=False)
+    return mAP
+
+
+def calculate_intra_patient_mAP(
+    df: pd.DataFrame,
+    metadata_columns: list,
+    col_for_reference: str = "Metadata_Experiment_Treatment",
+    reference_group: str = "DMSO",
+    output_path: Union[None, pathlib.Path] = None,
+) -> Union[None, pd.DataFrame]:
+    """
+    Calculate per-patient mAP for every treatment-dose against a single
+    reference group, with each patient's hypotheses corrected separately.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing the profiles and metadata.
+    metadata_columns : list
+        List of metadata columns to exclude from profiles.
+    col_for_reference : str
+        Column name for treatment grouping.
+    reference_group : str
+        Reference treatment-dose label (e.g., "DMSO_1").
+    output_path : Union[None, pathlib.Path]
+        Path to save results as parquet.
+
+    Returns
+    ----------
+    Union[None, pd.DataFrame]
+        DataFrame with mAP results per treatment-dose per patient.
     """
     list_of_dfs = []
-    for drug in df[col_for_reference].unique():
-        if drug == reference_group:
+    for patient in df[PATIENT_COL].unique():
+        patient_df = df.loc[df[PATIENT_COL] == patient].copy()
+        if reference_group not in patient_df[col_for_reference].unique():
             continue
-        drug_df = df.loc[df[col_for_reference] == drug, :].copy()
-        reference_df = df.loc[df[col_for_reference] == reference_group, :].copy()
-        drug_df = pd.concat([drug_df, reference_df], ignore_index=True)
-
         mAP = calculate_mAP(
-            drug_df,
+            patient_df,
             metadata_columns=metadata_columns,
             col_for_reference=col_for_reference,
             reference_group=reference_group,
         )
         if mAP is not None:
-            mAP["Metadata_treatment"] = drug
-            mAP["Metadata_patient"] = "all_patients"
+            mAP[PATIENT_COL] = patient
             list_of_dfs.append(mAP)
 
     if len(list_of_dfs) == 0:
@@ -244,22 +299,51 @@ def calculate_inter_patient_mAP(
     return output_df
 
 
-# In[4]:
+# In[5]:
 
 
 # Inter-patient mAP by treatment and dose, with every treatment-dose taking a
 # turn as the reference group, for every profile type
-for label, slug, path in profile_types:
-    print("===", label, "===")
+for label, slug, path in tqdm.tqdm(
+    profile_types, total=len(profile_types), desc="Profile Types"
+):
     df = load_and_harmonize(path)
+    n_null = df["Metadata_treatment_dose"].isna().sum()
+    if n_null:
+        warnings.warn(f"Dropping {n_null} row(s) with null Metadata_treatment_dose.")
+        df = df.loc[df["Metadata_treatment_dose"].notna()].reset_index(drop=True)
     metadata_cols = [c for c in df.columns if c.startswith("Metadata_")]
 
-    for reference_group in sorted(df["Metadata_treatment_dose"].unique()):
-        calculate_inter_patient_mAP(
-            df,
-            metadata_columns=metadata_cols,
-            col_for_reference="Metadata_treatment_dose",
-            reference_group=reference_group,
-            output_path=results_dir
-            / f"{slug}_inter_patient_mAP_vs_{reference_group}.parquet",
+    for reference_group in tqdm.tqdm(
+        df["Metadata_treatment_dose"].unique(),
+        total=len(df["Metadata_treatment_dose"].unique()),
+        desc="Reference Groups",
+        leave=False,
+    ):
+        inter_patient_output_file = (
+            results_dir
+            / f"{slug}_inter_patient_mAP_ref_group_{reference_group}.parquet"
         )
+        intra_patient_output_file = (
+            results_dir
+            / f"{slug}_intra_patient_mAP_ref_group_{reference_group}.parquet"
+        )
+        if inter_patient_output_file.exists() and intra_patient_output_file.exists():
+            continue
+        print("===", label, "Reference Group:", reference_group, "===")
+        if not inter_patient_output_file.exists():
+            calculate_inter_patient_mAP(
+                df=df,
+                metadata_columns=metadata_cols,
+                col_for_reference="Metadata_treatment_dose",
+                reference_group=reference_group,
+                output_path=inter_patient_output_file,
+            )
+        if not intra_patient_output_file.exists():
+            calculate_intra_patient_mAP(
+                df=df,
+                metadata_columns=metadata_cols,
+                col_for_reference="Metadata_treatment_dose",
+                reference_group=reference_group,
+                output_path=intra_patient_output_file,
+            )
