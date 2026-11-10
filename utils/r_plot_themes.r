@@ -151,6 +151,17 @@ feature_type_palette = c(
     "Texture" = brewer.pal(8, "Paired")[8]
 )
 
+feature_type_palette_2D = c(
+    "AreaSizeShape" = brewer.pal(8, "Paired")[1],
+    "Colocalization" = brewer.pal(8, "Paired")[2],
+    "Granularity" = brewer.pal(8, "Paired")[3],
+    "Intensity" = brewer.pal(8, "Paired")[5],
+    "Location" = brewer.pal(8, "Paired")[4],
+    "Neighbors" = brewer.pal(8, "Paired")[6],
+    "Texture" = brewer.pal(8, "Paired")[8],
+    "RadialDistribution" = brewer.pal(8, "Paired")[7]
+)
+
 # Shared theme for manuscript-quality plots.
 # x_text controls how the x axis tick labels are rendered:
 #   "default" - leave tick labels as ggplot's default
