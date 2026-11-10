@@ -3,14 +3,20 @@
 
 # # PDO Cell Painting pipeline figure
 #
-# A publication-style schematic of the workflow, drawn entirely from matplotlib polygons:
+# A publication-style schematic drawn entirely from matplotlib polygons:
 #
-# 1. **Patient-derived organoids** — patients → tumour samples → organoid growth → 96-well plate + drugs
-# 2. **Cell Painting + high-content volumetric imaging** — AGP, DNA, ER and Mito z-stacks
-# 3. **2.5D/3D segmentation** — nuclei, cells, cytoplasm and whole-organoid masks
+# 1. **Patient tumor resection, organoid culture & drug treatment** (one continuous process):
+#    patient → resected tumors of several types → dissociation into single cells → plating in a 96-well
+#    plate → one well magnified (Matrigel ring, top and side views) → assay timeline (Day 0 seeding,
+#    Days 1–3 organoid formation, Days 4–5 drug treatment, Day 6 Cell Painting) → arrow to the microscope
+# 2. **Cell Painting + high-content volumetric imaging**: AGP, DNA, ER and Mito z-stacks
+# 3. **2.5D/3D segmentation**: nuclei, cells, cytoplasm and whole-organoid masks
 #
 # The figure is sized for a 180 mm double-column journal width with 6–9 pt text, and is exported as
 # vector PDF/SVG (editable text) plus a 600 dpi PNG.
+#
+# The mini-ring assay format and timeline in panel 1 follow Phan *et al.*, *Commun. Biol.* **2**, 78 (2019);
+# cite that paper if you use this panel.
 #
 # **Requires:** `numpy`, `matplotlib`, `scipy`
 #
@@ -34,18 +40,18 @@ from scipy.spatial import Voronoi
 root_dir, in_notebook = init_notebook()
 
 
-# In[2]:
+# In[ ]:
 
 
 output_figure_file_path = pathlib.Path(
-    f"{root_dir}/figures/workflow_figures/figures/pdo_pipeline_figure.png"
+    f"{root_dir}/figures/workflow_figures/figures/pdo_pipeline_figure"
 )
 output_figure_file_path.parent.mkdir(parents=True, exist_ok=True)
 
 
 # ## Settings
 # Fonts fall back from Arial → Helvetica → Liberation Sans → DejaVu Sans, depending on what is installed.
-# `rng` fixes the random organoid layout — change the seed for a different arrangement.
+# `rng` fixes the random organoid layout; change the seed for a different arrangement.
 # Drawing coordinates are in abstract units on a `W × H` canvas; the figure is scaled to `FIG_W_IN` inches wide.
 
 # In[3]:
@@ -63,19 +69,24 @@ mpl.rcParams.update(
 
 rng = np.random.default_rng(7)
 
-W, H = 20.0, 8.4  # drawing units
+W, H = 20.0, 8.0  # drawing units
 FIG_W_IN = 180 / 25.4  # 180 mm double-column width
 INK = "#222222"
 GREY = "#6b6b6b"
 LIGHT = "#eceef1"
+SLATE = "#5b6b82"  # organoids, drug, dose gradient
+MATRIGEL = "#e3d9c6"
+MEDIUM = "#f6f7f9"
+DRUG = "#c9d0db"  # medium containing drug
 LW = 0.7  # standard stroke (pt)
 SEG_CMAP = plt.get_cmap("cividis")
 
-FS_TITLE, FS_LABEL, FS_SMALL, FS_LETTER = 11, 9, 7, 13
+FS_TITLE, FS_LABEL, FS_SMALL = 9, 7, 6
+OUT_STEM = "pdo_pipeline_figure"  # output file name (without extension)
 
 
 # ## Polygon helpers
-# Every shape in the figure is a `Polygon`: bevelled boxes (`chamfer`), arrows (`arrow_poly`), and multi-segment connectors (`elbow_arrow`).
+# Every shape in the figure is a `Polygon`: bevelled boxes (`chamfer`), circles (`circle`) and arrows (`arrow_poly`).
 
 # In[4]:
 
@@ -96,9 +107,14 @@ def chamfer(x, y, w, h, c=0.1):
     )
 
 
-def poly(ax, verts, fc="none", ec=INK, lw=LW, z=3, **kw):
+def circle(cx, cy, r, n=64):
+    t = np.linspace(0, 2 * np.pi, n, endpoint=False)
+    return np.c_[cx + r * np.cos(t), cy + r * np.sin(t)]
+
+
+def poly(ax, verts, fc="none", ec=INK, lw=LW, z=3, closed=True, **kw):
     p = Polygon(
-        verts, closed=True, fc=fc, ec=ec, lw=lw, zorder=z, joinstyle="miter", **kw
+        verts, closed=closed, fc=fc, ec=ec, lw=lw, zorder=z, joinstyle="miter", **kw
     )
     ax.add_patch(p)
     return p
@@ -126,21 +142,20 @@ def arrow(ax, p0, p1, color=INK, z=8, **kw):
     poly(ax, arrow_poly(p0, p1, **kw), fc=color, ec="none", z=z)
 
 
-def elbow_arrow(ax, pts, color=INK, w=0.1, z=8):
-    pts = [np.asarray(p, float) for p in pts]
-    for k, (a, b) in enumerate(zip(pts[:-2], pts[1:-1])):
-        u = (b - a) / np.linalg.norm(b - a)
-        n = np.array([-u[1], u[0]])
-        a2 = a - (u * w / 2 if k else 0)
-        b2 = b + u * w / 2
-        poly(
-            ax,
-            [a2 + n * w / 2, b2 + n * w / 2, b2 - n * w / 2, a2 - n * w / 2],
-            fc=color,
-            ec="none",
-            z=z,
-        )
-    arrow(ax, pts[-2], pts[-1], color, z=z, w=w)
+def bar(ax, p0, p1, w=0.08, color=INK, z=8):
+    """Straight polygon segment, extended by w/2 at both ends so joints close cleanly."""
+    p0, p1 = np.asarray(p0, float), np.asarray(p1, float)
+    u = (p1 - p0) / np.linalg.norm(p1 - p0)
+    n = np.array([-u[1], u[0]]) * w / 2
+    a, b = p0 - u * w / 2, p1 + u * w / 2
+    poly(ax, [a + n, b + n, b - n, a - n], fc=color, ec="none", z=z)
+
+
+def connector(ax, pts, w=0.08, hw=0.24, hl=0.18, color=INK, z=8):
+    """Multi-segment polygon arrow through the points in `pts`."""
+    for a, b in zip(pts[:-2], pts[1:-1]):
+        bar(ax, a, b, w, color, z)
+    arrow(ax, pts[-2], pts[-1], color, z, w=w, hw=hw, hl=hl)
 
 
 def text(
@@ -171,7 +186,7 @@ def text(
 
 
 # ## Organoid geometry
-# One organoid is generated here and reused in every panel so the imaging and segmentation views match:
+# One organoid is generated here and reused in the imaging and segmentation panels so they match:
 # a wobbly outline (`BLOB`), cell centres (`SEEDS`), Voronoi cell polygons (`CELLS`) and irregular nuclei (`NUCLEI`).
 # Label colours are sampled from the colourblind-safe **cividis** colormap.
 
@@ -352,66 +367,66 @@ def channel_drawer(img):
 
 
 # ## Icons
-# Outline-style icons for the organoid and imaging panels, plus `mini_organoid` for the growth sequence
-# (single cell → cluster → organoid), each built from Voronoi cells clipped to a round polygon.
+# Outline-style icons for the patient, sample tube, plate, drug and microscope, plus `dissociation`:
+# a piece of tumor tissue (Voronoi cells clipped to a jagged polygon) broken up into single cells.
 
 # In[9]:
 
 
 def person(ax, cx, cy):
-    t = np.linspace(0, 2 * np.pi, 40, endpoint=False)
-    poly(ax, np.c_[cx + 0.24 * np.cos(t), cy + 0.68 + 0.24 * np.sin(t)], fc=LIGHT)
+    poly(ax, circle(cx, cy + 0.68, 0.24, 40), fc=LIGHT)
     poly(ax, chamfer(cx - 0.34, cy - 0.38, 0.68, 0.78, 0.18), fc=LIGHT)
 
 
-def tube(ax, cx, cy):
+def tube(ax, cx, cy, s=1.0, liquid="#b9bec7"):
+    P = lambda pts: [(cx + s * dx, cy + s * dy) for dx, dy in pts]
     poly(
         ax,
-        [
-            (cx - 0.16, cy + 0.4),
-            (cx + 0.16, cy + 0.4),
-            (cx + 0.16, cy - 0.15),
-            (cx, cy - 0.52),
-            (cx - 0.16, cy - 0.15),
-        ],
+        P([(-0.16, 0.4), (0.16, 0.4), (0.16, -0.15), (0, -0.52), (-0.16, -0.15)]),
         fc="white",
     )
     poly(
         ax,
-        [
-            (cx - 0.16, cy - 0.02),
-            (cx + 0.16, cy - 0.02),
-            (cx + 0.16, cy - 0.15),
-            (cx, cy - 0.52),
-            (cx - 0.16, cy - 0.15),
-        ],
-        fc="#b9bec7",
+        P([(-0.16, -0.02), (0.16, -0.02), (0.16, -0.15), (0, -0.52), (-0.16, -0.15)]),
+        fc=liquid,
         ec="none",
         z=3.2,
     )
-    poly(ax, chamfer(cx - 0.21, cy + 0.4, 0.42, 0.14, 0.03), fc=LIGHT, z=3.3)
+    poly(
+        ax,
+        chamfer(cx - 0.21 * s, cy + 0.4 * s, 0.42 * s, 0.14 * s, 0.03 * s),
+        fc=LIGHT,
+        z=3.3,
+    )
 
 
-def plate(ax, x, y, w, h):
+def plate(ax, x, y, w, h, highlight=None):
+    """96-well plate shaded by dose; optionally rings one well (row, col) and returns its centre and radius."""
     poly(ax, chamfer(x, y, w, h, 0.12), fc="white")
-    cmap = LinearSegmentedColormap.from_list("dose", ["#ffffff", "#5b6b82"])
+    cmap = LinearSegmentedColormap.from_list("dose", ["#ffffff", SLATE])
     dx, dy = (w - 0.3) / 12, (h - 0.25) / 8
+    r = min(dx, dy) * 0.4
+    centre = lambda i, j: (x + 0.15 + dx * (j + 0.5), y + 0.12 + dy * (i + 0.5))
     for i in range(8):
         for j in range(12):
             ax.add_patch(
                 RegularPolygon(
-                    (x + 0.15 + dx * (j + 0.5), y + 0.12 + dy * (i + 0.5)),
+                    centre(i, j),
                     24,
-                    radius=min(dx, dy) * 0.4,
+                    radius=r,
                     fc=cmap(j / 11),
                     ec=INK,
                     lw=0.3,
                     zorder=4,
                 )
             )
+    if highlight is not None:
+        c = centre(*highlight)
+        poly(ax, circle(*c, r * 1.6, 32), ec=INK, lw=0.9, z=4.5)
+        return c, r * 1.6
 
 
-def pill(ax, cx, cy, length=0.9, r=0.19, angle=40):
+def pill(ax, cx, cy, length=0.9, r=0.19, angle=40, z=3):
     t = np.linspace(-np.pi / 2, np.pi / 2, 16)
     half = length / 2 - r
     right = np.c_[half + r * np.cos(t), r * np.sin(t)]
@@ -419,8 +434,8 @@ def pill(ax, cx, cy, length=0.9, r=0.19, angle=40):
     a = np.deg2rad(angle)
     R = np.array([[np.cos(a), -np.sin(a)], [np.sin(a), np.cos(a)]])
     rot = lambda v: v @ R.T + [cx, cy]
-    poly(ax, rot(np.vstack([[0, -r], right, [0, r]])), fc="#5b6b82")
-    poly(ax, rot(np.vstack([[0, r], left, [0, -r]])), fc="white")
+    poly(ax, rot(np.vstack([[0, -r], right, [0, r]])), fc=SLATE, z=z)
+    poly(ax, rot(np.vstack([[0, r], left, [0, -r]])), fc="white", z=z)
 
 
 def microscope(ax, x, y):
@@ -471,50 +486,197 @@ def microscope(ax, x, y):
     )  # objective
 
 
-def mini_organoid(ax, cx, cy, r, n_cells, rng_local):
-    """Small organoid icon: Voronoi cells clipped to a round polygon, with nuclei."""
-    t = np.linspace(0, 2 * np.pi, 48, endpoint=False)
-    wob = 1 + 0.05 * np.sin(3 * t + cx) if n_cells > 1 else 1
-    outline = np.c_[cx + r * wob * np.cos(t), cy + r * wob * np.sin(t)]
-    if n_cells == 1:
-        seeds = np.array([[cx, cy]])
-    else:
-        seeds, min_d = [], r * 1.1 / np.sqrt(n_cells)
-        for _ in range(20000):
-            if len(seeds) == n_cells:
-                break
-            p = rng_local.uniform(-0.8 * r, 0.8 * r, 2)
-            if np.hypot(*p) < 0.8 * r and all(
-                np.hypot(*(p - q)) > min_d for q in seeds
-            ):
-                seeds.append(p)
-        seeds = np.array(seeds) + [cx, cy]
+def tissue_chunk(ax, cx, cy, r, n_cells, rng_local, jag=0.16):
+    """Piece of tissue: Voronoi cells clipped to a jagged outline, one nucleus per cell."""
+    k = 13
+    t = np.linspace(0, 2 * np.pi, k, endpoint=False)
+    rr = r * (1 + jag * rng_local.uniform(-1, 1, k))
+    outline = np.c_[cx + rr * np.cos(t), cy + rr * np.sin(t)]
+    seeds, min_d = [], r * 1.1 / np.sqrt(n_cells)
+    for _ in range(20000):
+        if len(seeds) == n_cells:
+            break
+        p = rng_local.uniform(-0.8 * r, 0.8 * r, 2)
+        if np.hypot(*p) < 0.75 * r and all(np.hypot(*(p - q)) > min_d for q in seeds):
+            seeds.append(p)
+    seeds = np.array(seeds) + [cx, cy]
     clip = poly(ax, outline, fc="none", ec="none", z=4)
     far = np.array(
         [[cx - 50, cy - 50], [cx + 50, cy - 50], [cx + 50, cy + 50], [cx - 50, cy + 50]]
     )
     vor = Voronoi(np.vstack([seeds, far]))
-    for i, s in enumerate(seeds):
+    nr = r * 0.42 / np.sqrt(n_cells)
+    for i, sd in enumerate(seeds):
         v = vor.vertices[vor.regions[vor.point_region[i]]]
         c = v.mean(axis=0)
         v = v[np.argsort(np.arctan2(v[:, 1] - c[1], v[:, 0] - c[0]))]
         p = poly(ax, v, fc="#dfe3e8", ec=GREY, lw=0.3, z=4)
         p.set_clip_path(clip)
-        nr = r * 0.3 if n_cells == 1 else r * 0.42 / np.sqrt(n_cells)
+        poly(ax, circle(*sd, nr, 12), fc=SLATE, ec="none", z=4.2)
+    poly(ax, outline, fc="none", ec=INK, lw=0.6, z=4.3)
+
+
+def single_cell(ax, cx, cy, r=0.06):
+    poly(ax, circle(cx, cy, r, 16), fc="#dfe3e8", ec=INK, lw=0.4, z=4)
+    poly(ax, circle(cx, cy, r * 0.45, 12), fc=SLATE, ec="none", z=4.2)
+
+
+def dissociation(ax, x, cy, seed=3):
+    """Tumor tissue -> enzymatic/mechanical dissociation -> single-cell suspension."""
+    rl = np.random.default_rng(seed)
+    tissue_chunk(ax, x + 0.3, cy, 0.3, 10, rl)
+    arrow(ax, (x + 0.68, cy), (x + 0.98, cy), w=0.05, hw=0.15, hl=0.11)
+    for dx, dy in [
+        (0.15, 0.2),
+        (0.38, 0.27),
+        (0.1, -0.05),
+        (0.33, 0.02),
+        (0.55, 0.12),
+        (0.2, -0.27),
+        (0.47, -0.2),
+    ]:
+        single_cell(ax, x + 1.02 + dx, cy + dy)
+
+
+# ## Culture format and assay timeline
+# Cells are seeded in a ring of Matrigel around the rim of each well, which leaves the centre clear for imaging.
+#
+# * `well_top` draws one well from above at a given stage of the assay:
+#   0 = single cells seeded in the Matrigel ring, 1 = organoids forming, 2 = drug added to the medium,
+#   3 = drug washed out; organoids fixed and stained for Cell Painting.
+# * `well_side` draws the cross-section (Matrigel in the corners where the wall meets the floor).
+# * `well_zoom` magnifies the highlighted plate well into a top + side view, joined by a polygon "spotlight".
+# * `assay_timeline` places the four stages along a timeline arrow. Edit `STAGES` to change days or wording.
+
+# In[10]:
+
+
+RING_IN, RING_OUT = 0.55, 0.9  # Matrigel ring, as a fraction of the well radius
+
+STAGES = [
+    ("Day 0", "Seeding in\nMatrigel"),
+    ("Days 1–3", "Organoid\nformation"),
+    ("Days 4–5", "Drug\ntreatment"),
+    ("Day 6", "Cell\nPainting"),
+]
+
+
+def organoid_blob(ax, cx, cy, r, rng_local, z=4.4):
+    t = np.linspace(0, 2 * np.pi, 9, endpoint=False) + rng_local.uniform(0, 1)
+    rr = r * (1 + rng_local.normal(0, 0.12, len(t)))
+    poly(
+        ax,
+        np.c_[cx + rr * np.cos(t), cy + rr * np.sin(t)],
+        fc=SLATE,
+        ec="white",
+        lw=0.25,
+        z=z,
+    )
+
+
+def well_top(ax, cx, cy, r, stage, seed=11):
+    rl = np.random.default_rng(seed)
+    n = 14
+    ang = rl.uniform(0, 2 * np.pi, n)
+    rad = rl.uniform(RING_IN + 0.07, RING_OUT - 0.07, n)
+    medium = DRUG if stage == 2 else MEDIUM
+    poly(ax, circle(cx, cy, r), fc=medium, ec=INK, lw=0.6, z=4)
+    poly(ax, circle(cx, cy, r * RING_OUT), fc=MATRIGEL, ec="none", z=4.1)
+    poly(ax, circle(cx, cy, r * RING_IN), fc=medium, ec=GREY, lw=0.3, z=4.2)
+    size = r * (0.045, 0.075, 0.095, 0.095)[stage]
+    for a, d in zip(ang, rad):
+        px, py = cx + d * r * np.cos(a), cy + d * r * np.sin(a)
+        if stage == 0:
+            poly(ax, circle(px, py, size, 10), fc=SLATE, ec="none", z=4.4)
+        elif stage == 3:  # stained organoids: dark outline, light core
+            poly(ax, circle(px, py, size * 1.05, 12), fc="white", ec=INK, lw=0.5, z=4.4)
+            poly(ax, circle(px, py, size * 0.45, 10), fc=SLATE, ec="none", z=4.5)
+        else:
+            organoid_blob(ax, px, py, size, rl)
+
+
+def well_side(ax, x, y, w, h, seed=5):
+    rl = np.random.default_rng(seed)
+    poly(
+        ax,
+        [(x, y), (x + w, y), (x + w, y + 0.78 * h), (x, y + 0.78 * h)],
+        fc=MEDIUM,
+        ec="none",
+        z=4,
+    )
+    a, b = 0.3 * w, 0.5 * h
+    t = np.linspace(0, np.pi / 2, 20)
+    left = np.vstack([[x, y], np.c_[x + a * np.cos(t), y + b * np.sin(t)]])
+    right = left.copy()
+    right[:, 0] = 2 * x + w - right[:, 0]
+    for wedge in (left, right):
+        poly(ax, wedge, fc=MATRIGEL, ec=GREY, lw=0.3, z=4.1)
+    for side in (0, 1):
+        for _ in range(4):
+            u, th = rl.uniform(0.2, 0.7), rl.uniform(0.15, 1.4)
+            px = x + a * u * np.cos(th)
+            px = 2 * x + w - px if side else px
+            poly(
+                ax,
+                circle(px, y + b * u * np.sin(th), 0.018, 10),
+                fc=SLATE,
+                ec="none",
+                z=4.4,
+            )
+    poly(
+        ax,
+        [(x, y + h), (x, y), (x + w, y), (x + w, y + h)],
+        ec=INK,
+        lw=0.9,
+        z=4.5,
+        closed=False,
+    )
+
+
+def well_zoom(ax, src, src_r, bx, by, bw, bh):
+    wx, wy = src
+    poly(
+        ax,
+        [(wx, wy + src_r), (bx, by + bh), (bx, by), (wx, wy - src_r)],
+        fc="#dfe2e7",
+        ec="none",
+        alpha=0.7,
+        z=2.6,
+    )
+    poly(ax, chamfer(bx, by, bw, bh, 0.06), fc="white", ec=INK, lw=0.6, z=3)
+    well_top(ax, bx + 0.55, by + 0.8, 0.42, stage=0)
+    well_side(ax, bx + bw - 0.92, by + 0.52, 0.74, 0.56)
+    text(ax, bx + 0.55, by + 0.17, "top", FS_SMALL, GREY)
+    text(ax, bx + bw - 0.55, by + 0.17, "side", FS_SMALL, GREY)
+
+
+def assay_timeline(ax, x0, x1, y_line, xs, cy, r):
+    arrow(ax, (x0, y_line), (x1, y_line), w=0.07, hw=0.24, hl=0.2)
+    for k, (cx, (day, desc)) in enumerate(zip(xs, STAGES)):
+        well_top(ax, cx, cy, r, stage=k)
         poly(
             ax,
-            np.c_[s[0] + nr * np.cos(t[::4]), s[1] + nr * np.sin(t[::4])],
-            fc="#5b6b82",
+            [
+                (cx - 0.012, cy - r),
+                (cx + 0.012, cy - r),
+                (cx + 0.012, y_line),
+                (cx - 0.012, y_line),
+            ],
+            fc=INK,
             ec="none",
-            z=4.2,
+            z=3,
         )
-    poly(ax, outline, fc="none", ec=INK, lw=0.6, z=4.3)
+        poly(ax, circle(cx, y_line, 0.065, 20), fc="white", ec=INK, lw=0.7, z=8.5)
+        text(ax, cx, cy + r + 0.17, day, weight="bold")
+        text(ax, cx, y_line - 0.14, desc, FS_SMALL + 0.5, va="top")
+        if k == 2:
+            pill(ax, cx + r + 0.28, cy + 0.22, length=0.42, r=0.085, z=4.6)
 
 
 # ## Panel frame
 # A light-grey header bar above a dashed body.
 
-# In[10]:
+# In[11]:
 
 
 def panel(ax, x, y_body, w, h_body, h_head, title):
@@ -525,80 +687,90 @@ def panel(ax, x, y_body, w, h_body, h_head, title):
 
 
 # ## Build the figure
-# All positions are in drawing units. The three panels are laid out top-left, top-right and bottom,
-# joined by arrows in workflow order (organoids → imaging → segmentation).
+# All positions are in drawing units. Top row: patient-derived organoids → culture & drug treatment.
+# Bottom row: imaging → segmentation.
 
-# In[11]:
+# In[ ]:
 
 
 def build_figure():
     fig = plt.figure(figsize=(FIG_W_IN, FIG_W_IN * H / W), facecolor="white")
     ax = fig.add_axes([0, 0, 1, 1])
+    HEAD = 0.85
+    small = dict(w=0.08, hw=0.24, hl=0.18)
+    TOP_Y, TOP_H = 4.1, 2.75  # top-row panel body
+    YC = 5.65  # icon centre line, top row
+    LY, LKW = 4.75, dict(size=FS_SMALL + 0.5, va="top")
 
-    # a — Patient-derived organoids
-    panel(ax, 0.3, 4.5, 7.45, 2.6, 0.95, "Patient-derived organoids (PDOs)")
-    arrow_kw = dict(w=0.08, hw=0.24, hl=0.18)
-    LY, LKW = 5.2, dict(size=FS_SMALL, va="top")
-    person(ax, 0.82, 5.85)
-    text(ax, 0.82, LY, "Patients", **LKW)
-    arrow(ax, (1.24, 5.95), (1.54, 5.95), **arrow_kw)
-    tube(ax, 1.85, 5.95)
-    text(ax, 1.85, LY, "Tumour\nsamples", **LKW)
-    arrow(ax, (2.15, 5.95), (2.49, 5.95), **arrow_kw)
-    # organoid growth: single cell -> cluster -> organoid
-    rng_g = np.random.default_rng(3)
-    mini_organoid(ax, 2.72, 5.95, 0.11, 1, rng_g)
-    mini_organoid(ax, 3.14, 5.95, 0.2, 4, rng_g)
-    mini_organoid(ax, 3.77, 5.95, 0.33, 12, rng_g)
-    text(ax, 3.27, LY, "Organoid\ngrowth", **LKW)
-    arrow(ax, (4.2, 5.95), (4.54, 5.95), **arrow_kw)
-    plate(ax, 4.65, 5.3, 1.75, 1.3)
-    text(ax, 5.52, LY, "96-well\nplate", **LKW)
-    text(ax, 6.6, 5.98, "+", 12)
-    pill(ax, 7.17, 5.98, length=0.72, r=0.15)
-    text(ax, 7.17, LY, "Drugs", **LKW)
-
-    # b — Cell Painting imaging
+    # ---- Patient-derived organoids ----
     panel(
         ax,
-        3.0,
+        0.3,
+        TOP_Y,
+        19.4,
+        TOP_H,
+        HEAD,
+        "Patient tumor resection, organoid culture & drug treatment",
+    )
+    person(ax, 1.0, YC - 0.27)
+    text(ax, 1.0, LY, "Patient", **LKW)
+    # arrow splits into one branch per tumor type, then merges again
+    split, merge = (1.7, YC), (3.25, YC)
+    bar(ax, (1.45, YC), split, w=0.06)
+    tube_x, tube_ys = 2.5, (YC + 0.62, YC, YC - 0.62)
+    for ty, liquid in zip(tube_ys, ("#8f99a8", "#b9bec7", "#dde0e5")):
+        arrow(ax, split, (tube_x - 0.15, ty), w=0.06, hw=0.17, hl=0.13)
+        tube(ax, tube_x, ty, s=0.45, liquid=liquid)
+        bar(ax, (tube_x + 0.15, ty), merge, w=0.06)
+    arrow(ax, merge, (3.55, YC), **small)
+    text(ax, tube_x, LY, "Tumor types", **LKW)
+    dissociation(ax, 3.65, YC)
+    text(ax, 4.5, LY, "Dissociation", **LKW)
+    arrow(ax, (5.4, YC), (5.75, YC), **small)
+    src, src_r = plate(ax, 5.9, 5.0, 1.6, 1.25, highlight=(5, 9))
+    text(ax, 6.7, LY, "Plating\n(96-well plate)", **LKW)
+    well_zoom(ax, src, src_r, 7.9, 4.95, 2.0, 1.35)
+    text(ax, 8.9, LY, "Matrigel ring", **LKW)
+    assay_timeline(ax, 10.1, 19.45, 5.27, xs=[11.15, 13.3, 15.45, 17.6], cy=6.0, r=0.4)
+
+    # ---- Cell Painting imaging ----
+    # culture panel (far right) -> down, back along the gap between rows -> microscope
+    connector(ax, [(19.3, 4.08), (19.3, 3.85), (0.3, 3.85), (0.3, 1.55), (1.0, 1.55)])
+    panel(
+        ax,
+        0.6,
         0.15,
-        12.0,
-        2.65,
-        0.95,
+        8.95,
+        2.45,
+        HEAD,
         "Cell Painting + high-content volumetric imaging",
     )
-    microscope(ax, 3.3, 0.5)
-    arrow(ax, (4.72, 1.45), (5.35, 1.45))
-    poly(ax, chamfer(5.55, 0.3, 9.25, 2.35, 0.08), ec=INK, lw=0.6, z=2.5)
+    microscope(ax, 0.85, 0.42)
+    arrow(ax, (2.15, 1.3), (2.55, 1.3), **small)
+    poly(ax, chamfer(2.7, 0.3, 6.65, 2.15, 0.08), ec=INK, lw=0.6, z=2.5)
     imgs = channel_images()
     for i, ch in enumerate(["AGP", "DNA", "ER", "Mito"]):
-        fx = 6.25 + i * 2.3
-        stack(ax, fx, 0.45, 1.35, channel_drawer(imgs[ch]))
-        text(ax, fx + 0.53, 2.37, ch)
+        fx = 3.12 + i * 1.6
+        stack(ax, fx, 0.45, 1.2, channel_drawer(imgs[ch]))
+        text(ax, fx + 0.46, 2.22, ch)
 
-    # c — Segmentation
-    panel(ax, 8.0, 4.5, 11.7, 2.6, 0.95, "2.5D/3D segmentation")
+    # ---- Segmentation ----
+    arrow(ax, (9.6, 1.3), (10.1, 1.3), **small)
+    panel(ax, 10.15, 0.15, 9.55, 2.45, HEAD, "2.5D/3D segmentation")
     cards = [
-        ("2.5D segmentation", "Nuclei", seg_nuclei),
-        ("3D seeded watershed", "Cell", seg_cells),
-        ("3D image maths", "Cytoplasm", lambda *a: seg_cells(*a, cyto=True)),
-        ("Thresholding", "Organoid", seg_organoid),
+        ("2.5D\nsegmentation", "Nuclei", seg_nuclei),
+        ("3D seeded\nwatershed", "Cell", seg_cells),
+        ("3D image\nmaths", "Cytoplasm", lambda *a: seg_cells(*a, cyto=True)),
+        ("2.5D\nsegmentation", "Organoid", seg_organoid),
     ]
     for i, (method, target, fn) in enumerate(cards):
-        x0, w0 = 8.15 + i * 2.88, 2.72
+        x0, w0 = 10.25 + i * 2.35, 2.35
         cx = x0 + w0 / 2
-        text(ax, cx, 6.83, target, weight="bold")
-        text(ax, cx, 6.55, method, FS_SMALL, GREY)
-        stack(ax, cx - 0.46, 4.68, 1.25, fn)
+        text(ax, cx, 2.45, target, weight="bold")
+        text(ax, cx, 2.3, method, FS_SMALL, GREY, va="top")
+        stack(ax, cx - 0.42, 0.32, 1.1, fn)
         if i < 3:
-            ax.plot(
-                [x0 + w0 + 0.08] * 2, [4.7, 6.95], color="#c9cdd3", lw=0.5, zorder=1
-            )
-
-    # flow
-    arrow(ax, (4.5, 4.45), (4.5, 3.98), w=0.11, hw=0.32)
-    elbow_arrow(ax, [(15.05, 1.45), (17.9, 1.45), (17.9, 4.42)], w=0.11)
+            ax.plot([x0 + w0] * 2, [0.3, 2.5], color="#c9cdd3", lw=0.5, zorder=1)
 
     ax.set_xlim(0, W)
     ax.set_ylim(0, H)
@@ -607,7 +779,7 @@ def build_figure():
     return fig
 
 
-# In[12]:
+# In[13]:
 
 
 fig = build_figure()
@@ -617,7 +789,8 @@ plt.show()
 # ## Export
 # Vector PDF and SVG keep text editable (Illustrator / Inkscape); the PNG is 600 dpi.
 
-# In[13]:
+# In[14]:
 
 
-fig.savefig(output_figure_file_path, facecolor="white", dpi=600)
+for ext, kw in [("png", {"dpi": 600})]:
+    fig.savefig(f"{output_figure_file_path}.{ext}", facecolor="white", **kw)

@@ -72,7 +72,7 @@ PYCYTOMINER_LOGO = LOGO_DIR / "pycytominer_icon.png"
 # ## Drawing helpers
 # The main axes uses data units (0–128 × 0–124, equal aspect), so every box, arrow and inset is placed in those coordinates.
 
-# In[3]:
+# In[ ]:
 
 
 def rounded_box(ax, x, y, w, h, fc, title=None, subtitle=None, lw=2.5, fontsize=32):
@@ -171,7 +171,7 @@ def block_arrow(ax, p0, p1, width=2.4, head_width=6.0, head_len=4.0):
     ax.add_patch(Polygon(pts, closed=True, fc="black", ec="black", zorder=4))
 
 
-def mini_arrow(ax, x0, x1, y, label=None, fontsize=13):
+def mini_arrow(ax, x0, x1, y, label=None, fontsize=16):
     ax.annotate(
         "",
         xy=(x1, y),
@@ -195,10 +195,10 @@ def mini_arrow(ax, x0, x1, y, label=None, fontsize=13):
 # ### Panels, insets and heatmaps
 # `panel()` draws the white card with a caption and returns the area left for content; `inset()` places a small axes inside it.
 
-# In[4]:
+# In[ ]:
 
 
-def panel(ax, x, y, w, h, caption, fontsize=15):
+def panel(ax, x, y, w, h, caption, fontsize=19):
     """White card behind an illustration; returns the content rectangle.
 
     The caption is wrapped to the panel width, and the bottom margin grows
@@ -243,7 +243,7 @@ def inset(ax, x, y, w, h):
     return a
 
 
-def heatmap(a, data, ylabels=None, ylabel_colors=None):
+def heatmap(a, data, ylabels=None, ylabel_colors=None, ylabel_fontsize=15):
     cmap = plt.get_cmap(CMAP).copy()
     cmap.set_bad("white")
     a.imshow(
@@ -254,7 +254,7 @@ def heatmap(a, data, ylabels=None, ylabel_colors=None):
         a.set_yticks([])
     else:
         a.set_yticks(range(len(ylabels)))
-        a.set_yticklabels(ylabels, fontsize=12)
+        a.set_yticklabels(ylabels, fontsize=ylabel_fontsize)
         a.tick_params(axis="y", length=0, pad=1.5)
         if ylabel_colors:
             for t, c in zip(a.get_yticklabels(), ylabel_colors):
@@ -265,7 +265,7 @@ def heatmap(a, data, ylabels=None, ylabel_colors=None):
 
 
 def tiny_title(a, text):
-    a.set_title(text, fontsize=13, pad=2, color="#333333")
+    a.set_title(text, fontsize=17, pad=2, color="#333333")
 
 
 # ## Step illustrations
@@ -273,13 +273,66 @@ def tiny_title(a, text):
 # ### Quality control
 # Scatter of single cells (nucleus area vs DNA intensity). Cells outside the dashed gate, such as merged nuclei or debris, are flagged with a red ✕ and dropped.
 
-# In[5]:
+# In[ ]:
 
 
 def draw_qc(ax, rect):
-    """Scatter of single cells; outliers outside the QC gate are dropped."""
+    """Scatter of single cells; outliers outside the QC gate are dropped.
+    A row of whole-organoid icons makes the same point at the organoid
+    level: coSMicQC also flags and drops abnormally small/large organoids,
+    not just individual outlier cells."""
     x, y, w, h = rect
-    a = inset(ax, x + 1.5, y + 1.8, w - 2.5, h - 3.0)
+
+    # ---- organoid-level outliers (size-based) --------------------------- #
+    # Reserved band at the top of the panel for the caption + icon row;
+    # anchored with `va="top"`/explicit radii so nothing crosses the
+    # panel's own border above it.
+    row_h = 5.5
+    cap_y = y + h - 0.2
+    org_y = y + h - 4.3
+    sizes = [0.52, 0.58, 0.5, 1.1, 0.56, 0.6, 0.38, 0.54]
+    org_drop = [False, False, False, True, False, False, True, False]
+    org_xs = np.linspace(x + 2.3, x + w - 2.3, len(sizes))
+    for ox, s, dropped in zip(org_xs, sizes, org_drop):
+        r = 0.95 * s
+        ax.add_patch(
+            Circle(
+                (ox, org_y),
+                r,
+                fc=COLORS["drop"] if dropped else "#E7E9ED",
+                ec=COLORS["drop"] if dropped else "#777777",
+                lw=1.2,
+                alpha=0.9 if dropped else 1.0,
+                zorder=5,
+            )
+        )
+        if dropped:
+            # scale the X mark with the circle so it reads cleanly on the
+            # undersized organoid too, not just the oversized one
+            ax.plot(
+                ox,
+                org_y,
+                marker="x",
+                color="white",
+                ms=max(3.5, r * 7.5),
+                mew=1.6,
+                zorder=6,
+            )
+    ax.text(
+        x + w / 2,
+        cap_y,
+        "organoids: size/shape outliers dropped too",
+        ha="center",
+        va="top",
+        fontsize=13,
+        style="italic",
+        color=COLORS["text_soft"],
+    )
+
+    # ---- single-cell scatter --------------------------------------------- #
+    # Extra left padding (2.6 instead of 1.5) keeps the rotated "DNA
+    # intensity" ylabel clear of the panel's own border.
+    a = inset(ax, x + 2.6, y + 1.0, w - 3.6, h - row_h - 0.7)
 
     n = 260
     area = RNG.normal(0, 1, n)
@@ -302,7 +355,7 @@ def draw_qc(ax, rect):
         hi - 0.1,
         lo + 0.15,
         "keep",
-        fontsize=13,
+        fontsize=16,
         ha="right",
         va="bottom",
         color=COLORS["keep"],
@@ -312,7 +365,7 @@ def draw_qc(ax, rect):
         4.6,
         2.4,
         "drop",
-        fontsize=13,
+        fontsize=16,
         ha="right",
         va="top",
         color=COLORS["drop"],
@@ -322,8 +375,8 @@ def draw_qc(ax, rect):
     a.set_ylim(-5, 5.2)
     a.set_xticks([])
     a.set_yticks([])
-    a.set_xlabel("nucleus area", fontsize=13, labelpad=1)
-    a.set_ylabel("DNA intensity", fontsize=13, labelpad=1)
+    a.set_xlabel("nucleus area", fontsize=16, labelpad=1)
+    a.set_ylabel("DNA intensity", fontsize=16, labelpad=4)
     for s in a.spines.values():
         s.set_linewidth(0.6)
 
@@ -331,7 +384,7 @@ def draw_qc(ax, rect):
 # ### Normalize
 # Raw features live on very different scales; after `normalize()` (e.g. `standardize` or `mad_robustize` against negative controls) they are centred at 0 with unit spread.
 
-# In[6]:
+# In[ ]:
 
 
 def draw_normalize(ax, rect):
@@ -365,13 +418,13 @@ def draw_normalize(ax, rect):
             a.spines[s].set_visible(False)
         a.spines["bottom"].set_linewidth(0.6)
 
-    mini_arrow(ax, x + w * 0.42, x + w * 0.58, y + h * 0.45, "(x − μ) / σ", fontsize=11)
+    mini_arrow(ax, x + w * 0.42, x + w * 0.58, y + h * 0.45, "(x − μ) / σ", fontsize=14)
 
 
 # ### Feature selection
 # A cells × features matrix. `feature_select()` removes a near-constant column (variance), one of a highly correlated pair, and a mostly-missing column (NA); the remaining features carry on.
 
-# In[7]:
+# In[ ]:
 
 
 def draw_feature_select(ax, rect):
@@ -406,7 +459,7 @@ def draw_feature_select(ax, rect):
             why,
             ha="center",
             va="bottom",
-            fontsize=12,
+            fontsize=15,
             color=COLORS["drop"],
             clip_on=False,
         )
@@ -424,7 +477,7 @@ def draw_feature_select(ax, rect):
 # ### Aggregate: well median
 # Each well contains many single cells; `aggregate()` takes the per-feature median to give one profile per well.
 
-# In[8]:
+# In[ ]:
 
 
 def draw_well_median(ax, rect):
@@ -433,7 +486,10 @@ def draw_well_median(ax, rect):
     wells = ["A01", "A02", "A03"]
     well_means = RNG.normal(0, 1.3, (len(wells), N_FEAT))
 
-    left = inset(ax, x, y, w * 0.52, h - 0.4)
+    # Same top clearance as the "well profiles" inset below (h - 2.2, not
+    # h - 0.4), so its tiny_title doesn't collide with the panel's own
+    # border above it.
+    left = inset(ax, x, y, w * 0.52, h - 2.2)
     left.set_xlim(-0.2, 7.0)
     left.set_ylim(-1.75, 1.25)
     left.set_aspect("equal", adjustable="box")
@@ -459,7 +515,7 @@ def draw_well_median(ax, rect):
             lw=0.2,
             ec="#333333",
         )
-        left.text(cx, -1.25, name, ha="center", va="top", fontsize=13)
+        left.text(cx, -1.25, name, ha="center", va="top", fontsize=16)
     tiny_title(left, "single cells per well")
 
     right = inset(ax, x + w * 0.78, y + 0.8, w * 0.22, h - 2.2)
@@ -473,7 +529,7 @@ def draw_well_median(ax, rect):
 # Replicate wells treated with the same drug are combined (median across replicates) into one consensus profile per drug.
 # This reuses `aggregate()` with a different `strata`/groupby (drug instead of well) rather than a separate `consensus()` call.
 
-# In[9]:
+# In[ ]:
 
 
 def draw_consensus(ax, rect):
@@ -492,8 +548,10 @@ def draw_consensus(ax, rect):
         label_colors += [col] * n_rep
     rows = np.vstack(rows)
 
-    left = inset(ax, x + 7.0, y + 2.1, w * 0.32, h - 3.3)
-    heatmap(left, rows, ylabels=labels, ylabel_colors=label_colors)
+    left = inset(ax, x + 7.0, y + 1.3, w * 0.32, h - 2.6)
+    # 6 rows need a much smaller label font than the 2-3 row heatmaps
+    # elsewhere, or the labels overlap each other vertically.
+    heatmap(left, rows, ylabels=labels, ylabel_colors=label_colors, ylabel_fontsize=9)
     left.axhline(n_rep - 0.5, color="black", lw=1.2)
     tiny_title(left, "replicate wells")
 
@@ -537,7 +595,7 @@ def box_logo(ax, box_x, box_y, box_w, box_h, logo_path, half=3.2, margin=1.2):
 # ## Assemble the figure
 # Positions of every frame, box and panel are set here. Edit the `steps` list to rename steps or change captions.
 
-# In[11]:
+# In[ ]:
 
 
 def build_figure():
@@ -555,8 +613,7 @@ def build_figure():
     BOX_X, BOX_W = 10, 54  # step boxes (wide enough for large titles)
     PAN_X, PAN_W = 67, 68  # illustration panels
 
-    # ---- top frame: QC -------------------------------------------------- #
-    dotted_frame(ax, 1.5, 96, 135, 26.5)
+    # ---- top: QC ---------------------------------------------------------#
     qc_box_h = 11
     rounded_box(
         ax, BOX_X, 103, BOX_W, qc_box_h, COLORS["qc"], "Quality Control", fontsize=34
@@ -577,8 +634,7 @@ def build_figure():
         ax, (arrow_x, 102.5), (arrow_x, 89.5), width=3.0, head_width=7.5, head_len=4.5
     )
 
-    # ---- bottom frame: pycytominer steps -------------------------------- #
-    dotted_frame(ax, 1.5, 1.5, 135, 91)
+    # ---- bottom: pycytominer steps ---------------------------------------#
     step_h, gap = 20.5, 1.5
     steps = [
         (
