@@ -44,4 +44,5 @@ uv run "$module_dir/scripts/6.calculate_well_dmso_correlation.py"
 uvr run "$module_dir/scripts/7.plot_well_dmso_correlation.r"
 uv run "$module_dir/scripts/8.calculate_mek_signatures.py"
 uvr run "$module_dir/scripts/9.plot_mek_signatures.r"
+uvr run "$module_dir/scripts/10.viability_vs_morphology.r"
 
