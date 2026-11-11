@@ -68,41 +68,45 @@ placeholder_panel <- function(label) {
     )
 }
 
-panel_a <- embed_png_panel(panel_a_path)
+# Panel A carries a larger top-left margin so the bold "A" tag sits in
+# whitespace instead of overlapping the image's own italic "i" sublabel.
+tight_margin <- margin(2, 2, 2, 2)
+panel_a <- embed_png_panel(panel_a_path) & theme(
+    plot.margin = margin(t = 34, l = 34, r = 2, b = 2)
+)
 panel_b <- placeholder_panel(
     "Panel B: Z-sampling influence on feature measurements\n(placeholder)"
-)
-panel_c <- embed_png_panel(panel_c_path)
-panel_d <- embed_png_panel(panel_d_path)
+) + theme(plot.margin = tight_margin)
+panel_c <- embed_png_panel(panel_c_path) & theme(plot.margin = tight_margin)
+panel_d <- embed_png_panel(panel_d_path) & theme(plot.margin = tight_margin)
 
 # Trimmed aspect ratios (width / height) of each embedded PNG. Panel B is a
-# placeholder, so its aspect is chosen (wide, short) rather than measured.
+# placeholder; its aspect is matched to Panel A so the two top-row cells read
+# as a balanced pair.
 aspect_a <- 1.847  # featurization_figure.png
-aspect_b <- 3.000  # placeholder
+aspect_b <- 1.847  # placeholder (matched to Panel A)
 aspect_c <- 1.171  # sc_fs_entropy.png
 aspect_d <- 0.987  # sc_fs_entropy_2D_vs_3D.png
 
-# Panel A spans row 1 on its own, the placeholder is row 2, and C and D share
-# row 3 (widths set to their aspects so neither is stretched). Each row's
-# height is inversely proportional to its panels' combined aspect ratio, so at
-# a shared figure width every row renders at exactly the height its panels need.
-row1 <- panel_a
-row2 <- panel_b
-row3 <- panel_c + panel_d + plot_layout(widths = c(aspect_c, aspect_d))
+# 2x2 layout: A and B share row 1, C and D share row 2. Within each row the
+# panel widths are set to their aspect ratios so neither is stretched, and each
+# row's height is inversely proportional to its panels' combined aspect ratio,
+# so at a shared figure width every panel renders at its native shape.
+row1 <- panel_a + panel_b + plot_layout(widths = c(aspect_a, aspect_b))
+row2 <- panel_c + panel_d + plot_layout(widths = c(aspect_c, aspect_d))
 
-row1_height <- 1 / aspect_a
-row2_height <- 1 / aspect_b
-row3_height <- 1 / (aspect_c + aspect_d)
+row1_height <- 1 / (aspect_a + aspect_b)
+row2_height <- 1 / (aspect_c + aspect_d)
 
 fig_width <- 20
-fig_height <- fig_width * (row1_height + row2_height + row3_height)
+fig_height <- fig_width * (row1_height + row2_height)
 dims <- set_plot_size(fig_width, fig_height)
 
 assembled_figure <- (
-    (row1 / row2 / row3)
-    + plot_layout(heights = c(row1_height, row2_height, row3_height))
+    (row1 / row2)
+    + plot_layout(heights = c(row1_height, row2_height))
     + plot_annotation(tag_levels = "A")
-    & theme(plot.margin = margin(2, 2, 2, 2))
+    & theme(plot.tag = element_text(face = "bold", size = 18))
 )
 
 save_ggplot(
