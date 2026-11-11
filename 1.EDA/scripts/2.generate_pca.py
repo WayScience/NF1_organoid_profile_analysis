@@ -12,7 +12,7 @@
 #
 # The notebook saves PCA coordinates (`PC0`...`PC{N_COMPONENTS-1}`) plus per-component explained variance ratios as parquet files under `1.EDA/results/pca/`.
 
-# In[1]:
+# In[ ]:
 
 
 import pathlib
@@ -62,7 +62,7 @@ all_patients_2D_and_3D_dirs = [
 ]
 
 
-# In[4]:
+# In[ ]:
 
 
 # generate a dict for each path

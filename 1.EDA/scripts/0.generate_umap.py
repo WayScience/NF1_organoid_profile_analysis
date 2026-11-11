@@ -11,7 +11,7 @@
 #
 # The notebook saves results (`UMAP1` coordinate, `UMAP2` coordinate, plus the original metadata columns) as parquet files under `1.EDA/results/umap/`.
 
-# In[1]:
+# In[ ]:
 
 
 import pathlib
@@ -91,7 +91,7 @@ pooled_profile_paths = {
 pathlib.Path(f"{root_dir}/1.EDA/results/umap").mkdir(parents=True, exist_ok=True)
 
 
-# In[3]:
+# In[ ]:
 
 
 for projection_key in pooled_profile_paths:
@@ -230,7 +230,7 @@ patient_specific_output_paths = {
 }
 
 
-# In[6]:
+# In[ ]:
 
 
 patient_specific_results = {

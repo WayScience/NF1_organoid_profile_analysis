@@ -1,9 +1,13 @@
-# %% [markdown]
+#!/usr/bin/env python
+# coding: utf-8
+
 # # Pearson correlations across profile types
 #
 # Correlate features across matched well aggregates, per patient/tumor and pooled.
 
-# %%
+# In[1]:
+
+
 import pathlib
 
 import numpy as np
@@ -12,7 +16,10 @@ from notebook_init_utils import init_notebook
 
 root_dir, in_notebook = init_notebook()
 
-# %%
+
+# In[2]:
+
+
 # Define the comparisons to run
 PROJECTIONS = ("max_projection",)
 
@@ -58,7 +65,13 @@ METADATA_2D_RENAME = {
     "Metadata_dose_unit": "Metadata_Experiment_Unit",
 }
 
-# %%
+
+# In[ ]:
+
+
+# In[3]:
+
+
 # Define input paths
 # 2D profiles (one sub-directory per projection)
 input_2d_dir = pathlib.Path(f"{root_dir}/data/profiles_2D/all_patients").resolve(
@@ -81,11 +94,11 @@ matching_summary_path = results_dir / "matching_summary.parquet"
 feature_summary_path = results_dir / "feature_cleanup_summary.parquet"
 
 
-# %% [markdown]
 # ## Clean profiles and match wells
 
+# In[4]:
 
-# %%
+
 def load_profile(path: pathlib.Path, dimension: str) -> tuple[pd.DataFrame, dict]:
     """
     Load a well-aggregated profile and apply the same feature filters used in
@@ -198,11 +211,11 @@ def match_profiles(
     return aligned_2d, aligned_3d, audit
 
 
-# %% [markdown]
 # ## Calculate Pearson correlations
 
+# In[5]:
 
-# %%
+
 def standardize(arr: np.ndarray) -> np.ndarray:
     """
     Perform standard scalar normalization on the input array.
@@ -248,7 +261,10 @@ def compute_and_save_correlation(
     features_2d_cols = list(features_2d.columns)
     features_3d_cols = list(features_3d.columns)
 
-    # Profiles were normalized at the single-cell level before aggregation, so re-standardize within this cohort's matched wells.
+    # Profiles were normalized at the single-cell level before aggregation, so
+    # re-standardize within this cohort's matched wells. This does not change
+    # Pearson r (it is shift/scale invariant); it only puts the 2D and 3D
+    # features on a common scale before the combined .corr() call.
     arr_2d_z = standardize(features_2d.values)
     arr_3d_z = standardize(features_3d.values)
 
@@ -278,11 +294,13 @@ def compute_and_save_correlation(
     }
 
 
-# %% [markdown]
 # ## Save correlations and matching summaries
 
-# %%
-# Profiles are loaded fresh for each comparison; each file's cleanup summary is recorded once, the first time it is loaded
+# In[6]:
+
+
+# Profiles are loaded fresh for each comparison; each file's cleanup summary
+# is recorded once, the first time it is loaded
 summarized_paths = set()
 feature_summaries = []
 matching_summaries = []
@@ -379,7 +397,10 @@ for projection in PROJECTIONS:
                 flush=True,
             )
 
-# %%
+
+# In[7]:
+
+
 # Save the manifest notebook 2 plots from, plus the cleanup and matching audits
 correlation_manifest = pd.DataFrame(manifest)
 
