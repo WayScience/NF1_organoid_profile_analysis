@@ -20,6 +20,7 @@ hrbrthemes = "*"
 magick = "*"
 patchwork = "*"
 pheatmap = "*"
+platetools = "*"
 tidyr = "*"
 tm = "*"
 
