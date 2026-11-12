@@ -10,7 +10,7 @@
 # | **i. Volumetric acquisition:** fine vs. coarse z-step (Δz) | **iii. Handcrafted featurization:** 3D volume or 2D image → caliper + compass (engineered measurements) → **f**<sub>hc</sub> |
 # | **ii. 3D → 2D sampling:** max over all z, max of *k* central slices, middle z-slice | **iv. Deep learning featurization (ViT):** unmasked or masked input (DL only) → patch tokens + [CLS] → Transformer encoder → **f**<sub>dl</sub> |
 #
-# Colors and text sizes are set in the first code cell. The column widths and row heights are set at the top of `make_figure`. Running the last cell saves PNG (300 dpi), PDF and SVG versions.
+# The micrographs in the schematic are simulated. Colors and text sizes are set in the first code cell. The column widths, row heights and per-panel crop windows are set at the top of `make_figure`. Running the last cell saves PNG (300 dpi), PDF and SVG versions.
 
 # ## 1 · Style, palette and text sizes
 
@@ -34,10 +34,11 @@ from notebook_init_utils.notebook_init_utils import init_notebook
 
 root_dir, in_notebook = init_notebook()
 
-output_figure_file_path = pathlib.Path(
+
+save_fig_path = pathlib.Path(
     f"{root_dir}/figures/assembled_figure_2/figures/featurization_figure.png"
 )
-output_figure_file_path.parent.mkdir(parents=True, exist_ok=True)
+save_fig_path.parent.mkdir(parents=True, exist_ok=True)
 
 
 # In[2]:
@@ -728,7 +729,7 @@ def panel_sampling(ax, y_top):
     ]
     sx, nx, tx = 1.9, 5.6, 8.0
     for i, (label, dzs, op, bright) in enumerate(rows):
-        y = y_top - i * 3.0
+        y = y_top - i * 2.6
         draw_sphere(ax, (sx, y), r)
         if dzs is None:  # whole volume contributes
             for k, dz in enumerate(np.linspace(-r * 0.85, r * 0.85, 7)):
@@ -943,7 +944,7 @@ def panel_deep(ax, y, title_dy=3.3):
 
 
 # ## 8 · Compose (2 × 2) and export
-# Each panel gets its own axes at the same drawing scale, so the shapes stay consistent across panels.
+# Each panel gets its own axes at the same drawing scale. Each axes' y-limits crop that panel tightly to its content.
 
 # In[9]:
 
@@ -951,8 +952,8 @@ def panel_deep(ax, y, title_dy=3.3):
 def make_figure(save_prefix="featurization_overview", unit_in=0.62):
     """2 x 2 layout. Left column: acquisition (i) over 3D->2D sampling (ii).
     Right column: handcrafted (iii) over deep learning (iv). Every panel is drawn at the same scale."""
-    LW, RW, CG = 15.0, 13.0, 0.9  # left/right column widths, column gap (drawing units)
-    R1, R2, RG = 5.4, 10.1, 0.5  # top/bottom row heights, row gap
+    LW, RW, CG = 14.9, 12.0, 0.7  # left/right column widths, column gap (drawing units)
+    R1, R2, RG = 5.0, 8.4, 0.35  # top/bottom row heights, row gap
     W, H = LW + CG + RW, R2 + RG + R1
     fig = plt.figure(figsize=(W * unit_in, H * unit_in))
 
@@ -965,10 +966,10 @@ def make_figure(save_prefix="featurization_overview", unit_in=0.62):
         return a
 
     top = R2 + RG
-    panel_acquisition(panel_ax(0, top, LW, (24.3, 29.7)), y=27.0)
-    panel_sampling(panel_ax(0, 0, LW, (13.7, 23.8)), y_top=21.5)
-    panel_handcrafted(panel_ax(LW + CG, top, RW, (8.85, 14.25)), y=10.9, title_dy=2.8)
-    panel_deep(panel_ax(LW + CG, 0, RW, (-0.65, 9.45)), y=4.8, title_dy=4.1)
+    panel_acquisition(panel_ax(0, top, LW, (24.5, 29.5)), y=27.0)
+    panel_sampling(panel_ax(0, 0, LW, (15.2, 23.6)), y_top=21.5)
+    panel_handcrafted(panel_ax(LW + CG, top, RW, (8.55, 13.55)), y=10.9, title_dy=2.3)
+    panel_deep(panel_ax(LW + CG, 0, RW, (0.95, 9.35)), y=4.8, title_dy=4.2)
     separator(fig, (LW + CG / 2) / W, 0.02, (LW + CG / 2) / W, 0.98)  # column divider
     separator(
         fig, 0.01, (R2 + RG / 2) / H, (LW - 0.2) / W, (R2 + RG / 2) / H
@@ -978,8 +979,8 @@ def make_figure(save_prefix="featurization_overview", unit_in=0.62):
     )  # row divider, right
     if save_prefix:
         fig.savefig(
-            f"{output_figure_file_path}",
-            dpi=600,
+            save_fig_path,
+            dpi=600 if save_fig_path.suffix == ".png" else None,
             bbox_inches="tight",
             facecolor="white",
         )
