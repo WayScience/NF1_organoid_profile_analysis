@@ -1,0 +1,3 @@
+# Cached multi-channel composites (regenerable from raw z-stacks); do not commit.
+*.png
+!.gitignore
