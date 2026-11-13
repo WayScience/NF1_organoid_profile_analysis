@@ -125,20 +125,84 @@ def generate_image_paths_from_combination_string(
 
 def make_multi_channel_image_array(image_path: pathlib.Path) -> np.ndarray:
     """
-    Given a path to a zstack image directory, return a 4D numpy array of shape (channels, z, y, x).
-    The channels are expected to be in the order: DAPI, GFP, RFP.
+    Given a path to a z-stack image directory, return a 3D numpy array of shape
+    (channels, y, x) built from the middle z-slice of each fluorescence channel
+    (sorted by filename, i.e. 405, 488, 555, 640). TRANS and segmentation-mask
+    tiffs are skipped. Intensities are returned as-is (uint16); microshow handles
+    per-channel display rescaling.
+
+    The middle slice (the focal plane) is used rather than a max-intensity
+    projection: a max-projection takes the brightest value per pixel across all
+    z-slices, which accumulates per-slice background noise and makes the composite
+    look grainy. The middle slice keeps the in-focus signal with a clean
+    background.
     """
     channel_image_paths = sorted(image_path.glob("*.tif*"))
     channel_images = []
     for channel_path in channel_image_paths:
-        if "TRANS" in channel_path.name:
+        name = channel_path.name
+        if "TRANS" in name or "mask" in name.lower():
             continue
         zstack_array = skimage.io.imread(channel_path)
-        # get the middle slice of the zstack for each channel
-        zstack_array = zstack_array[zstack_array.shape[0] // 2, :, :]
+        # middle slice (focal plane) of the z-stack for each channel
+        if zstack_array.ndim == 3:
+            zstack_array = zstack_array[zstack_array.shape[0] // 2, :, :]
         channel_images.append(zstack_array)
     multi_channel_array = np.stack(channel_images, axis=0)
     return multi_channel_array
+
+
+def create_and_save_single_image_panel(
+    image_array: np.ndarray,
+    image_label: str,
+    output_path: pathlib.Path | None = None,
+) -> pathlib.Path:
+    """
+    Given a 4D numpy array of shape (channels, z, y, x), create a single-panel image and save it to the specified output path.
+    The output image will be a 2D projection of the maximum intensity across the z-axis for each channel.
+
+    Parameters:
+    ----------
+    image_array : np.ndarray
+        A 4D numpy array representing the image (channels, z, y, x).
+    image_label : str
+        The label to display on the image panel.
+    output_path : pathlib.Path | None, optional
+        The path where the output image will be saved. If None, a default path will be used.
+
+    Returns:
+    -------
+    pathlib.Path
+        The path to the saved output image.
+    """
+    microim = microshow(
+        images=image_array[:, :, :],
+        fig_scaling=5,
+        cmaps=["pure_cyan", "pure_green", "pure_magenta", "pure_red"],
+        unit="um",
+        scalebar_size_in_units=10,
+        scalebar_unit_per_pix=0.1,
+        scalebar_font_size=10,
+        label_text=image_label,
+        label_color="white",
+        label_font_size=20,
+        label_location="upper right",
+    )
+
+    panel = Micropanel(rows=1, cols=1)
+    panel.add_element(pos=[0, 0], microim=microim)
+    if output_path is None:
+        # get the array and return it
+        return panel
+    else:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        panel.savefig(
+            output_path,
+            dpi=600,
+            bbox_inches="tight",
+            pad_inches=0.1,
+        )
+        return output_path
 
 
 def create_and_save_two_image_panel(
