@@ -50,7 +50,7 @@ from scipy.spatial import Voronoi
 root_dir, in_notebook = init_notebook()
 
 
-# In[ ]:
+# In[2]:
 
 
 output_figure_file_path = pathlib.Path(
@@ -763,7 +763,12 @@ FEATURE_TILES = {
     "Colocalization": (955, 1870, 0, 743),
     "Granularity": (1870, 3000, 0, 743),
     "Neighbors": (0, 955, 743, 1500),
-    "Intensity": (955, 1870, 743, 1500),
+    "Intensity": (
+        955,
+        1870,
+        710,
+        1467,
+    ),  # shifted up 33 px so content aligns with its row
     "Texture": (1870, 3000, 743, 1500),
 }
 FEATURE_TYPES = sorted(
@@ -1385,35 +1390,9 @@ def mini_arrow(ax, x0, x1, y, label=None, above=False):
 
 
 def draw_qc(ax, rect):
-    """Organoids: size outliers dropped (top row). Single cells: outliers outside the gate dropped."""
+    """Single cells: outliers outside the gate (coSMicQC) are dropped."""
     x, y, w, h = rect
-    band = h * 0.24
-    org_y = y + h - band / 2
-    sizes = [0.52, 0.58, 0.5, 1.1, 0.56, 0.6, 0.38, 0.54]
-    dropped = [False, False, False, True, False, False, True, False]
-    for ox, s, d in zip(
-        np.linspace(x + 0.25, x + w - 0.25, len(sizes)), sizes, dropped
-    ):
-        r = s * band * 0.42
-        poly(
-            ax,
-            circle(ox, org_y, r, 28),
-            fc=DROP_C if d else "#E7E9ED",
-            ec=DROP_C if d else "#777777",
-            lw=0.5,
-            z=6,
-        )
-        if d:
-            ax.plot(
-                ox,
-                org_y,
-                marker="x",
-                color="white",
-                ms=max(2.0, r * 30),
-                mew=0.8,
-                zorder=7,
-            )
-    a = inset(ax, x + 0.36, y + 0.2, w - 0.41, h - band - 0.3)
+    a = inset(ax, x + 0.36, y + 0.2, w - 0.41, h - 0.4)
     n = 260
     area = PROF_RNG.normal(0, 1, n)
     inten = 0.5 * area + PROF_RNG.normal(0, 0.85, n)
