@@ -275,7 +275,7 @@ load_feature_matrix <- function(input_path, patient_col, feature_parser, rename_
 }
 
 build_profile_heatmap <- function(mat, metadata, feature_annotations, feature_type_palette, cluster = TRUE,
-                                   title, legend_fontsize = 8, column_title_fontsize = 10) {
+                                   title, legend_fontsize = 8, column_title_fontsize = 10, narrow = FALSE) {
     # Build a single feature-by-sample profile Heatmap: rows are features,
     # columns are samples (mat comes in as samples x features from the
     # loaders -- transposed here). Column annotations (Treatment/Dose/
@@ -388,9 +388,20 @@ build_profile_heatmap <- function(mat, metadata, feature_annotations, feature_ty
         stats::dist(m)
     }
 
+    # Patient-specific pages have few samples (columns) but many features
+    # (rows); on the shared, wide page size that leaves each cell wide and
+    # short. When narrow = TRUE, pin the heatmap body to a narrow width
+    # (scaled to the sample count) so it renders as a narrow, tall strip
+    # with the body height left to auto-fill the fixed 10-inch page. The
+    # matrix orientation (features = rows, samples = columns) is unchanged,
+    # so these pages stay consistent with every other heatmap. All-patients
+    # pages (narrow = FALSE) keep the default auto width that fills the page.
+    body_width <- if (narrow) unit(max(4, min(n_samples, 40)) * 4, "mm") else NULL
+
     Heatmap(
         mat,
         name = "Value",
+        width = body_width,
         col = col_fun,
         na_col = "grey80",
         show_row_names = FALSE,
@@ -465,6 +476,10 @@ add_dose_label <- function(metadata) {
         missing, "None",
         paste0(metadata$Metadata_Experiment_Dose, metadata$Metadata_Experiment_Unit)
     )
+    # The only "1%" dose in the data is DMSO's vehicle control (verified:
+    # no other treatment uses a 1% dose) -- spell that out in the label so
+    # readers don't have to cross-reference it against the treatment track.
+    metadata$dose_label <- ifelse(metadata$dose_label == "1%", "1% (DMSO only)", metadata$dose_label)
     metadata
 }
 
@@ -550,11 +565,11 @@ plot_one_file <- function(input_path, patient_col, feature_parser, rename_map, f
 
         heatmaps[[paste0(key_prefix, "_", patient_id, "_clustered")]] <<- build_profile_heatmap(
             mat, metadata, feature_annotations, feature_type_palette, cluster = TRUE,
-            title = title_for(suffix, "Clustered")
+            title = title_for(suffix, "Clustered"), narrow = TRUE
         )
         heatmaps[[paste0(key_prefix, "_", patient_id, "_unclustered")]] <<- build_profile_heatmap(
             mat, metadata, feature_annotations, feature_type_palette, cluster = FALSE,
-            title = title_for(suffix, "Unclustered")
+            title = title_for(suffix, "Unclustered"), narrow = TRUE
         )
     }
 
