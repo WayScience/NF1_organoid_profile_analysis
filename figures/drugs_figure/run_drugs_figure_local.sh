@@ -14,5 +14,5 @@ conda deactivate
 deactivate 2>/dev/null
 
 uv run python "$git_root"/figures/drugs_figure/scripts/drugs_figure.py
-
+uv run python "$git_root"/figures/drugs_figure/scripts/chembl_target_cell.py
 uvr run "$git_root"/figures/drugs_figure/scripts/platemap_figure.r
