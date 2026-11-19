@@ -7,16 +7,6 @@ if [ -z "$git_root" ]; then
     exit 1
 fi
 
-patient_array_file_path="$git_root/data/patient_IDs.txt"
-# read the patient IDs from the file into an array
-if [[ -f "$patient_array_file_path" ]]; then
-    # shellcheck disable=SC2034
-    readarray -t patient_array < "$patient_array_file_path"
-else
-    echo "Error: File $patient_array_file_path does not exist."
-    exit 1
-fi
-
 uv run jupyter nbconvert --to=script --FilesWriter.build_directory="$git_root"/1.EDA/scripts/ "$git_root"/1.EDA/notebooks/*.ipynb
 
 # deactivate any existing conda environment
@@ -43,5 +33,5 @@ uv run python "$git_root"/1.EDA/scripts/13.calculate_neighbor_features.py
 uvr run "$git_root"/1.EDA/scripts/14.plot_neighbor_features.r
 uv run python "$git_root"/1.EDA/scripts/15.calculate_intensity_values.py
 uvr run "$git_root"/1.EDA/scripts/16.plot_intensity_facets.r
-uv run python "$git_root"/1.EDA/scripts/17.calculate_mAP_vs_positive_controls.py
-uvr run "$git_root"/1.EDA/scripts/18.plot_mAP_vs_positive_controls.r
+# uv run python "$git_root"/1.EDA/scripts/17.calculate_mAP_vs_positive_controls.py
+# uvr run "$git_root"/1.EDA/scripts/18.plot_mAP_vs_positive_controls.r

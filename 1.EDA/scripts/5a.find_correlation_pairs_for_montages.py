@@ -50,7 +50,7 @@ samples_df = pd.read_parquet(
 )
 
 # sc_norm/agg matches this notebook's previous default input
-# (3D_2.aggregated_profiles_sc_norm_sc_agg_profiles.parquet)
+# (3D_2.aggregated_profiles_sc_norm_agg_from_norm.parquet)
 normalization_variant = "sc_norm"
 profile_type = "agg"
 pairs_df = pairs_df.loc[

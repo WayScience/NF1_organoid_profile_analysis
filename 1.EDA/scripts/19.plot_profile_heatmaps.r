@@ -699,6 +699,9 @@ organoid_3d_variant_display_names <- c(
 )
 
 plot_2d_group("2D_sc", "sc", slice_display_names, "Single-Cell")
+
 plot_2d_group("2D_organoid", "organoid", slice_display_names, "Organoid")
+
 plot_3d_group("3D_sc", names(sc_3d_variant_display_names), sc_3d_variant_display_names, "Single-Cell")
+
 plot_3d_group("3D_organoid", names(organoid_3d_variant_display_names), organoid_3d_variant_display_names, "Organoid")

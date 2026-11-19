@@ -66,10 +66,10 @@ profile_pairs <- data.frame(
         path_2d_sc
     ),
     path_3d = c(
-        file.path(dir_3d_agg, "organoid_norm_sc_agg_profiles.parquet"),
-        file.path(dir_3d_agg, "sammed_organoid_norm_sc_agg_profiles.parquet"),
-        file.path(dir_3d_agg, "sc_norm_sc_agg_profiles.parquet"),
-        file.path(dir_3d_agg, "sammed_sc_norm_sc_agg_profiles.parquet"),
+        file.path(dir_3d_agg, "organoid_norm_agg_from_norm.parquet"),
+        file.path(dir_3d_agg, "sammed_organoid_norm_agg_from_norm.parquet"),
+        file.path(dir_3d_agg, "sc_norm_agg_from_norm.parquet"),
+        file.path(dir_3d_agg, "sammed_sc_norm_agg_from_norm.parquet"),
         file.path(dir_3d_agg, "sammed_nucleocentric_norm_sc_agg_profiles.parquet"),
         file.path(dir_3d_agg, "nucleocentric_morphem_norm_sc_agg_profiles.parquet")
     ),

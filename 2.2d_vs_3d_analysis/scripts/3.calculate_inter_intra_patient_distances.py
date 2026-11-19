@@ -43,22 +43,22 @@ profile_types = [
     (
         "3D Organoid - Handcrafted",
         "3D_organoid_handcrafted",
-        dir_3d_agg / "organoid_norm_sc_agg_profiles.parquet",
+        dir_3d_agg / "organoid_norm_agg_from_norm.parquet",
     ),
     (
         "3D Organoid - DL (SAM-Med3D)",
         "3D_organoid_sammed",
-        dir_3d_agg / "sammed_organoid_norm_sc_agg_profiles.parquet",
+        dir_3d_agg / "sammed_organoid_norm_agg_from_norm.parquet",
     ),
     (
         "3D Single-cell - Handcrafted",
         "3D_sc_handcrafted",
-        dir_3d_agg / "sc_norm_sc_agg_profiles.parquet",
+        dir_3d_agg / "sc_norm_agg_from_norm.parquet",
     ),
     (
         "3D Single-cell - DL (SAM-Med3D)",
         "3D_sc_sammed",
-        dir_3d_agg / "sammed_sc_norm_sc_agg_profiles.parquet",
+        dir_3d_agg / "sammed_sc_norm_agg_from_norm.parquet",
     ),
     (
         "3D Single-cell - Nucleocentric DL (SAM-Med3D)",
