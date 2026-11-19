@@ -23,7 +23,6 @@ from pycytominer.cyto_utils import infer_cp_features
 
 root_dir, in_notebook = init_notebook()
 
-
 # In[2]:
 
 
@@ -90,7 +89,6 @@ pooled_profile_paths = {
 # Create output directory
 pathlib.Path(f"{root_dir}/1.EDA/results/umap").mkdir(parents=True, exist_ok=True)
 
-
 # In[ ]:
 
 
@@ -140,7 +138,6 @@ for projection_key in pooled_profile_paths:
         # Save the UMAP results
         umap_results_df.to_parquet(profile_paths["output"], index=False)
 
-
 # ## Individual umaps
 
 # In[4]:
@@ -151,7 +148,6 @@ patients = pd.read_csv(
     header=None,
     names=["patient"],
 )["patient"].to_list()
-
 
 # In[ ]:
 
@@ -228,7 +224,6 @@ patient_specific_output_paths = {
         / "patient_specific_2D_midslice_scagg_umap.parquet",
     },
 }
-
 
 # In[ ]:
 

@@ -35,13 +35,11 @@ if in_notebook:
 else:
     import tqdm
 
-
 # In[2]:
 
 
 REFERENCE_COL = "reference_index"
 PATIENT_COL = "Metadata_patient"
-
 
 # In[3]:
 

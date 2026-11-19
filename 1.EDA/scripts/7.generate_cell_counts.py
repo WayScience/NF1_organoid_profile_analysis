@@ -18,7 +18,6 @@ if in_notebook:
 else:
     import tqdm
 
-
 # In[2]:
 
 
@@ -38,13 +37,11 @@ normalized_2D_profile_paths = [
 ]
 normalized_profiles = normalized_profiles + normalized_2D_profile_paths
 
-
 # In[3]:
 
 
 results_dir = pathlib.Path(f"{root_dir}/1.EDA/results/cell_counts/").resolve()
 results_dir.mkdir(parents=True, exist_ok=True)
-
 
 # In[4]:
 
@@ -126,7 +123,6 @@ fov_lookup = pd.concat(fov_lookup_frames)
 
 fov_lookup.reset_index(drop=True, inplace=True)
 
-
 # In[5]:
 
 
@@ -159,7 +155,6 @@ for profile_type, entry in dict_of_count_dfs.items():
     else:
         merged_df = pd.concat([merged_df, entry["df"]], ignore_index=True)
 
-
 # In[6]:
 
 
@@ -175,12 +170,10 @@ merged_df["Metadata_unique_treatment"] = (
 )
 merged_df.to_parquet(results_dir / "cell_counts.parquet", index=False)
 
-
 # In[7]:
 
 
 merged_df.head()
-
 
 # ## From the organoid profiles get the number of cells per organoid
 # ## From the single-cell profiles get the number of cells without a parent organoid
@@ -209,7 +202,6 @@ metadata_cols_to_group_on = [
 organoid_cell_count_col = ["Metadata_Object_OrganoidSingleCellCount"]
 single_cell_parent_organoid_col = ["Metadata_Object_ParentOrganoid"]
 
-
 # In[9]:
 
 
@@ -227,7 +219,6 @@ organoid_cell_counts.reset_index(inplace=True)
 organoid_cell_counts["total_cells_normalized_per_FOV"] = (
     organoid_cell_counts["total_cells"] / organoid_cell_counts["total_number_of_FOVs"]
 )
-
 
 # In[10]:
 
@@ -267,7 +258,6 @@ single_cell_counts[
     single_cell_counts["n_cells_with_parent_organoid"]
     + single_cell_counts["n_cells_without_parent_organoid"]
 )
-
 
 # In[11]:
 

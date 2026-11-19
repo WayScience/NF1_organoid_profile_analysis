@@ -7,15 +7,6 @@ if [ -z "$git_root" ]; then
     exit 1
 fi
 
-patient_array_file_path="$git_root/data/patient_IDs.txt"
-# read the patient IDs from the file into an array
-if [[ -f "$patient_array_file_path" ]]; then
-    # shellcheck disable=SC2034
-    readarray -t patient_array < "$patient_array_file_path"
-else
-    echo "Error: File $patient_array_file_path does not exist."
-    exit 1
-fi
 
 jupyter nbconvert --to=script --FilesWriter.build_directory="$git_root"/1.EDA/scripts/ "$git_root"/1.EDA/notebooks/*.ipynb
 

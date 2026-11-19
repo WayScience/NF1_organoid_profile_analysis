@@ -39,14 +39,12 @@ from scipy.spatial.distance import pdist, squareform
 
 warnings.filterwarnings("ignore")
 
-
 # In[2]:
 
 
 from notebook_init_utils import init_notebook
 
 root_dir, in_notebook = init_notebook()
-
 
 # In[3]:
 
@@ -69,7 +67,6 @@ NUCLEI_NEIGHBOR_COLS_2D = [
     "Nuclei_Neighbors_AngleBetweenNeighbors_Adjacent",
 ]
 ORGANOID_NEIGHBOR_COLS_2D = ["Organoid_Neighbors_NumberOfNeighbors_Adjacent"]
-
 
 # In[4]:
 
@@ -119,7 +116,6 @@ nuc_2d = pd.concat(nuc_rows, ignore_index=True) if nuc_rows else pd.DataFrame()
 org_2d = pd.concat(org_rows, ignore_index=True) if org_rows else pd.DataFrame()
 nuc_2d.to_parquet(results_dir / "nuclei_neighbors_2D.parquet", index=False)
 org_2d.to_parquet(results_dir / "organoid_neighbors_2D.parquet", index=False)
-
 
 # In[5]:
 
@@ -175,7 +171,6 @@ for patient in patients_3d:
 sc_3d = pd.concat(sc3_rows, ignore_index=True) if sc3_rows else pd.DataFrame()
 sc_3d.to_parquet(results_dir / "nuclei_neighbors_3D.parquet", index=False)
 
-
 # In[6]:
 
 
@@ -202,7 +197,6 @@ for patient in patients_3d:
 
 org_3d = pd.concat(org3_rows, ignore_index=True) if org3_rows else pd.DataFrame()
 org_3d.to_parquet(results_dir / "organoid_volume_3D.parquet", index=False)
-
 
 # In[7]:
 
@@ -310,7 +304,6 @@ org_nbr_3d = (
     pd.concat(org_nbr3_rows, ignore_index=True) if org_nbr3_rows else pd.DataFrame()
 )
 org_nbr_3d.to_parquet(results_dir / "organoid_neighbors_3D.parquet", index=False)
-
 
 # In[8]:
 

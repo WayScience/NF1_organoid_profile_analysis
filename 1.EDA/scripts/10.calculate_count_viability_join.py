@@ -15,7 +15,6 @@ import pandas as pd
 
 warnings.filterwarnings("ignore")
 
-
 # In[2]:
 
 
@@ -84,7 +83,6 @@ dropped_patients.to_parquet(
 print("Dropped from profiles (no viability/platemap coverage):", dropped_from_profiles)
 print("In platemaps but not in profiles:", dropped_from_platemaps)
 print(f"Wrote {results_dir / 'count_viability_dropped_patients.parquet'}")
-
 
 # In[3]:
 

@@ -72,7 +72,6 @@ if in_notebook:
 else:
     import tqdm
 
-
 # ## Parameters
 
 # In[2]:
@@ -80,7 +79,6 @@ else:
 
 correlation_dir = pathlib.Path(f"{root_dir}/1.EDA/results/correlation/").resolve()
 correlation_dir.mkdir(parents=True, exist_ok=True)
-
 
 # ## Shared preprocessing
 
@@ -189,7 +187,6 @@ samples_df.to_parquet(samples_path, index=False)
 print(f"Saved {pairs_path.name}: {len(pairs_df)} rows")
 print(f"Saved {samples_path.name}: {len(samples_df)} rows")
 
-
 # ## Group A -- 3D sc_agg / sc_consensus, replicate/treatment-level
 #
 # 4 normalization variants x {agg, consensus} = 8 matrices (excludes
@@ -253,7 +250,6 @@ samples_df_3d.to_parquet(samples_path_3d, index=False)
 
 print(f"Saved {pairs_path_3d.name}: {len(pairs_df_3d)} rows")
 print(f"Saved {samples_path_3d.name}: {len(samples_df_3d)} rows")
-
 
 # ## Group B -- 3D sc_fs, single-cell, per patient
 #

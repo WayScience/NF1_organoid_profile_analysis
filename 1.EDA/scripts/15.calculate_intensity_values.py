@@ -20,7 +20,6 @@ results_dir.mkdir(parents=True, exist_ok=True)
 KEEP_STATS = ["MeanIntensity", "MedianIntensity"]
 COMPARTMENT_LABELS = {"Organoid": "whole_organoid", "Cell": "cell", "Nuclei": "nucleus"}
 
-
 # In[2]:
 
 

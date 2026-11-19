@@ -31,7 +31,6 @@ if in_notebook:
 else:
     import tqdm
 
-
 # In[2]:
 
 
@@ -73,7 +72,6 @@ image_base_dir = bandicoot_check(
 image_base_dir = image_base_dir / "data/"
 montage_figure_base_dir.mkdir(parents=True, exist_ok=True)
 
-
 # In[3]:
 
 
@@ -81,7 +79,6 @@ montage_figure_base_dir.mkdir(parents=True, exist_ok=True)
 # wide correlation-matrix format this notebook used to read -- no melt
 # needed, just rename to the group1/group2 convention montage_utils expects
 df_long = pairs_df.rename(columns={"sample_i": "group1", "sample_j": "group2"})
-
 
 # In[4]:
 
@@ -110,7 +107,6 @@ df_long_with_meta = df_long_with_meta.merge(
     right_on="sample_index",
     how="left",
 ).drop(columns=["sample_index"])
-
 
 # In[5]:
 
@@ -171,7 +167,6 @@ df_long_with_meta_and_viability = df_long_with_meta_and_viability.merge(
     how="left",
 )
 
-
 # In[6]:
 
 
@@ -181,14 +176,12 @@ df_long_with_meta_and_viability["group1_group2_viability_diff"] = abs(
     - df_long_with_meta_and_viability["group2_min_max_viability"]
 )
 
-
 # In[7]:
 
 
 df_long_with_meta_and_viability = filter_out_diagonal_correlations(
     df_long_with_meta_and_viability
 )
-
 
 # In[8]:
 
@@ -197,7 +190,6 @@ high_correlation_cutoff = 0.8
 low_correlation_cutoff = -0.3
 similar_viability_difference_cutoff = 0.1
 dissimilar_viability_difference_cutoff = 0.9
-
 
 # In[9]:
 
@@ -240,7 +232,6 @@ df_long_with_meta_and_viability = filter_out_self_correlations(
     df_long_with_meta_and_viability
 )
 
-
 # In[10]:
 
 
@@ -250,7 +241,6 @@ df_long_with_meta_and_viability.to_parquet(
         f"{root_dir}/1.EDA/results/correlation/3D_sc_correlation_pairs_{normalization_variant}_{profile_type}_with_meta_and_viability.parquet"
     )
 )
-
 
 # In[11]:
 
@@ -273,7 +263,6 @@ threshold_definitions_dict = {  # bottom right
         "viability_diff_threshold": dissimilar_viability_difference_cutoff,
     },
 }
-
 
 # In[12]:
 
@@ -355,7 +344,6 @@ print(
     f"Low Correlation & Dissimilar Viability: {len(low_correlation_dissimilar_viability_df)} pairs"
 )
 
-
 # In[13]:
 
 
@@ -392,7 +380,6 @@ for _df in (
         )
     )
 
-
 # In[14]:
 
 
@@ -416,7 +403,6 @@ dict_of_randomly_selected_images = {
         min(number_of_choices, len(low_correlation_similar_viability_list)),
     ),
 }
-
 
 # In[15]:
 

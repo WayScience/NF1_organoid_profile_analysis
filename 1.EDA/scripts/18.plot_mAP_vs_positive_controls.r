@@ -82,7 +82,7 @@ plot_theme <- theme(
 # for every profile type
 load_mAP <- function(slug, reference_group) {
     arrow::read_parquet(
-        file.path(results_dir, paste0(slug, "_inter_patient_mAP_vs_", reference_group, ".parquet"))
+        file.path(results_dir, paste0(slug, "_inter_patient_mAP_ref_group_", reference_group, ".parquet"))
     ) %>%
         select(Metadata_treatment_dose, mean_average_precision)
 }
@@ -147,7 +147,7 @@ mAP_plot
 heatmap_mAP <- list()
 for (i in seq_len(nrow(profile_types))) {
     slug <- profile_types$slug[i]
-    file_pattern <- paste0("^", slug, "_inter_patient_mAP_vs_(.*)\\.parquet$")
+    file_pattern <- paste0("^", slug, "_inter_patient_mAP_ref_group_(.*)\\.parquet$")
     reference_groups <- sub(file_pattern, "\\1", list.files(results_dir, pattern = file_pattern))
 
     for (reference_group in reference_groups) {

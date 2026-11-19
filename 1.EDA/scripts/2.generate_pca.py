@@ -29,14 +29,12 @@ if in_notebook:
 else:
     import tqdm
 
-
 # In[2]:
 
 
 # PCA parameters
 N_COMPONENTS = 50
 OVERWRITE_EXISTING = False
-
 
 # In[3]:
 
@@ -60,7 +58,6 @@ all_patients_2D_and_3D_dirs = [
     for x in all_patients_2D_and_3D_dirs
     if any(substr in x.name for substr in ["fs", "agg", "consensus"])
 ]
-
 
 # In[ ]:
 
