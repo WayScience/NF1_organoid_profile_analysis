@@ -105,7 +105,7 @@ all_patient_tumor_ids <- unique(all_patient_tumor_ids[all_patient_tumor_ids != "
 master_patient_palette <- setNames(tab20_palette_for_patients[1:length(all_patient_tumor_ids)], all_patient_tumor_ids)
 
 patient_color_palette <- master_patient_palette[
-  names(master_patient_palette) %in% unique(max_projection_2D_sc_umap_results$Metadata_Biology_PatientTumor)
+  names(master_patient_palette) %in% unique(sc_3D_umap_results$Metadata_Biology_PatientTumor)
 ]
 
 # Tumor type comes from the 3D profiles' Metadata_Biology_TumorType column.

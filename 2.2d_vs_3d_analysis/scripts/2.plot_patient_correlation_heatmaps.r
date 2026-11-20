@@ -1,16 +1,4 @@
-# %% [markdown]
-# # Plot profile correlations
-#
-# Plot defined correlations from notebook 1 in a single PDF.
-
-# %%
 # Load libraries
-if (!requireNamespace("BiocManager", quietly = TRUE))
-    install.packages("BiocManager")
-
-if (!requireNamespace("ComplexHeatmap", quietly = TRUE)) {
-    BiocManager::install("ComplexHeatmap")
-}
 suppressPackageStartupMessages({
     library(arrow)
     library(ComplexHeatmap)
@@ -18,7 +6,6 @@ suppressPackageStartupMessages({
     library(grid)
 })
 
-# %%
 # Get the current working directory and find Git root
 find_git_root <- function() {
     # Get current working directory
@@ -43,6 +30,12 @@ find_git_root <- function() {
 
 # Find the Git root directory
 root_dir <- find_git_root()
+source(file.path(root_dir, "utils/r_result_cache.r"))
+
+# Caching: skip work whose outputs were built from unchanged inputs and code
+CACHE_STEP <- "2.plot_patient_correlation_heatmaps"
+CODE_PATH <- file.path(root_dir, "2.2d_vs_3d_analysis", "scripts", "2.plot_patient_correlation_heatmaps.r")
+results_root <- file.path(root_dir, "2.2d_vs_3d_analysis", "results")
 
 results_dir <- file.path(root_dir, "2.2d_vs_3d_analysis", "results", "correlation")
 manifest_path <- file.path(results_dir, "correlation_manifest.parquet")
@@ -65,7 +58,6 @@ projection_labels <- c(
     middle_n_slice = "Middle N slices"
 )
 
-# %%
 build_correlation_matrix <- function(corr_long_df) {
     #' Pivot long-form correlations into a 2D x 3D matrix.
     #'
@@ -157,7 +149,6 @@ cluster_correlation_matrix <- function(corr_matrix) {
     hclust(correlation_distances(corr_matrix), method = "ward.D2")
 }
 
-# %%
 plot_correlation_heatmap <- function(corr_long_df, comparison) {
     #' Draw a clustered heatmap of Pearson correlations between 2D and 3D
     #' features onto the open graphics device.
@@ -185,8 +176,10 @@ plot_correlation_heatmap <- function(corr_long_df, comparison) {
     projection_label <- unname(projection_labels[comparison$projection])
     if (is.na(projection_label)) projection_label <- comparison$projection
 
-    # MorphEM is a 2D embedding, so that comparison is 2D vs. 2D
-    is_morphem <- comparison$profile_type == "sc_nucleocentric_morphem"
+    # MorphEM is a 2D embedding, so that comparison is 2D vs. 2D. The
+    # profile_type carries an aggregation-mode suffix (_from_fs / _from_norm),
+    # so match on the prefix rather than the full string.
+    is_morphem <- startsWith(comparison$profile_type, "sc_nucleocentric_morphem")
     comparison_title <- if (is_morphem) {
         "2D handcrafted vs. 2D nucleocentric (MorphEM/CHAMMI-75)"
     } else {
@@ -263,7 +256,6 @@ plot_correlation_heatmap <- function(corr_long_df, comparison) {
     invisible(TRUE)
 }
 
-# %%
 # Plot comparisons from the correlation manifest
 manifest <- as.data.frame(arrow::read_parquet(manifest_path))
 
@@ -280,52 +272,66 @@ if (!is.null(cohorts_to_plot)) {
     manifest <- manifest[manifest$cohort %in% cohorts_to_plot, , drop = FALSE]
 }
 
-cat(sprintf("Plotting %d comparisons\n", nrow(manifest)))
+correlation_files <- file.path(results_dir, manifest$correlation_file)
+cache_inputs <- c(manifest_path, correlation_files)
+if (result_cache_is_fresh(CACHE_STEP, results_root, CODE_PATH, pdf_path, cache_inputs)) {
+    cat("Using cached result:", basename(pdf_path), "\n")
+} else {
+    cat(sprintf("Plotting %d comparisons\n", nrow(manifest)))
 
-# Each comparison is rendered to its own single-page PDF, then merged into one
-# file with Ghostscript -- Jupyter's R kernel collapses every page onto the
-# first if drawn into one long-lived pdf() device instead.
-page_dir <- file.path(tempdir(), "correlation_heatmap_pages")
-dir.create(page_dir, showWarnings = FALSE)
-page_paths <- character(0)
+    # Merge every page into one combined PDF, in manifest order
+    # Each comparison page is cached on its own, so a page is only redrawn when
+    # its correlation file or this script changes
+    page_dir <- file.path(results_dir, "_page_cache")
+    dir.create(page_dir, recursive = TRUE, showWarnings = FALSE)
+    page_paths <- character(0)
 
-for (i in seq_len(nrow(manifest))) {
-    comparison <- manifest[i, , drop = FALSE]
+    for (i in seq_len(nrow(manifest))) {
+        comparison <- manifest[i, , drop = FALSE]
+        corr_file <- file.path(results_dir, comparison$correlation_file)
 
-    corr_data <- as.data.frame(arrow::read_parquet(
-        file.path(results_dir, comparison$correlation_file)
-    ))
+        page_name <- gsub("[/\\\\]", "__", sub("\\.parquet$", ".pdf", comparison$correlation_file))
+        page_path <- file.path(page_dir, page_name)
 
-    page_path <- file.path(page_dir, sprintf("page_%03d.pdf", i))
-    pdf(page_path, width = 11, height = 8.5, onefile = FALSE)
-    plotted <- plot_correlation_heatmap(corr_data, comparison)
-    dev.off()
+        if (result_cache_is_fresh(CACHE_STEP, results_root, CODE_PATH, page_path, corr_file)) {
+            cat("Using cached page:", page_name, "\n")
+            page_paths <- c(page_paths, page_path)
+            next
+        }
 
-    if (isTRUE(plotted)) {
-        page_paths <- c(page_paths, page_path)
-    } else {
-        unlink(page_path)
+        corr_data <- as.data.frame(arrow::read_parquet(corr_file))
+
+        pdf(page_path, width = 11, height = 8.5, onefile = FALSE)
+        plotted <- plot_correlation_heatmap(corr_data, comparison)
+        dev.off()
+
+        if (isTRUE(plotted)) {
+            result_cache_mark_fresh(CACHE_STEP, results_root, CODE_PATH, page_path, corr_file)
+            page_paths <- c(page_paths, page_path)
+        } else {
+            unlink(page_path)
+        }
     }
-}
 
-# Merge every page into one combined PDF, in manifest order
-gs_bin <- Sys.which("gs")
-if (gs_bin == "") {
-    gs_candidate <- file.path(dirname(dirname(R.home())), "bin", "gs")
-    if (file.exists(gs_candidate)) gs_bin <- gs_candidate
-}
-if (gs_bin == "" || length(page_paths) == 0L) {
-    stop("Ghostscript (gs) not found, or no pages were plotted; cannot merge.")
-}
-status <- system2(
-    gs_bin,
-    c(
-        "-dBATCH", "-dNOPAUSE", "-q", "-sDEVICE=pdfwrite",
-        paste0("-sOutputFile=", pdf_path), page_paths
+    # Each comparison is rendered to its own single-page PDF, then merged into one file with Ghostscript.
+    gs_bin <- Sys.which("gs")
+    if (gs_bin == "") {
+        gs_candidate <- file.path(dirname(dirname(R.home())), "bin", "gs")
+        if (file.exists(gs_candidate)) gs_bin <- gs_candidate
+    }
+    if (gs_bin == "" || length(page_paths) == 0L) {
+        stop("Ghostscript (gs) not found, or no pages were plotted; cannot merge.")
+    }
+    status <- system2(
+        gs_bin,
+        c(
+            "-dBATCH", "-dNOPAUSE", "-q", "-sDEVICE=pdfwrite",
+            paste0("-sOutputFile=", pdf_path), page_paths
+        )
     )
-)
-if (status != 0L) stop("Ghostscript failed to merge the heatmap pages.")
+    if (status != 0L) stop("Ghostscript failed to merge the heatmap pages.")
 
-unlink(page_dir, recursive = TRUE)
+    cat(sprintf("Saved: %s\n", pdf_path))
 
-cat(sprintf("Saved: %s\n", pdf_path))
+    result_cache_mark_fresh(CACHE_STEP, results_root, CODE_PATH, pdf_path, cache_inputs)
+}

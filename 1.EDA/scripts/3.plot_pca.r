@@ -92,13 +92,11 @@ for (slice in slice_specs) {
             explained_variance_file_path <- file.path(pca_results_dir, explained_variance_file_name)
 
             if (!file.exists(file_path) || !file.exists(explained_variance_file_path)) {
-                cat("Missing file, skipping:", file_path, "\n")
                 next
             }
 
             df <- arrow::read_parquet(file_path)
             if (!"PC1" %in% colnames(df)) {
-                cat("PC1 not found, skipping:", file_path, "\n")
                 next
             }
             # Harmonize 2D column names to the 3D metadata convention, as
@@ -172,13 +170,11 @@ for (norm_profile in normalized_profiles) {
         explained_variance_file_path <- file.path(pca_results_dir, explained_variance_file_name)
 
         if (!file.exists(file_path) || !file.exists(explained_variance_file_path)) {
-            cat("Missing file, skipping:", file_path, "\n")
             next
         }
 
         df <- arrow::read_parquet(file_path)
         if (!"PC1" %in% colnames(df)) {
-            cat("PC1 not found, skipping:", file_path, "\n")
             next
         }
         df$Metadata_Biology_TumorType <- patient_tumor_type_lookup[df$Metadata_Biology_PatientTumor]
@@ -225,7 +221,6 @@ for (norm_profile in normalized_profiles) {
     explained_variance_file_path <- file.path(pca_results_dir, explained_variance_file_name)
 
     if (!file.exists(explained_variance_file_path)) {
-        cat("Missing file, skipping:", explained_variance_file_path, "\n")
         next
     }
 
@@ -262,7 +257,6 @@ for (slice in slice_specs) {
         explained_variance_file_path <- file.path(pca_results_dir, explained_variance_file_name)
 
         if (!file.exists(explained_variance_file_path)) {
-            cat("Missing file, skipping:", explained_variance_file_path, "\n")
             next
         }
 

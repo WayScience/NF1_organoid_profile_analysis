@@ -1,9 +1,10 @@
 [project]
 name = "NF1_organoid_profile_analysis"
-r_version = ">=4.3.0"
+r_version = ">=4.4.3"
 
 [dependencies]
 IRkernel = "*"
+PMA = "*"
 VennDiagram = "*"
 arrow = "*"
 circlize = "*"
@@ -20,8 +21,12 @@ hrbrthemes = "*"
 magick = "*"
 patchwork = "*"
 pheatmap = "*"
+platetools = "*"
 tidyr = "*"
 tm = "*"
 
 [dependencies.ComplexHeatmap]
 bioc = true
+
+[dependencies.kBET]
+git = "theislab/kBET"
