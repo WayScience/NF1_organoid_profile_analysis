@@ -49,10 +49,12 @@ samples_df = pd.read_parquet(
     )
 )
 
-# sc_norm/agg matches this notebook's previous default input
-# (3D_2.aggregated_profiles_sc_norm_agg_from_norm.parquet)
+# sc_norm/agg_from_norm matches this notebook's previous default input
+# (3D_2.aggregated_profiles_sc_norm_agg_from_norm.parquet). Notebook 4 now
+# tags each 3D aggregate with its derivation mode, so profile_type carries the
+# _from_fs / _from_norm suffix; the from_norm aggregate is used here.
 normalization_variant = "sc_norm"
-profile_type = "agg"
+profile_type = "agg_from_norm"
 pairs_df = pairs_df.loc[
     (pairs_df["normalization_variant"] == normalization_variant)
     & (pairs_df["profile_type"] == profile_type)

@@ -29,6 +29,12 @@ find_git_root <- function() {
 }
 
 root_dir <- find_git_root()
+source(file.path(root_dir, "utils/r_result_cache.r"))
+
+# Caching: skip work whose outputs were built from unchanged inputs and code
+CACHE_STEP <- "8.kbet_analysis"
+CODE_PATH <- file.path(root_dir, "2.2d_vs_3d_analysis", "scripts", "8.kbet_analysis.r")
+results_root <- file.path(root_dir, "2.2d_vs_3d_analysis", "results")
 cat("Git root directory:", root_dir, "\n")
 
 figures_path <- file.path(root_dir, "2.2d_vs_3d_analysis/figures/kbet")
@@ -96,7 +102,9 @@ for (prof in profiles) {
         cache_dir, paste0(prof$label, "_dmso_patient_summary.parquet")
     )
 
-    if (file.exists(stats_cache_path) && file.exists(summary_cache_path)) {
+    cache_outputs <- c(stats_cache_path, summary_cache_path)
+    cache_inputs  <- prof$path
+    if (result_cache_is_fresh(CACHE_STEP, results_root, CODE_PATH, cache_outputs, cache_inputs)) {
         plot.data   <- arrow::read_parquet(stats_cache_path)
         summary_row <- arrow::read_parquet(summary_cache_path)
     } else {
@@ -150,6 +158,7 @@ for (prof in profiles) {
 
         arrow::write_parquet(plot.data, stats_cache_path)
         arrow::write_parquet(summary_row, summary_cache_path)
+        result_cache_mark_fresh(CACHE_STEP, results_root, CODE_PATH, cache_outputs, cache_inputs)
     }
 
     # individual boxplot

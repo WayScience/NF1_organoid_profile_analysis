@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -eo pipefail
+set -euo pipefail
 
 git_root=$(git rev-parse --show-toplevel)
 if [ -z "$git_root" ]; then
@@ -10,10 +10,12 @@ fi
 
 uv run jupyter nbconvert --to=script --FilesWriter.build_directory="$git_root"/2.2d_vs_3d_analysis/scripts/ "$git_root"/2.2d_vs_3d_analysis/notebooks/*.ipynb
 
-# deactivate any existing conda environment
-conda deactivate
-# deactivate any existing venv environment
-deactivate 2>/dev/null
+{
+    conda deactivate 2>/dev/null &&
+    deactivate 2>/dev/null
+} || {
+    echo "Note: no active conda/venv environment to deactivate" >&2
+}
 
 uv run python "$git_root"/2.2d_vs_3d_analysis/scripts/1.generate_patient_correlation.py
 uvr run "$git_root"/2.2d_vs_3d_analysis/scripts/2.plot_patient_correlation_heatmaps.r

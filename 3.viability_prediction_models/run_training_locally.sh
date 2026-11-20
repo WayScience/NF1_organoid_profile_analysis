@@ -1,5 +1,8 @@
 #!/bin/bash
 
+set -euo pipefail
+
+
 git_root=$(git rev-parse --show-toplevel)
 
 uv run jupyter nbconvert --to=script --FilesWriter.build_directory="$git_root"/3.viability_prediction_models/scripts/ "$git_root"/3.viability_prediction_models/notebooks/*.ipynb

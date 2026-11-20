@@ -30,6 +30,12 @@ find_git_root <- function() {
 }
 
 root_dir <- find_git_root()
+source(file.path(root_dir, "utils/r_result_cache.r"))
+
+# Caching: skip work whose outputs were built from unchanged inputs and code
+CACHE_STEP <- "9.sparse_cca_analysis"
+CODE_PATH <- file.path(root_dir, "2.2d_vs_3d_analysis", "scripts", "9.sparse_cca_analysis.r")
+results_root <- file.path(root_dir, "2.2d_vs_3d_analysis", "results")
 cat("Git root directory:", root_dir, "\n")
 
 results_dir <- file.path(root_dir, "2.2d_vs_3d_analysis/results/sparse_cca")
@@ -40,7 +46,14 @@ path_2d_organoid <- file.path(root_dir, "data/profiles_2D/all_patients/max_proje
 path_2d_sc <- file.path(root_dir, "data/profiles_2D/all_patients/max_projection/sc_agg_profiles.parquet")
 dir_3d_agg <- file.path(root_dir, "data/profiles_3D/all_patients/2.aggregated_profiles")
 
-profile_pairs <- data.frame(
+# Each 3D aggregated profile is derived two ways -- aggregated from the
+# feature-selected single cells (from_fs) and from the normalized single cells
+# (from_norm) -- so both are run against the (single) 2D profile. The mode is
+# appended to the slug so per-pair output files don't collide. 2D profiles have
+# no such split.
+modes <- c("from_fs", "from_norm")
+mode_labels <- c(from_fs = "from FS", from_norm = "from norm")
+base_profile_pairs <- data.frame(
     label = c(
         "Organoid - Handcrafted",
         "Organoid - Deep Learning (SAM-Med3D)",
@@ -65,16 +78,28 @@ profile_pairs <- data.frame(
         path_2d_sc,
         path_2d_sc
     ),
-    path_3d = c(
-        file.path(dir_3d_agg, "organoid_norm_agg_from_norm.parquet"),
-        file.path(dir_3d_agg, "sammed_organoid_norm_agg_from_norm.parquet"),
-        file.path(dir_3d_agg, "sc_norm_agg_from_norm.parquet"),
-        file.path(dir_3d_agg, "sammed_sc_norm_agg_from_norm.parquet"),
-        file.path(dir_3d_agg, "sammed_nucleocentric_norm_sc_agg_profiles.parquet"),
-        file.path(dir_3d_agg, "nucleocentric_morphem_norm_sc_agg_profiles.parquet")
+    stem_3d = c(
+        "organoid_norm_agg",
+        "sammed_organoid_norm_agg",
+        "sc_norm_agg",
+        "sammed_sc_norm_agg",
+        "sammed_nucleocentric_norm_agg",
+        "nucleocentric_morphem_norm_agg"
     ),
     stringsAsFactors = FALSE
 )
+
+profile_pairs <- do.call(rbind, lapply(modes, function(m) {
+    data.frame(
+        label = paste0(base_profile_pairs$label, " (", mode_labels[[m]], ")"),
+        slug = paste0(base_profile_pairs$slug, "_", m),
+        path_2d = base_profile_pairs$path_2d,
+        path_3d = file.path(
+            dir_3d_agg, paste0(base_profile_pairs$stem_3d, "_", m, ".parquet")
+        ),
+        stringsAsFactors = FALSE
+    )
+}))
 
 # Standardizes 2D/3D metadata column names and matches samples present in both views.
 load_and_match <- function(path_2d, path_3d) {
@@ -224,12 +249,25 @@ for (i in seq_len(nrow(profile_pairs))) {
     pair <- profile_pairs[i, ]
     cat("===", pair$label, "===\n")
 
-    matched <- load_and_match(pair$path_2d, pair$path_3d)
-    mat_2d <- as.matrix(prep_features((matched$df_2d)))
-    mat_3d <- as.matrix(prep_features((matched$df_3d)))
-    cat("Matched samples:", nrow(mat_2d), " | 2D features:", ncol(mat_2d), " | 3D features:", ncol(mat_3d), "\n")
+    pair_outputs <- file.path(results_dir, paste0(pair$slug, c(
+        "_cca_permute_summary.parquet", "_canonical_scores.parquet",
+        "_canonical_correlations.parquet", "_loadings_2d.parquet", "_loadings_3d.parquet"
+    )))
+    pair_inputs <- c(pair$path_2d, pair$path_3d)
+    if (result_cache_is_fresh(CACHE_STEP, results_root, CODE_PATH, pair_outputs, pair_inputs)) {
+        cat("Using cached result:", pair$slug, "\n")
+        result <- arrow::read_parquet(
+            file.path(results_dir, paste0(pair$slug, "_canonical_correlations.parquet"))
+        )
+    } else {
+        matched <- load_and_match(pair$path_2d, pair$path_3d)
+        mat_2d <- as.matrix(prep_features((matched$df_2d)))
+        mat_3d <- as.matrix(prep_features((matched$df_3d)))
+        cat("Matched samples:", nrow(mat_2d), " | 2D features:", ncol(mat_2d), " | 3D features:", ncol(mat_3d), "\n")
 
-    result <- run_sparse_cca(mat_2d, mat_3d, matched$metadata, pair$slug, results_dir)
+        result <- run_sparse_cca(mat_2d, mat_3d, matched$metadata, pair$slug, results_dir)
+        result_cache_mark_fresh(CACHE_STEP, results_root, CODE_PATH, pair_outputs, pair_inputs)
+    }
     result$label <- pair$label
     result$slug <- pair$slug
     summary_rows[[pair$slug]] <- result

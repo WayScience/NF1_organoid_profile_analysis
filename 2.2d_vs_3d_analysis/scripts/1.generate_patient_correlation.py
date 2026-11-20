@@ -13,6 +13,7 @@ import pathlib
 import numpy as np
 import pandas as pd
 from notebook_init_utils import init_notebook
+from notebook_init_utils.result_cache import is_fresh, mark_fresh
 
 root_dir, in_notebook = init_notebook()
 
@@ -41,6 +42,13 @@ PROFILE_TYPES = {
         "Single-cell / Nucleocentric MorphEM",
     ),
 }
+
+# Each 3D aggregated profile is derived two ways -- aggregated from the
+# feature-selected single cells (``from_fs``) and from the normalized single
+# cells (``from_norm``). Both are correlated against the (single) 2D profile,
+# and the mode is appended to the profile_type key so outputs don't collide.
+MODES = ["from_fs", "from_norm"]
+MODE_LABELS = {"from_fs": "from FS", "from_norm": "from norm"}
 
 PATIENT_TUMORS = None  # None = every shared patient/tumor; or a list of IDs.
 INCLUDE_ALL_PATIENTS = True  # Pools every shared, non-excluded sample.
@@ -80,6 +88,13 @@ input_3d_dir = pathlib.Path(
     f"{root_dir}/data/profiles_3D/all_patients/2.aggregated_profiles"
 ).resolve(strict=True)
 
+# Caching: a comparison is skipped when its output was built from unchanged inputs and code
+CACHE_STEP = "1.generate_patient_correlation"
+CODE_PATH = pathlib.Path(
+    f"{root_dir}/2.2d_vs_3d_analysis/scripts/1.generate_patient_correlation.py"
+).resolve(strict=True)
+results_root = pathlib.Path(f"{root_dir}/2.2d_vs_3d_analysis/results").resolve()
+
 # Define output paths
 results_dir = pathlib.Path(
     f"{root_dir}/2.2d_vs_3d_analysis/results/correlation"
@@ -93,7 +108,7 @@ feature_summary_path = results_dir / "feature_cleanup_summary.parquet"
 
 # ## Clean profiles and match wells
 
-# In[ ]:
+# In[4]:
 
 
 def load_profile(path: pathlib.Path, dimension: str) -> tuple[pd.DataFrame, dict]:
@@ -227,6 +242,34 @@ def standardize(arr: np.ndarray) -> np.ndarray:
     return (arr - mean) / std
 
 
+def summarize_saved_correlation(
+    output_path: pathlib.Path, n_features_2d: int, n_features_3d: int
+) -> dict:
+    """
+    Build the manifest summary for a correlation file written on an earlier run.
+
+    Parameters
+    ----------
+    output_path : pathlib.Path
+        The long-form correlation parquet file to read back.
+    n_features_2d : int
+        Number of 2D features in the comparison.
+    n_features_3d : int
+        Number of 3D features in the comparison.
+
+    Returns
+    ----------
+    dict
+        The same summary ``compute_and_save_correlation`` returns.
+    """
+    saved = pd.read_parquet(output_path, columns=["pearson_r"])
+    return {
+        "n_features_2d": n_features_2d,
+        "n_features_3d": n_features_3d,
+        "n_defined_correlations": int(saved["pearson_r"].notna().sum()),
+    }
+
+
 def compute_and_save_correlation(
     features_2d: pd.DataFrame, features_3d: pd.DataFrame, output_path: pathlib.Path
 ) -> dict:
@@ -299,93 +342,112 @@ manifest = []
 for projection in PROJECTIONS:
     for profile_type, (resolution, prefix, label) in PROFILE_TYPES.items():
         path_2d = input_2d_dir / projection / f"{resolution}_agg_profiles.parquet"
-        path_3d = input_3d_dir / f"{prefix}_norm_sc_agg_profiles.parquet"
 
-        profiles = {}
-        for path, dimension in ((path_2d, "2D"), (path_3d, "3D")):
-            profiles[path], summary = load_profile(path, dimension)
-            if path not in summarized_paths:
-                summarized_paths.add(path)
-                feature_summaries.append(summary)
+        for mode in MODES:
+            # Tag the aggregation mode onto the profile_type key / label so the
+            # from_fs and from_norm comparisons live in separate output dirs and
+            # are distinguishable in the manifest notebook 2 plots from.
+            profile_type_key = f"{profile_type}_{mode}"
+            label_mode = f"{label} ({MODE_LABELS[mode]})"
+            path_3d = input_3d_dir / f"{prefix}_norm_agg_{mode}.parquet"
 
-        aligned_2d, aligned_3d, audit = match_profiles(
-            profiles[path_2d], profiles[path_3d]
-        )
+            profiles = {}
+            for path, dimension in ((path_2d, "2D"), (path_3d, "3D")):
+                profiles[path], summary = load_profile(path, dimension)
+                if path not in summarized_paths:
+                    summarized_paths.add(path)
+                    feature_summaries.append(summary)
 
-        # Save the well-matching audit next to this comparison's correlations
-        pair_dir = results_dir / projection / profile_type
-        pair_dir.mkdir(parents=True, exist_ok=True)
-        audit.to_parquet(pair_dir / "matched_wells.parquet", index=False)
-
-        for patient_tumor, group in audit.groupby("Metadata_Biology_PatientTumor"):
-            counts = group["match_status"].value_counts()
-            matching_summaries.append(
-                {
-                    "projection": projection,
-                    "profile_type": profile_type,
-                    "patient_tumor": patient_tumor,
-                    "n_matched_wells": int(counts.get("both", 0)),
-                    "n_2d_only": int(counts.get("left_only", 0)),
-                    "n_3d_only": int(counts.get("right_only", 0)),
-                }
+            aligned_2d, aligned_3d, audit = match_profiles(
+                profiles[path_2d], profiles[path_3d]
             )
 
-        # Correlate each patient/tumor on its own, and optionally all pooled
-        shared_patient_tumors = sorted(
-            aligned_2d["Metadata_Biology_PatientTumor"].unique()
-        )
-        if PATIENT_TUMORS is not None:
-            missing = set(PATIENT_TUMORS) - set(shared_patient_tumors)
-            if missing:
-                raise ValueError(
-                    f"{projection}/{profile_type}: unmatched IDs {missing}."
-                )
-            shared_patient_tumors = [
-                patient_tumor
-                for patient_tumor in shared_patient_tumors
-                if patient_tumor in PATIENT_TUMORS
-            ]
+            # Save the well-matching audit next to this comparison's correlations
+            pair_dir = results_dir / projection / profile_type_key
+            pair_dir.mkdir(parents=True, exist_ok=True)
+            audit.to_parquet(pair_dir / "matched_wells.parquet", index=False)
 
-        cohorts = ["all_patients"] if INCLUDE_ALL_PATIENTS else []
-        cohorts = cohorts + shared_patient_tumors
-
-        features_2d = [col for col in aligned_2d if not col.startswith("Metadata_")]
-        features_3d = [col for col in aligned_3d if not col.startswith("Metadata_")]
-
-        for cohort in cohorts:
-            if cohort == "all_patients":
-                selected = np.ones(len(aligned_2d), dtype=bool)
-            else:
-                selected = (
-                    aligned_2d["Metadata_Biology_PatientTumor"].eq(cohort).to_numpy()
+            for patient_tumor, group in audit.groupby("Metadata_Biology_PatientTumor"):
+                counts = group["match_status"].value_counts()
+                matching_summaries.append(
+                    {
+                        "projection": projection,
+                        "profile_type": profile_type_key,
+                        "patient_tumor": patient_tumor,
+                        "n_matched_wells": int(counts.get("both", 0)),
+                        "n_2d_only": int(counts.get("left_only", 0)),
+                        "n_3d_only": int(counts.get("right_only", 0)),
+                    }
                 )
 
-            output_path = pair_dir / f"{cohort}_correlation.parquet"
-            summary = compute_and_save_correlation(
-                aligned_2d.loc[selected, features_2d],
-                aligned_3d.loc[selected, features_3d],
-                output_path,
+            # Correlate each patient/tumor on its own, and optionally all pooled
+            shared_patient_tumors = sorted(
+                aligned_2d["Metadata_Biology_PatientTumor"].unique()
             )
+            if PATIENT_TUMORS is not None:
+                missing = set(PATIENT_TUMORS) - set(shared_patient_tumors)
+                if missing:
+                    raise ValueError(
+                        f"{projection}/{profile_type_key}: unmatched IDs {missing}."
+                    )
+                shared_patient_tumors = [
+                    patient_tumor
+                    for patient_tumor in shared_patient_tumors
+                    if patient_tumor in PATIENT_TUMORS
+                ]
 
-            manifest.append(
-                {
-                    "projection": projection,
-                    "profile_type": profile_type,
-                    "profile_label": label,
-                    "cohort": cohort,
-                    "analysis_unit": "patient_tumor_well_aggregate",
-                    "n_matched_wells": int(selected.sum()),
-                    "correlation_file": str(output_path.relative_to(results_dir)),
-                    **summary,
-                }
-            )
+            cohorts = ["all_patients"] if INCLUDE_ALL_PATIENTS else []
+            cohorts = cohorts + shared_patient_tumors
 
-            print(
-                f"{projection} / {profile_type} / {cohort}: "
-                f"{selected.sum()} matched wells; "
-                f"{summary['n_defined_correlations']:,} defined correlations",
-                flush=True,
-            )
+            features_2d = [col for col in aligned_2d if not col.startswith("Metadata_")]
+            features_3d = [col for col in aligned_3d if not col.startswith("Metadata_")]
+
+            for cohort in cohorts:
+                if cohort == "all_patients":
+                    selected = np.ones(len(aligned_2d), dtype=bool)
+                else:
+                    selected = (
+                        aligned_2d["Metadata_Biology_PatientTumor"]
+                        .eq(cohort)
+                        .to_numpy()
+                    )
+
+                output_path = pair_dir / f"{cohort}_correlation.parquet"
+                inputs = [path_2d, path_3d]
+                if is_fresh(CACHE_STEP, results_root, CODE_PATH, [output_path], inputs):
+                    print(f"Using cached result: {output_path.name}")
+                    summary = summarize_saved_correlation(
+                        output_path, len(features_2d), len(features_3d)
+                    )
+                else:
+                    summary = compute_and_save_correlation(
+                        aligned_2d.loc[selected, features_2d],
+                        aligned_3d.loc[selected, features_3d],
+                        output_path,
+                    )
+                    mark_fresh(
+                        CACHE_STEP, results_root, CODE_PATH, [output_path], inputs
+                    )
+
+                manifest.append(
+                    {
+                        "projection": projection,
+                        "profile_type": profile_type_key,
+                        "profile_label": label_mode,
+                        "cohort": cohort,
+                        "analysis_unit": "patient_tumor_well_aggregate",
+                        "n_matched_wells": int(selected.sum()),
+                        "correlation_file": str(output_path.relative_to(results_dir)),
+                        **summary,
+                    }
+                )
+
+                print(
+                    f"{projection} / {profile_type_key} / {cohort}: "
+                    f"{selected.sum()} matched wells; "
+                    f"{summary['n_defined_correlations']:,} defined correlations",
+                    flush=True,
+                )
 
 
 # In[7]:

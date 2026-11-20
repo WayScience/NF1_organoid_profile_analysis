@@ -205,40 +205,48 @@ GROUP_A_3D_VARIANTS = [
 profile_dirs_3d = {"agg": "2.aggregated_profiles", "consensus": "3.consensus_profiles"}
 patient_col_3d = "Metadata_Biology_PatientTumor"
 
+# Each 3D aggregate/consensus profile is derived two ways -- summarized from the
+# feature-selected single cells (``from_fs``) and from the normalized single
+# cells (``from_norm``). Both are correlated, and the mode is appended to the
+# profile_type value (e.g. ``agg_from_fs``) so the long table stays unambiguous.
+MODES_3D = ["from_fs", "from_norm"]
+
 pairs_rows_3d = []
 samples_rows_3d = []
 
 for variant in tqdm.tqdm(GROUP_A_3D_VARIANTS):
     for profile_type in profile_types:
-        input_path = pathlib.Path(
-            f"{root_dir}/data/profiles_3D/all_patients/{profile_dirs_3d[profile_type]}/{variant}_sc_{profile_type}_profiles.parquet"
-        ).resolve(strict=True)
-        df = pd.read_parquet(input_path)
+        for mode in MODES_3D:
+            profile_type_mode = f"{profile_type}_{mode}"
+            input_path = pathlib.Path(
+                f"{root_dir}/data/profiles_3D/all_patients/{profile_dirs_3d[profile_type]}/{variant}_{profile_type}_{mode}.parquet"
+            ).resolve(strict=True)
+            df = pd.read_parquet(input_path)
 
-        df, metadata_columns, feature_columns = clean_profile(
-            df, patient_col=patient_col_3d
-        )
-        corr_mat = correlate_samples(df, feature_columns)
-
-        n = corr_mat.shape[0]
-        iu = np.triu_indices(n)
-        pairs_rows_3d.append(
-            pd.DataFrame(
-                {
-                    "normalization_variant": variant,
-                    "profile_type": profile_type,
-                    "sample_i": iu[0],
-                    "sample_j": iu[1],
-                    "correlation": corr_mat[iu],
-                }
+            df, metadata_columns, feature_columns = clean_profile(
+                df, patient_col=patient_col_3d
             )
-        )
+            corr_mat = correlate_samples(df, feature_columns)
 
-        sample_metadata = df[metadata_columns].reset_index(drop=True)
-        sample_metadata.insert(0, "sample_index", np.arange(n))
-        sample_metadata.insert(0, "profile_type", profile_type)
-        sample_metadata.insert(0, "normalization_variant", variant)
-        samples_rows_3d.append(sample_metadata)
+            n = corr_mat.shape[0]
+            iu = np.triu_indices(n)
+            pairs_rows_3d.append(
+                pd.DataFrame(
+                    {
+                        "normalization_variant": variant,
+                        "profile_type": profile_type_mode,
+                        "sample_i": iu[0],
+                        "sample_j": iu[1],
+                        "correlation": corr_mat[iu],
+                    }
+                )
+            )
+
+            sample_metadata = df[metadata_columns].reset_index(drop=True)
+            sample_metadata.insert(0, "sample_index", np.arange(n))
+            sample_metadata.insert(0, "profile_type", profile_type_mode)
+            sample_metadata.insert(0, "normalization_variant", variant)
+            samples_rows_3d.append(sample_metadata)
 
 pairs_df_3d = pd.concat(pairs_rows_3d, ignore_index=True)
 samples_df_3d = pd.concat(samples_rows_3d, ignore_index=True)

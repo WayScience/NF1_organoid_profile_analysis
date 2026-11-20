@@ -35,7 +35,7 @@ find_git_root <- function() {
 root_dir <- find_git_root()
 source(file.path(root_dir, "utils", "r_plot_themes.r"))
 
-data_to_plot_file_path <- file.path(root_dir, "1.EDA/results/correlation/3D_sc_correlation_pairs_sc_norm_agg_with_meta_and_viability.parquet")
+data_to_plot_file_path <- file.path(root_dir, "1.EDA/results/correlation/3D_sc_correlation_pairs_sc_norm_agg_from_norm_with_meta_and_viability.parquet")
 correlation_viability_df <- arrow::read_parquet(data_to_plot_file_path)
 figures_base_dir <- file.path(root_dir, "1.EDA", "figures")
 montage_dir <- file.path(figures_base_dir, "montages")

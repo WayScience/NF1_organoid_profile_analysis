@@ -76,12 +76,23 @@ pooled_profile_paths = {
                 f"{root_dir}/1.EDA/results/umap/3D_scfs_umap.parquet"
             ).resolve(),
         },
-        "sc_consensus": {
+        # 3D consensus profiles are summarized two ways -- from the
+        # feature-selected single cells (from_fs) and from the normalized
+        # single cells (from_norm) -- so a UMAP is embedded for each.
+        "sc_consensus_from_fs": {
             "input": pathlib.Path(
-                f"{root_dir}/data/profiles_3D/all_patients/3.consensus_profiles/sc_norm_sc_consensus_profiles.parquet"
+                f"{root_dir}/data/profiles_3D/all_patients/3.consensus_profiles/sc_norm_consensus_from_fs.parquet"
             ).resolve(strict=True),
             "output": pathlib.Path(
-                f"{root_dir}/1.EDA/results/umap/3D_scconsensus_umap.parquet"
+                f"{root_dir}/1.EDA/results/umap/3D_scconsensus_from_fs_umap.parquet"
+            ).resolve(),
+        },
+        "sc_consensus_from_norm": {
+            "input": pathlib.Path(
+                f"{root_dir}/data/profiles_3D/all_patients/3.consensus_profiles/sc_norm_consensus_from_norm.parquet"
+            ).resolve(strict=True),
+            "output": pathlib.Path(
+                f"{root_dir}/1.EDA/results/umap/3D_scconsensus_from_norm_umap.parquet"
             ).resolve(),
         },
     },

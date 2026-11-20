@@ -261,14 +261,31 @@ variant_display_names_3d <- c(
     sc_norm = "Sc Norm"
 )
 
-heatmaps_by_profile_type_3d <- list(agg = list(), consensus = list())
-max_n_by_profile_type_3d <- list(agg = 0, consensus = 0)
+# 3D aggregate/consensus profiles are each summarized two ways -- from the
+# feature-selected single cells (from_fs) and from the normalized single cells
+# (from_norm) -- and notebook 4 writes the mode into the profile_type value, so
+# the 3D heatmaps are keyed on the mode-suffixed profile types.
+profile_type_labels_3d <- c(
+    agg_from_fs = "Aggregate (from FS)",
+    agg_from_norm = "Aggregate (from norm)",
+    consensus_from_fs = "Consensus (from FS)",
+    consensus_from_norm = "Consensus (from norm)"
+)
+
+heatmaps_by_profile_type_3d <- setNames(
+    lapply(names(profile_type_labels_3d), function(x) list()),
+    names(profile_type_labels_3d)
+)
+max_n_by_profile_type_3d <- setNames(
+    as.list(rep(0, length(profile_type_labels_3d))),
+    names(profile_type_labels_3d)
+)
 
 for (variant in names(variant_display_names_3d)) {
     variant_label <- variant_display_names_3d[[variant]]
 
-    for (profile_type in names(profile_type_labels)) {
-        profile_label <- profile_type_labels[[profile_type]]
+    for (profile_type in names(profile_type_labels_3d)) {
+        profile_label <- profile_type_labels_3d[[profile_type]]
 
         group_samples <- samples_df_3d %>%
             filter(normalization_variant == !!variant, profile_type == !!profile_type) %>%
@@ -283,7 +300,7 @@ for (variant in names(variant_display_names_3d)) {
         patient <- group_samples$Metadata_Biology_PatientTumor
         tumor_type <- group_samples$Metadata_Biology_TumorType
 
-        correlation_label <- if (profile_type == "agg") "Replicate Correlation" else "Correlation"
+        correlation_label <- if (startsWith(profile_type, "agg")) "Replicate Correlation" else "Correlation"
         title_clustered <- paste0("3D ", variant_label, " - Single-Cell ", profile_label, " Profiles - ", correlation_label, " (Clustered)")
         title_unclustered <- paste0("3D ", variant_label, " - Single-Cell ", profile_label, " Profiles - ", correlation_label, " (Unclustered)")
 
@@ -297,7 +314,7 @@ for (variant in names(variant_display_names_3d)) {
     }
 }
 
-for (profile_type in names(profile_type_labels)) {
+for (profile_type in names(profile_type_labels_3d)) {
     size <- page_size_for(max_n_by_profile_type_3d[[profile_type]])
     output_path <- file.path(figures_dir, paste0("3D_sc_", profile_type, "_correlation_heatmaps.pdf"))
     save_heatmaps_pdf(heatmaps_by_profile_type_3d[[profile_type]], output_path, size$width, size$height)

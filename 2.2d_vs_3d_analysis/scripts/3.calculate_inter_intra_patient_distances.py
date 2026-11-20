@@ -17,6 +17,7 @@ import scipy
 import scipy.spatial.distance
 import sklearn.metrics.pairwise
 from notebook_init_utils.notebook_init_utils import init_notebook
+from notebook_init_utils.result_cache import is_fresh, mark_fresh
 
 root_dir, in_notebook = init_notebook()
 
@@ -36,41 +37,52 @@ dir_3d_agg = pathlib.Path(
     f"{root_dir}/data/profiles_3D/all_patients/2.aggregated_profiles"
 ).resolve(strict=True)
 
-# (label, slug, path) for every profile type in the 2D + 3D combinatorics
-profile_types = [
-    ("2D Organoid", "2D_organoid", path_2d_organoid),
-    ("2D Single-cell", "2D_sc", path_2d_sc),
-    (
-        "3D Organoid - Handcrafted",
-        "3D_organoid_handcrafted",
-        dir_3d_agg / "organoid_norm_agg_from_norm.parquet",
-    ),
-    (
-        "3D Organoid - DL (SAM-Med3D)",
-        "3D_organoid_sammed",
-        dir_3d_agg / "sammed_organoid_norm_agg_from_norm.parquet",
-    ),
-    (
-        "3D Single-cell - Handcrafted",
-        "3D_sc_handcrafted",
-        dir_3d_agg / "sc_norm_agg_from_norm.parquet",
-    ),
-    (
-        "3D Single-cell - DL (SAM-Med3D)",
-        "3D_sc_sammed",
-        dir_3d_agg / "sammed_sc_norm_agg_from_norm.parquet",
-    ),
+# Each 3D aggregated profile is derived two ways -- aggregated from the
+# feature-selected single cells (``from_fs``) and from the normalized single
+# cells (``from_norm``) -- so both variants are scored for every profile type.
+MODES = ["from_fs", "from_norm"]
+MODE_LABELS = {"from_fs": "from FS", "from_norm": "from norm"}
+
+# (label, slug, filename stem) base specs for every 3D profile type; the
+# ``_from_fs`` / ``_from_norm`` suffix is appended per mode below.
+base_3d_profile_types = [
+    ("3D Organoid - Handcrafted", "3D_organoid_handcrafted", "organoid_norm_agg"),
+    ("3D Organoid - DL (SAM-Med3D)", "3D_organoid_sammed", "sammed_organoid_norm_agg"),
+    ("3D Single-cell - Handcrafted", "3D_sc_handcrafted", "sc_norm_agg"),
+    ("3D Single-cell - DL (SAM-Med3D)", "3D_sc_sammed", "sammed_sc_norm_agg"),
     (
         "3D Single-cell - Nucleocentric DL (SAM-Med3D)",
         "3D_sc_sammed_nucleocentric",
-        dir_3d_agg / "sammed_nucleocentric_norm_sc_agg_profiles.parquet",
+        "sammed_nucleocentric_norm_agg",
     ),
     (
         "3D Single-cell - Nucleocentric DL (MorphEM)",
         "3D_sc_nucleocentric_morphem",
-        dir_3d_agg / "nucleocentric_morphem_norm_sc_agg_profiles.parquet",
+        "nucleocentric_morphem_norm_agg",
     ),
 ]
+
+# (label, slug, path) for every profile type in the 2D + 3D combinatorics
+profile_types = [
+    ("2D Organoid", "2D_organoid", path_2d_organoid),
+    ("2D Single-cell", "2D_sc", path_2d_sc),
+]
+for _label, _slug, _stem in base_3d_profile_types:
+    for _mode in MODES:
+        profile_types.append(
+            (
+                f"{_label} ({MODE_LABELS[_mode]})",
+                f"{_slug}_{_mode}",
+                dir_3d_agg / f"{_stem}_{_mode}.parquet",
+            )
+        )
+
+# Caching: a profile type is skipped when its outputs were built from unchanged inputs and code
+CACHE_STEP = "3.calculate_inter_intra_patient_distances"
+CODE_PATH = pathlib.Path(
+    f"{root_dir}/2.2d_vs_3d_analysis/scripts/3.calculate_inter_intra_patient_distances.py"
+).resolve(strict=True)
+results_root = pathlib.Path(f"{root_dir}/2.2d_vs_3d_analysis/results").resolve()
 
 dist_results_dir = pathlib.Path(
     f"{root_dir}/2.2d_vs_3d_analysis/results/distance_metrics"
@@ -269,6 +281,18 @@ def calculate_inter_patient_distance_metrics(
 
 # Inter and intra patient distances for every profile type, saved with a slug prefix
 for label, slug, path in profile_types:
+    intra_output_path = (
+        dist_results_dir / f"{slug}_intra_patient_cosine_distance.parquet"
+    )
+    inter_output_path = (
+        dist_results_dir / f"{slug}_inter_patient_cosine_distance.parquet"
+    )
+    outputs = [intra_output_path, inter_output_path]
+    inputs = [path]
+    if is_fresh(CACHE_STEP, results_root, CODE_PATH, outputs, inputs):
+        print("===", label, "(cached) ===")
+        continue
+
     print("===", label, "===")
     df = load_and_harmonize(path)
 
@@ -279,12 +303,13 @@ for label, slug, path in profile_types:
         metadata_columns=metadata_cols,
         col_for_reference="Metadata_treatment_dose",
         reference_group="DMSO_1",
-        output_path=dist_results_dir / f"{slug}_intra_patient_cosine_distance.parquet",
+        output_path=intra_output_path,
     )
     calculate_inter_patient_distance_metrics(
         df,
         metadata_columns=metadata_cols,
         col_for_reference="Metadata_treatment_dose",
         reference_group="DMSO_1",
-        output_path=dist_results_dir / f"{slug}_inter_patient_cosine_distance.parquet",
+        output_path=inter_output_path,
     )
+    mark_fresh(CACHE_STEP, results_root, CODE_PATH, outputs, inputs)

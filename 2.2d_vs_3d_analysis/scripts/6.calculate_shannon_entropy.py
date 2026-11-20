@@ -14,6 +14,7 @@ from typing import Dict, List
 import numpy as np
 import pandas as pd
 from notebook_init_utils.notebook_init_utils import init_notebook
+from notebook_init_utils.result_cache import is_fresh, mark_fresh
 from scipy.stats import entropy
 
 root_dir, in_notebook = init_notebook()
@@ -30,6 +31,12 @@ _3d_stage_dirs = {
     "agg": _3d_dir / "2.aggregated_profiles",
 }
 _entropy_dir = root_dir / "2.2d_vs_3d_analysis" / "results" / "entropy"
+# Caching: an output is skipped when it was built from unchanged inputs and code
+CACHE_STEP = "6.calculate_shannon_entropy"
+CODE_PATH = (
+    root_dir / "2.2d_vs_3d_analysis" / "scripts" / "6.calculate_shannon_entropy.py"
+).resolve(strict=True)
+results_root = (root_dir / "2.2d_vs_3d_analysis" / "results").resolve()
 
 # 2D has three separate projection methods, each in its own directory
 _2d_projections = [
@@ -90,21 +97,29 @@ for proj_label, proj_dir_name in _2d_projections:
 
 for slug, group_label, resolution, file_prefix in _3d_types:
     for stage, stage_dir in _3d_stage_dirs.items():
-        path = next(
-            f
-            for f in stage_dir.glob("*.parquet")
-            if f.name.startswith(f"{file_prefix}_")
-        )
-        suffix = "" if stage == "normal" else f"_{stage}"
-        key = f"3D_{slug}{suffix}"
-        data_dict[key] = {
-            "input": path,
-            "output": (_entropy_dir / f"3D_{slug}{suffix}_entropy.parquet"),
-            "modality": "3D",
-            "group_label": group_label,
-            "resolution": resolution,
-            "stage": stage,
-        }
+        # The aggregated stage is written two ways -- aggregated from the
+        # feature-selected single cells (``from_fs``) and from the normalized
+        # single cells (``from_norm``) -- so both variants are included, each
+        # tagged with its mode. Earlier stages have a single file per type.
+        modes = ["from_fs", "from_norm"] if stage == "agg" else [None]
+        for mode in modes:
+            path = sorted(
+                f
+                for f in stage_dir.glob("*.parquet")
+                if f.name.startswith(f"{file_prefix}_")
+                and (mode is None or f.stem.endswith(mode))
+            )[0]
+            mode_suffix = f"_{mode}" if mode is not None else ""
+            suffix = ("" if stage == "normal" else f"_{stage}") + mode_suffix
+            key = f"3D_{slug}{suffix}"
+            data_dict[key] = {
+                "input": path,
+                "output": (_entropy_dir / f"3D_{slug}{suffix}_entropy.parquet"),
+                "modality": "3D",
+                "group_label": group_label,
+                "resolution": resolution,
+                "stage": stage,
+            }
 
 
 # In[3]:
@@ -175,7 +190,9 @@ def compute_feature_entropy(
 _entropy_dir.mkdir(parents=True, exist_ok=True)
 
 for key, config in data_dict.items():
-    if config["output"].exists():
+    inputs = [config["input"]]
+    if is_fresh(CACHE_STEP, results_root, CODE_PATH, [config["output"]], inputs):
+        print(f"Using cached result: {config['output'].name}")
         continue
     df = pd.read_parquet(config["input"])
 
@@ -186,6 +203,7 @@ for key, config in data_dict.items():
     entropy_df["stage"] = config["stage"]
 
     entropy_df.to_parquet(config["output"], index=False)
+    mark_fresh(CACHE_STEP, results_root, CODE_PATH, [config["output"]], inputs)
 
 
 # In[5]:
@@ -279,7 +297,9 @@ for key, config in data_dict.items():
     per_patient_output = config["output"].parent / config["output"].name.replace(
         "_entropy.parquet", "_per_patient_entropy.parquet"
     )
-    if per_patient_output.exists():
+    inputs = [config["input"]]
+    if is_fresh(CACHE_STEP, results_root, CODE_PATH, [per_patient_output], inputs):
+        print(f"Using cached result: {per_patient_output.name}")
         continue
     df = pd.read_parquet(config["input"])
     df = derive_patient_column(df)
@@ -291,3 +311,4 @@ for key, config in data_dict.items():
     per_patient_df["stage"] = config["stage"]
 
     per_patient_df.to_parquet(per_patient_output, index=False)
+    mark_fresh(CACHE_STEP, results_root, CODE_PATH, [per_patient_output], inputs)

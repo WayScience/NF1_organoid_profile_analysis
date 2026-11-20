@@ -652,31 +652,39 @@ plot_2d_group <- function(group_name, profile_source, key_display_names, output_
 plot_3d_group <- function(group_name, variants, variant_display_names, output_prefix) {
     # Same as plot_2d_group, but for a 3D group (e.g. "3D_sc") -- one
     # normalization variant per PDF section instead of one slice strategy.
+    # Each 3D aggregate/consensus profile is summarized two ways -- from the
+    # feature-selected single cells (from_fs) and from the normalized single
+    # cells (from_norm) -- so a separate PDF is written per mode.
     profile_type_labels <- c(agg = "Aggregate", consensus = "Consensus")
     profile_dirs_3d <- c(agg = "2.aggregated_profiles", consensus = "3.consensus_profiles")
+    mode_labels <- c(from_fs = "from FS", from_norm = "from norm")
 
     for (profile_type in names(profile_type_labels)) {
-        profile_label <- profile_type_labels[[profile_type]]
-        heatmaps <- list()
-        max_n <- 0
+        for (mode in names(mode_labels)) {
+            profile_label <- paste0(
+                profile_type_labels[[profile_type]], " (", mode_labels[[mode]], ")"
+            )
+            heatmaps <- list()
+            max_n <- 0
 
-        for (variant in variants) {
-            input_path <- file.path(
-                root_dir, "data", "profiles_3D", "all_patients", profile_dirs_3d[[profile_type]],
-                paste0(variant, "_", profile_type, "_from_norm.parquet")
-            )
-            result <- plot_one_file(
-                input_path, "Metadata_Biology_PatientTumor", parse_feature_names_3d, NULL, feature_type_palette,
-                variant_display_names[[variant]], profile_label, output_prefix, heatmaps, max_n
-            )
-            heatmaps <- result$heatmaps
-            max_n <- result$max_n
+            for (variant in variants) {
+                input_path <- file.path(
+                    root_dir, "data", "profiles_3D", "all_patients", profile_dirs_3d[[profile_type]],
+                    paste0(variant, "_", profile_type, "_", mode, ".parquet")
+                )
+                result <- plot_one_file(
+                    input_path, "Metadata_Biology_PatientTumor", parse_feature_names_3d, NULL, feature_type_palette,
+                    variant_display_names[[variant]], profile_label, output_prefix, heatmaps, max_n
+                )
+                heatmaps <- result$heatmaps
+                max_n <- result$max_n
+            }
+
+            size <- page_size_for(max_n)
+            output_path <- file.path(figures_dir, paste0(group_name, "_", profile_type, "_", mode, "_profile_heatmaps.pdf"))
+            save_heatmaps_pdf(heatmaps, output_path, size$width, size$height)
+            cat("Saved:", basename(output_path), "(", length(heatmaps), "pages)\n")
         }
-
-        size <- page_size_for(max_n)
-        output_path <- file.path(figures_dir, paste0(group_name, "_", profile_type, "_profile_heatmaps.pdf"))
-        save_heatmaps_pdf(heatmaps, output_path, size$width, size$height)
-        cat("Saved:", basename(output_path), "(", length(heatmaps), "pages)\n")
     }
 }
 

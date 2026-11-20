@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 git_root=$(git rev-parse --show-toplevel)
 
 # regenerate scripts/ from notebooks/ so the mirrored .py/.r files never drift
