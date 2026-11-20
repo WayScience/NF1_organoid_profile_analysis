@@ -29,7 +29,7 @@ source(file.path(root_dir, "utils", "r_plot_funcs.r"))
 
 correlation_viability_file_path <- file.path(
     root_dir, "1.EDA", "results", "correlation",
-    "3D_sc_correlation_pairs_sc_norm_agg_with_meta_and_viability.parquet"
+    "3D_sc_correlation_pairs_sc_norm_agg_from_norm_with_meta_and_viability.parquet"
 )
 figures_dir <- file.path(root_dir, "1.EDA", "figures", "correlation_vs_viability")
 if (!dir.exists(figures_dir)) {

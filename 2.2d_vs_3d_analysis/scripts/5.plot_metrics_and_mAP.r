@@ -29,6 +29,12 @@ find_git_root <- function() {
 }
 
 root_dir <- find_git_root()
+source(file.path(root_dir, "utils/r_result_cache.r"))
+
+# Caching: skip work whose outputs were built from unchanged inputs and code
+CACHE_STEP <- "5.plot_metrics_and_mAP"
+CODE_PATH <- file.path(root_dir, "2.2d_vs_3d_analysis", "scripts", "5.plot_metrics_and_mAP.r")
+results_root <- file.path(root_dir, "2.2d_vs_3d_analysis", "results")
 cat("Git root directory:", root_dir, "\n")
 
 # custom_treatment_palette lives in utils/r_plot_themes.r so it isn't
@@ -40,11 +46,16 @@ dist_results_dir <- file.path(root_dir, "2.2d_vs_3d_analysis", "results", "dista
 figures_dir <- file.path(root_dir, "2.2d_vs_3d_analysis", "figures", "mAP_and_distance_metrics")
 dir.create(figures_dir, recursive = TRUE, showWarnings = FALSE)
 
-# Every profile type from notebooks 3/4, and the 2D-vs-3D pairs for cross-modality plots
-profile_types <- tibble::tribble(
-    ~label, ~slug,
-    "2D Organoid", "2D_organoid",
-    "2D Single-cell", "2D_sc",
+# Every profile type from notebooks 3/4, and the 2D-vs-3D pairs for cross-modality plots.
+# Each 3D profile is aggregated two ways -- from the feature-selected single cells
+# (from_fs) and from the normalized single cells (from_norm) -- so notebooks 3/4 emit a
+# _from_fs / _from_norm output per 3D profile type. 2D profiles have no such split.
+modes <- tibble::tibble(
+    mode = c("from_fs", "from_norm"),
+    mode_label = c("from FS", "from norm")
+)
+base_3d <- tibble::tribble(
+    ~base_label, ~base_slug,
     "3D Organoid - Handcrafted", "3D_organoid_handcrafted",
     "3D Organoid - DL (SAM-Med3D)", "3D_organoid_sammed",
     "3D Single-cell - Handcrafted", "3D_sc_handcrafted",
@@ -52,9 +63,21 @@ profile_types <- tibble::tribble(
     "3D Single-cell - Nucleocentric DL (SAM-Med3D)", "3D_sc_sammed_nucleocentric",
     "3D Single-cell - Nucleocentric DL (MorphEM)", "3D_sc_nucleocentric_morphem"
 )
+profile_types <- dplyr::bind_rows(
+    tibble::tribble(
+        ~label, ~slug,
+        "2D Organoid", "2D_organoid",
+        "2D Single-cell", "2D_sc"
+    ),
+    tidyr::expand_grid(base_3d, modes) %>%
+        dplyr::transmute(
+            label = paste0(base_label, " (", mode_label, ")"),
+            slug = paste0(base_slug, "_", mode)
+        )
+)
 
-pairs_2d_3d <- tibble::tribble(
-    ~label, ~slug_2d, ~slug_3d,
+base_pairs_2d_3d <- tibble::tribble(
+    ~base_label, ~slug_2d, ~base_slug_3d,
     "Organoid - Handcrafted", "2D_organoid", "3D_organoid_handcrafted",
     "Organoid - DL (SAM-Med3D)", "2D_organoid", "3D_organoid_sammed",
     "Single-cell - Handcrafted", "2D_sc", "3D_sc_handcrafted",
@@ -62,6 +85,12 @@ pairs_2d_3d <- tibble::tribble(
     "Single-cell - Nucleocentric DL (SAM-Med3D)", "2D_sc", "3D_sc_sammed_nucleocentric",
     "Single-cell - Nucleocentric DL (MorphEM)", "2D_sc", "3D_sc_nucleocentric_morphem"
 )
+pairs_2d_3d <- tidyr::expand_grid(base_pairs_2d_3d, modes) %>%
+    dplyr::transmute(
+        label = paste0(base_label, " (", mode_label, ")"),
+        slug_2d = slug_2d,
+        slug_3d = paste0(base_slug_3d, "_", mode)
+    )
 
 # Dose is encoded as point shape (1 = circle, 10 = triangle); drug colors
 # come from custom_treatment_palette in utils/r_plot_themes.r (sourced above).
@@ -356,7 +385,23 @@ for (i in seq_len(nrow(pairs_2d_3d))) {
     )
 }
 
-# One multi-page, rasterized-point PDF per category, instead of a PNG per plot
-save_plots_pdf(intra_plots, file.path(figures_dir, "intra_patient_metrics.pdf"), width = 14, height = 14)
-save_plots_pdf(inter_plots, file.path(figures_dir, "inter_patient_metrics.pdf"), width = 10, height = 12)
-save_plots_pdf(cross_plots, file.path(figures_dir, "intra_vs_inter_metrics.pdf"), width = 10, height = 12)
+# One multi-page, rasterized-point PDF per category, instead of a PNG per plot.
+# A PDF is redrawn only when the mAP or distance results behind it have changed.
+cache_inputs <- c(
+    list.files(mAP_results_dir, pattern = "_patient_mAP_by_dose\\.parquet$", full.names = TRUE),
+    list.files(dist_results_dir, pattern = "_patient_cosine_distance\\.parquet$", full.names = TRUE)
+)
+
+save_plots_pdf_if_stale <- function(plots, output_path, width = 10, height = 12) {
+    if (result_cache_is_fresh(CACHE_STEP, results_root, CODE_PATH, output_path, cache_inputs)) {
+        cat("Using cached result:", basename(output_path), "\n")
+        return(invisible(FALSE))
+    }
+    save_plots_pdf(plots, output_path, width = width, height = height)
+    result_cache_mark_fresh(CACHE_STEP, results_root, CODE_PATH, output_path, cache_inputs)
+    invisible(TRUE)
+}
+
+save_plots_pdf_if_stale(intra_plots, file.path(figures_dir, "intra_patient_metrics.pdf"), width = 14, height = 14)
+save_plots_pdf_if_stale(inter_plots, file.path(figures_dir, "inter_patient_metrics.pdf"), width = 10, height = 12)
+save_plots_pdf_if_stale(cross_plots, file.path(figures_dir, "intra_vs_inter_metrics.pdf"), width = 10, height = 12)

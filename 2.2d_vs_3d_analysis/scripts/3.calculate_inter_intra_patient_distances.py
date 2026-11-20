@@ -16,23 +16,10 @@ import pandas as pd
 import scipy
 import scipy.spatial.distance
 import sklearn.metrics.pairwise
+from notebook_init_utils.notebook_init_utils import init_notebook
+from notebook_init_utils.result_cache import is_fresh, mark_fresh
 
-# Get the current working directory
-cwd = pathlib.Path.cwd()
-
-if (cwd / ".git").is_dir():
-    root_dir = cwd
-
-else:
-    root_dir = None
-    for parent in cwd.parents:
-        if (parent / ".git").is_dir():
-            root_dir = parent
-            break
-
-# Check if a Git root directory was found
-if root_dir is None:
-    raise FileNotFoundError("No Git root directory found.")
+root_dir, in_notebook = init_notebook()
 
 
 # ## Load Data / Set Paths
@@ -50,41 +37,52 @@ dir_3d_agg = pathlib.Path(
     f"{root_dir}/data/profiles_3D/all_patients/2.aggregated_profiles"
 ).resolve(strict=True)
 
-# (label, slug, path) for every profile type in the 2D + 3D combinatorics
-profile_types = [
-    ("2D Organoid", "2D_organoid", path_2d_organoid),
-    ("2D Single-cell", "2D_sc", path_2d_sc),
-    (
-        "3D Organoid - Handcrafted",
-        "3D_organoid_handcrafted",
-        dir_3d_agg / "organoid_norm_sc_agg_profiles.parquet",
-    ),
-    (
-        "3D Organoid - DL (SAM-Med3D)",
-        "3D_organoid_sammed",
-        dir_3d_agg / "sammed_organoid_norm_sc_agg_profiles.parquet",
-    ),
-    (
-        "3D Single-cell - Handcrafted",
-        "3D_sc_handcrafted",
-        dir_3d_agg / "sc_norm_sc_agg_profiles.parquet",
-    ),
-    (
-        "3D Single-cell - DL (SAM-Med3D)",
-        "3D_sc_sammed",
-        dir_3d_agg / "sammed_sc_norm_sc_agg_profiles.parquet",
-    ),
+# Each 3D aggregated profile is derived two ways -- aggregated from the
+# feature-selected single cells (``from_fs``) and from the normalized single
+# cells (``from_norm``) -- so both variants are scored for every profile type.
+MODES = ["from_fs", "from_norm"]
+MODE_LABELS = {"from_fs": "from FS", "from_norm": "from norm"}
+
+# (label, slug, filename stem) base specs for every 3D profile type; the
+# ``_from_fs`` / ``_from_norm`` suffix is appended per mode below.
+base_3d_profile_types = [
+    ("3D Organoid - Handcrafted", "3D_organoid_handcrafted", "organoid_norm_agg"),
+    ("3D Organoid - DL (SAM-Med3D)", "3D_organoid_sammed", "sammed_organoid_norm_agg"),
+    ("3D Single-cell - Handcrafted", "3D_sc_handcrafted", "sc_norm_agg"),
+    ("3D Single-cell - DL (SAM-Med3D)", "3D_sc_sammed", "sammed_sc_norm_agg"),
     (
         "3D Single-cell - Nucleocentric DL (SAM-Med3D)",
         "3D_sc_sammed_nucleocentric",
-        dir_3d_agg / "sammed_nucleocentric_norm_sc_agg_profiles.parquet",
+        "sammed_nucleocentric_norm_agg",
     ),
     (
         "3D Single-cell - Nucleocentric DL (MorphEM)",
         "3D_sc_nucleocentric_morphem",
-        dir_3d_agg / "nucleocentric_morphem_norm_sc_agg_profiles.parquet",
+        "nucleocentric_morphem_norm_agg",
     ),
 ]
+
+# (label, slug, path) for every profile type in the 2D + 3D combinatorics
+profile_types = [
+    ("2D Organoid", "2D_organoid", path_2d_organoid),
+    ("2D Single-cell", "2D_sc", path_2d_sc),
+]
+for _label, _slug, _stem in base_3d_profile_types:
+    for _mode in MODES:
+        profile_types.append(
+            (
+                f"{_label} ({MODE_LABELS[_mode]})",
+                f"{_slug}_{_mode}",
+                dir_3d_agg / f"{_stem}_{_mode}.parquet",
+            )
+        )
+
+# Caching: a profile type is skipped when its outputs were built from unchanged inputs and code
+CACHE_STEP = "3.calculate_inter_intra_patient_distances"
+CODE_PATH = pathlib.Path(
+    f"{root_dir}/2.2d_vs_3d_analysis/scripts/3.calculate_inter_intra_patient_distances.py"
+).resolve(strict=True)
+results_root = pathlib.Path(f"{root_dir}/2.2d_vs_3d_analysis/results").resolve()
 
 dist_results_dir = pathlib.Path(
     f"{root_dir}/2.2d_vs_3d_analysis/results/distance_metrics"
@@ -121,35 +119,13 @@ def harmonize_metadata(df: pd.DataFrame) -> pd.DataFrame:
         + "_"
         + df["Metadata_Experiment_Dose"].fillna(0).astype(float).astype(int).astype(str)
     )
-    # Some upstream Texture features contain corrupted inf values; treat like NaN
-    # so the existing NaN-handling in the distance functions covers them too.
-    feature_cols = [c for c in df.columns if not c.startswith("Metadata_")]
-    df[feature_cols] = df[feature_cols].replace([np.inf, -np.inf], np.nan)
+
     return df
 
 
 def load_and_harmonize(path: pathlib.Path) -> pd.DataFrame:
     """Load a profile parquet and harmonize its metadata columns."""
     return harmonize_metadata(load_profile(path))
-
-
-# TEMPORARY - remove once ZedProfiler's Texture-feature computation is fixed
-# upstream. Aggregation is already fixed (all types are 1 row/well now), but
-# ZedProfiler (organoid_handcrafted, sc_handcrafted) still has astronomically
-# large corrupted values in a subset of Texture features. This masks those as
-# NaN so the existing NaN-handling in the distance functions covers them too;
-# for every other profile type this is a no-op.
-def temporary_clean_and_aggregate(df: pd.DataFrame) -> pd.DataFrame:
-    feature_cols = [c for c in df.columns if not c.startswith("Metadata_")]
-    meta_cols = [c for c in df.columns if c.startswith("Metadata_")]
-
-    df[feature_cols] = df[feature_cols].mask(df[feature_cols].abs() > 1e10)
-
-    # No-op if already 1 row per well; kept as a safety net.
-    group_keys = ["Metadata_Biology_PatientTumor", "Metadata_Experiment_Well"]
-    agg_dict = {c: "first" for c in meta_cols if c not in group_keys}
-    agg_dict.update({c: "mean" for c in feature_cols})
-    return df.groupby(group_keys, as_index=False).agg(agg_dict)
 
 
 # ## Define the functions
@@ -300,16 +276,26 @@ def calculate_inter_patient_distance_metrics(
 
 # ## Run the functions
 
-# In[ ]:
+# In[4]:
 
 
 # Inter and intra patient distances for every profile type, saved with a slug prefix
 for label, slug, path in profile_types:
+    intra_output_path = (
+        dist_results_dir / f"{slug}_intra_patient_cosine_distance.parquet"
+    )
+    inter_output_path = (
+        dist_results_dir / f"{slug}_inter_patient_cosine_distance.parquet"
+    )
+    outputs = [intra_output_path, inter_output_path]
+    inputs = [path]
+    if is_fresh(CACHE_STEP, results_root, CODE_PATH, outputs, inputs):
+        print("===", label, "(cached) ===")
+        continue
+
     print("===", label, "===")
     df = load_and_harmonize(path)
-    df = temporary_clean_and_aggregate(
-        df
-    )  # TEMPORARY - remove once upstream data is fixed
+
     metadata_cols = [c for c in df.columns if c.startswith("Metadata_")]
 
     calculate_intra_patient_distance_metrics(
@@ -317,12 +303,13 @@ for label, slug, path in profile_types:
         metadata_columns=metadata_cols,
         col_for_reference="Metadata_treatment_dose",
         reference_group="DMSO_1",
-        output_path=dist_results_dir / f"{slug}_intra_patient_cosine_distance.parquet",
+        output_path=intra_output_path,
     )
     calculate_inter_patient_distance_metrics(
         df,
         metadata_columns=metadata_cols,
         col_for_reference="Metadata_treatment_dose",
         reference_group="DMSO_1",
-        output_path=dist_results_dir / f"{slug}_inter_patient_cosine_distance.parquet",
+        output_path=inter_output_path,
     )
+    mark_fresh(CACHE_STEP, results_root, CODE_PATH, outputs, inputs)

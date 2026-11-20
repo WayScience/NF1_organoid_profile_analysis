@@ -76,12 +76,23 @@ pooled_profile_paths = {
                 f"{root_dir}/1.EDA/results/umap/3D_scfs_umap.parquet"
             ).resolve(),
         },
-        "sc_consensus": {
+        # 3D consensus profiles are summarized two ways -- from the
+        # feature-selected single cells (from_fs) and from the normalized
+        # single cells (from_norm) -- so a UMAP is embedded for each.
+        "sc_consensus_from_fs": {
             "input": pathlib.Path(
-                f"{root_dir}/data/profiles_3D/all_patients/3.consensus_profiles/sc_norm_sc_consensus_profiles.parquet"
+                f"{root_dir}/data/profiles_3D/all_patients/3.consensus_profiles/sc_norm_consensus_from_fs.parquet"
             ).resolve(strict=True),
             "output": pathlib.Path(
-                f"{root_dir}/1.EDA/results/umap/3D_scconsensus_umap.parquet"
+                f"{root_dir}/1.EDA/results/umap/3D_scconsensus_from_fs_umap.parquet"
+            ).resolve(),
+        },
+        "sc_consensus_from_norm": {
+            "input": pathlib.Path(
+                f"{root_dir}/data/profiles_3D/all_patients/3.consensus_profiles/sc_norm_consensus_from_norm.parquet"
+            ).resolve(strict=True),
+            "output": pathlib.Path(
+                f"{root_dir}/1.EDA/results/umap/3D_scconsensus_from_norm_umap.parquet"
             ).resolve(),
         },
     },
@@ -106,6 +117,8 @@ for projection_key in pooled_profile_paths:
         else "Metadata_patient_tumor"
     )
     for profile_variant, profile_paths in pooled_profile_paths[projection_key].items():
+        if profile_paths["output"].exists():
+            continue
         # Load the data
         profile_df = pd.read_parquet(profile_paths["input"])
 
@@ -153,7 +166,7 @@ patients = pd.read_csv(
 )["patient"].to_list()
 
 
-# In[ ]:
+# In[5]:
 
 
 # Individual patients, 2D and 3D, feature-selected and aggregated
@@ -248,6 +261,8 @@ for patient in patient_profile_paths:
         for profile_variant, profile_paths in patient_profile_paths[patient][
             projection_key
         ].items():
+            if patient_specific_output_paths[projection_key][profile_variant].exists():
+                continue
             # Load the data
             profile_df = pd.read_parquet(profile_paths["input"])
             metadata_columns = infer_cp_features(profile_df, metadata=True)
@@ -292,6 +307,8 @@ for patient in patient_profile_paths:
 # Concatenate all patients' results into one file per projection/variant combo
 for projection_key, variants in patient_specific_results.items():
     for profile_variant, patient_dfs in variants.items():
+        if patient_specific_output_paths[projection_key][profile_variant].exists():
+            continue
         combined_df = pd.concat(patient_dfs, ignore_index=True)
         combined_df.to_parquet(
             patient_specific_output_paths[projection_key][profile_variant],
