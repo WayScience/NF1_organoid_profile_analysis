@@ -153,11 +153,11 @@ requires = ["BiocGenerics"]
 
 [[package]]
 name = "S7"
-version = "0.2.2"
+version = "1.0.0"
 source = "cran"
-raw_version = "0.2.2"
-url = "https://cran.r-project.org/src/contrib/S7_0.2.2.tar.gz"
-checksum = "md5:6a40d3eae470be0f06a03737b9391269"
+raw_version = "1.0.0"
+url = "https://cran.r-project.org/src/contrib/S7_1.0.0.tar.gz"
+checksum = "md5:efb87f59334cee4c9ea0a8af20bf80e6"
 
 [[package]]
 name = "VennDiagram"
@@ -196,11 +196,11 @@ requires = [
 
 [[package]]
 name = "arrow"
-version = "25.0.1"
+version = "26.0.1"
 source = "cran"
-raw_version = "25.0.1"
-url = "https://cran.r-project.org/src/contrib/arrow_25.0.1.tar.gz"
-checksum = "md5:a337ef80e3605632842b5ed5846f12cd"
+raw_version = "26.0.1"
+url = "https://cran.r-project.org/src/contrib/arrow_26.0.1.tar.gz"
+checksum = "md5:5e2300ab556c3e1ee9cedc3660a5c8c4"
 requires = [
     "assertthat",
     "bit64",
@@ -381,11 +381,11 @@ checksum = "md5:b6d2fb49c00a528b04f574892359aa55"
 
 [[package]]
 name = "colorspace"
-version = "2.1.3"
+version = "2.1.4"
 source = "cran"
-raw_version = "2.1-3"
-url = "https://cran.r-project.org/src/contrib/colorspace_2.1-3.tar.gz"
-checksum = "md5:44beb9a1ff66bf35b44663b4fa7ef2ae"
+raw_version = "2.1-4"
+url = "https://cran.r-project.org/src/contrib/colorspace_2.1-4.tar.gz"
+checksum = "md5:2b2d367a454e47b574db3839fd550e36"
 
 [[package]]
 name = "commonmark"
@@ -442,11 +442,11 @@ requires = [
 
 [[package]]
 name = "curl"
-version = "8.0.0"
+version = "8.1.0"
 source = "cran"
-raw_version = "8.0.0"
-url = "https://cran.r-project.org/src/contrib/curl_8.0.0.tar.gz"
-checksum = "md5:11e42cdbfa575a081e5bf9a710ee76bd"
+raw_version = "8.1.0"
+url = "https://cran.r-project.org/src/contrib/curl_8.1.0.tar.gz"
+checksum = "md5:196b1c5e8adafec4b5bb9123864b52b4"
 
 [[package]]
 name = "desc"
@@ -493,11 +493,11 @@ requires = [
 
 [[package]]
 name = "diffobj"
-version = "0.3.9"
+version = "0.3.10"
 source = "cran"
-raw_version = "0.3.9"
-url = "https://cran.r-project.org/src/contrib/diffobj_0.3.9.tar.gz"
-checksum = "md5:2211ade9964a649d33567a67bbbac2de"
+raw_version = "0.3.10"
+url = "https://cran.r-project.org/src/contrib/diffobj_0.3.10.tar.gz"
+checksum = "md5:b5a1dc88ccdd18229343946d39a0e672"
 requires = ["crayon"]
 
 [[package]]
@@ -688,11 +688,11 @@ checksum = "md5:dda54b65216fe3c53571d2adaddc7461"
 
 [[package]]
 name = "gert"
-version = "2.4.1"
+version = "2.5.0"
 source = "cran"
-raw_version = "2.4.1"
-url = "https://cran.r-project.org/src/contrib/gert_2.4.1.tar.gz"
-checksum = "md5:a03c75ec3b3622841320c46ebf858bf5"
+raw_version = "2.5.0"
+url = "https://cran.r-project.org/src/contrib/gert_2.5.0.tar.gz"
+checksum = "md5:0dd025d2d2a0a6f38fb9c99bddac9c05"
 requires = [
     "askpass",
     "credentials",
@@ -736,11 +736,11 @@ requires = [
 
 [[package]]
 name = "ggfun"
-version = "0.2.1"
+version = "0.2.2"
 source = "cran"
-raw_version = "0.2.1"
-url = "https://cran.r-project.org/src/contrib/ggfun_0.2.1.tar.gz"
-checksum = "md5:78cdc8ca2371fa220c44ba471d8e67a1"
+raw_version = "0.2.2"
+url = "https://cran.r-project.org/src/contrib/ggfun_0.2.2.tar.gz"
+checksum = "md5:04814613a86523a50ff46897742ab1ff"
 requires = [
     "cli",
     "dplyr",
@@ -752,11 +752,11 @@ requires = [
 
 [[package]]
 name = "ggplot2"
-version = "4.0.3"
+version = "4.0.4"
 source = "cran"
-raw_version = "4.0.3"
-url = "https://cran.r-project.org/src/contrib/ggplot2_4.0.3.tar.gz"
-checksum = "md5:c50d6864f6226ed9759e5deaa0a25e7f"
+raw_version = "4.0.4"
+url = "https://cran.r-project.org/src/contrib/ggplot2_4.0.4.tar.gz"
+checksum = "md5:311e2e3e31a41b99269a46575056c10f"
 requires = [
     "cli",
     "gtable",
@@ -771,11 +771,11 @@ requires = [
 
 [[package]]
 name = "ggplotify"
-version = "0.1.3"
+version = "0.1.4"
 source = "cran"
-raw_version = "0.1.3"
-url = "https://cran.r-project.org/src/contrib/ggplotify_0.1.3.tar.gz"
-checksum = "md5:06f2d2b9f042fac7f4521b71a5ae49d9"
+raw_version = "0.1.4"
+url = "https://cran.r-project.org/src/contrib/ggplotify_0.1.4.tar.gz"
+checksum = "md5:39ec8abde205bdc56ceb6554fe0e4186"
 requires = [
     "ggplot2",
     "gridGraphics",
@@ -1057,11 +1057,11 @@ checksum = "md5:915e6c823c1d8243641ce97253389f14"
 
 [[package]]
 name = "lambda.r"
-version = "1.2.4"
+version = "1.2.6"
 source = "cran"
-raw_version = "1.2.4"
-url = "https://cran.r-project.org/src/contrib/lambda.r_1.2.4.tar.gz"
-checksum = "md5:861157dc2fe66ce8ed1e755578a57e47"
+raw_version = "1.2.6"
+url = "https://cran.r-project.org/src/contrib/lambda.r_1.2.6.tar.gz"
+checksum = "md5:cfd18ed648c858a7873506af81469de2"
 requires = ["formatR"]
 
 [[package]]
@@ -1153,28 +1153,28 @@ requires = [
 
 [[package]]
 name = "openssl"
-version = "2.4.2"
+version = "2.6.0"
 source = "cran"
-raw_version = "2.4.2"
-url = "https://cran.r-project.org/src/contrib/openssl_2.4.2.tar.gz"
-checksum = "md5:748b0fa601173da477706803783b6943"
+raw_version = "2.6.0"
+url = "https://cran.r-project.org/src/contrib/openssl_2.6.0.tar.gz"
+checksum = "md5:4c90a780fe0e9d65448a28a06568dbd0"
 requires = ["askpass"]
 
 [[package]]
 name = "otel"
-version = "0.2.0"
+version = "0.3.0"
 source = "cran"
-raw_version = "0.2.0"
-url = "https://cran.r-project.org/src/contrib/otel_0.2.0.tar.gz"
-checksum = "md5:cecd0f434a6327dcf5ca0bc2da494d06"
+raw_version = "0.3.0"
+url = "https://cran.r-project.org/src/contrib/otel_0.3.0.tar.gz"
+checksum = "md5:b9c41923305ec69ba71e80b63e86ec02"
 
 [[package]]
 name = "pak"
-version = "0.11.1"
+version = "0.11.2"
 source = "cran"
-raw_version = "0.11.1"
-url = "https://cran.r-project.org/src/contrib/pak_0.11.1.tar.gz"
-checksum = "md5:201eaa969a601b2efc6253432a283741"
+raw_version = "0.11.2"
+url = "https://cran.r-project.org/src/contrib/pak_0.11.2.tar.gz"
+checksum = "md5:808f7dc401bd4d503f2323a8b199cefd"
 
 [[package]]
 name = "patchwork"
@@ -1301,6 +1301,18 @@ requires = [
 ]
 
 [[package]]
+name = "platetools"
+version = "0.1.7"
+source = "cran"
+raw_version = "0.1.7"
+url = "https://cran.r-project.org/src/contrib/platetools_0.1.7.tar.gz"
+checksum = "md5:8ac37c9a8d360af1911b363dc2d0c702"
+requires = [
+    "RColorBrewer",
+    "ggplot2",
+]
+
+[[package]]
 name = "png"
 version = "0.1.9"
 source = "cran"
@@ -1326,11 +1338,11 @@ checksum = "md5:2e2db8105f214b80d3d4254b8aabb255"
 
 [[package]]
 name = "processx"
-version = "3.9.0"
+version = "3.10.0"
 source = "cran"
-raw_version = "3.9.0"
-url = "https://cran.r-project.org/src/contrib/processx_3.9.0.tar.gz"
-checksum = "md5:c4e0ed59285d195cdb03c66e3a9cb76d"
+raw_version = "3.10.0"
+url = "https://cran.r-project.org/src/contrib/processx_3.10.0.tar.gz"
+checksum = "md5:787f91ac0ed47ea60bba66d8b548b2d4"
 requires = [
     "ps",
     "R6",
@@ -1494,11 +1506,11 @@ requires = [
 
 [[package]]
 name = "roxygen2"
-version = "8.1.0"
+version = "8.1.1"
 source = "cran"
-raw_version = "8.1.0"
-url = "https://cran.r-project.org/src/contrib/roxygen2_8.1.0.tar.gz"
-checksum = "md5:db68d5c2c7cff5bf6c7db0069507a465"
+raw_version = "8.1.1"
+url = "https://cran.r-project.org/src/contrib/roxygen2_8.1.1.tar.gz"
+checksum = "md5:9c8666c36cdff91561fa7176dae67c98"
 requires = [
     "brew",
     "cli",
@@ -1542,17 +1554,17 @@ requires = ["curl"]
 
 [[package]]
 name = "sass"
-version = "0.4.10"
+version = "0.5.0"
 source = "cran"
-raw_version = "0.4.10"
-url = "https://cran.r-project.org/src/contrib/sass_0.4.10.tar.gz"
-checksum = "md5:16054a7117a81ba75893fec17da62209"
+raw_version = "0.5.0"
+url = "https://cran.r-project.org/src/contrib/sass_0.5.0.tar.gz"
+checksum = "md5:fdc11cc1b8f6cffd1ceef6b4d96b529c"
 requires = [
     "fs",
-    "rlang",
     "htmltools",
     "R6",
     "rappdirs",
+    "rlang",
 ]
 
 [[package]]
@@ -1593,11 +1605,11 @@ checksum = "md5:42b7951c69b6c93178c07f2d189d0c89"
 
 [[package]]
 name = "shiny"
-version = "1.14.0"
+version = "1.15.0"
 source = "cran"
-raw_version = "1.14.0"
-url = "https://cran.r-project.org/src/contrib/shiny_1.14.0.tar.gz"
-checksum = "md5:309459688ceae1e8b018d1595eae8879"
+raw_version = "1.15.0"
+url = "https://cran.r-project.org/src/contrib/shiny_1.15.0.tar.gz"
+checksum = "md5:944e93bbd58350e085f1c4b317c8e159"
 requires = [
     "bslib",
     "cachem",
@@ -1617,6 +1629,7 @@ requires = [
     "R6",
     "rlang",
     "sourcetools",
+    "watcher",
     "withr",
     "xtable",
 ]
@@ -1672,11 +1685,11 @@ checksum = "md5:ffb4244c6d4cacdd4ac8ef187699707c"
 
 [[package]]
 name = "systemfonts"
-version = "1.3.2"
+version = "1.3.3"
 source = "cran"
-raw_version = "1.3.2"
-url = "https://cran.r-project.org/src/contrib/systemfonts_1.3.2.tar.gz"
-checksum = "md5:57b95280ca9bba2bb18477eb512ac971"
+raw_version = "1.3.3"
+url = "https://cran.r-project.org/src/contrib/systemfonts_1.3.3.tar.gz"
+checksum = "md5:db0e538d68e478ef0eaa970fe3f6411c"
 requires = [
     "base64enc",
     "jsonlite",
@@ -1712,11 +1725,11 @@ requires = [
 
 [[package]]
 name = "textshaping"
-version = "1.0.5"
+version = "1.1.0"
 source = "cran"
-raw_version = "1.0.5"
-url = "https://cran.r-project.org/src/contrib/textshaping_1.0.5.tar.gz"
-checksum = "md5:93771d8cfc50a7ed021df061ce71e07f"
+raw_version = "1.1.0"
+url = "https://cran.r-project.org/src/contrib/textshaping_1.1.0.tar.gz"
+checksum = "md5:5f79be037dcb57d6ce6fd6b88d6f5100"
 requires = [
     "lifecycle",
     "stringi",
@@ -1920,6 +1933,19 @@ requires = [
 ]
 
 [[package]]
+name = "watcher"
+version = "0.2.2"
+source = "cran"
+raw_version = "0.2.2"
+url = "https://cran.r-project.org/src/contrib/watcher_0.2.2.tar.gz"
+checksum = "md5:c0f4049028385b1a98b3a8b8661cf247"
+requires = [
+    "later",
+    "R6",
+    "rlang",
+]
+
+[[package]]
 name = "whisker"
 version = "0.4.1"
 source = "cran"
@@ -1937,11 +1963,11 @@ checksum = "md5:121bf3699aadb9d1b47d648964b934f8"
 
 [[package]]
 name = "xfun"
-version = "0.61.0"
+version = "0.62.0"
 source = "cran"
-raw_version = "0.61"
-url = "https://cran.r-project.org/src/contrib/xfun_0.61.tar.gz"
-checksum = "md5:70130070c686204fb71dbf20c6c871ac"
+raw_version = "0.62"
+url = "https://cran.r-project.org/src/contrib/xfun_0.62.tar.gz"
+checksum = "md5:93bc01d797fcdf1e4014998e4c248bd7"
 
 [[package]]
 name = "xml2"
@@ -1982,11 +2008,11 @@ checksum = "md5:6beea9b09717960f6c79fcbc1e129c41"
 
 [[package]]
 name = "yulab.utils"
-version = "0.2.5"
+version = "0.2.6"
 source = "cran"
-raw_version = "0.2.5"
-url = "https://cran.r-project.org/src/contrib/yulab.utils_0.2.5.tar.gz"
-checksum = "md5:09c42a5753acb5f2b98badebf5dc3ec6"
+raw_version = "0.2.6"
+url = "https://cran.r-project.org/src/contrib/yulab.utils_0.2.6.tar.gz"
+checksum = "md5:a6eb9c0e13d9257dd3e07e2acffa6954"
 requires = [
     "cli",
     "digest",

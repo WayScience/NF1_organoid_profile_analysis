@@ -6,7 +6,7 @@ if [ -z "$git_root" ]; then
     exit 1
 fi
 
-jupyter nbconvert --to=script --FilesWriter.build_directory="$git_root"/figures/drugs_figure/scripts/ "$git_root"/figures/drugs_figure/notebooks/*.ipynb
+uv run jupyter nbconvert --to=script --FilesWriter.build_directory="$git_root"/figures/drugs_figure/scripts/ "$git_root"/figures/drugs_figure/notebooks/*.ipynb
 
 # deactivate any existing conda environment
 conda deactivate
@@ -15,6 +15,4 @@ deactivate 2>/dev/null
 
 uv run python "$git_root"/figures/drugs_figure/scripts/drugs_figure.py
 uv run python "$git_root"/figures/drugs_figure/scripts/chembl_target_cell.py
-# platemap_figure.r resolves its inputs/outputs relative to its own directory,
-# so run it from there (in a subshell to leave the caller's cwd unchanged).
-(cd "$git_root"/figures/drugs_figure/scripts && uvr run platemap_figure.r)
+uvr run "$git_root"/figures/drugs_figure/scripts/platemap_figure.r

@@ -3,14 +3,35 @@ suppressPackageStartupMessages(library(stringr))
 suppressPackageStartupMessages(library(ggplot2))
 suppressPackageStartupMessages(library(platetools))
 suppressPackageStartupMessages(library(patchwork))
+find_git_root <- function() {
+    cwd <- getwd()
+    if (dir.exists(file.path(cwd, ".git"))) {
+        return(cwd)
+    }
+    current_path <- cwd
+    while (dirname(current_path) != current_path) {
+        parent_path <- dirname(current_path)
+        if (dir.exists(file.path(parent_path, ".git"))) {
+            return(parent_path)
+        }
+        current_path <- parent_path
+    }
+    stop("No Git root directory found.")
+}
 
-platemap_file_path <- file.path("../../../data/2D_profiles/NF0040_T1/platemap/platemap.csv")
+root_dir <- find_git_root()
+figures_dir <- file.path(root_dir, "figures", "drugs_figure", "figures")
+dir.create(figures_dir, recursive = TRUE, showWarnings = FALSE)
+
+platemap_file_path <- file.path(
+    root_dir, "config/platemaps/platemap2.csv"
+)
 platemap <- read.csv(platemap_file_path, stringsAsFactors = FALSE)
 
 # Add leading zeros if needed (uncomment the commented code in your notebook)
 platemap <- platemap %>%
-  mutate(well_position = str_replace(well_position, "([A-H])([1-9])$", "\\10\\2"))
-platemap$dose_unit <- paste0(platemap$dose, " ", platemap$dose_unit)
+  mutate(WellRow = str_replace(WellRow, "([A-H])([1-9])$", "\\10\\2"))
+platemap$dose_unit <- paste0(platemap$Dose, " ", platemap$Unit)
 head(platemap)
 
 
@@ -22,8 +43,8 @@ axis_text_size <- font_size - 2
 # Now create the plot
 platemap_figure <- (
     platetools::raw_map(
-        data = platemap$treatment,
-        well = platemap$well_position,
+        data = platemap$Treatment,
+        well = platemap$WellPosition,
         # shape = platemap$dose_unit,
         plate = 96,
         size = 15
@@ -62,7 +83,7 @@ platemap_figure <- (
 
 )
 ggsave(
-    filename = file.path("../figures/platemap_figure.png"),
+    filename = file.path(figures_dir, "platemap_figure.png"),
     plot = platemap_figure,
     width = width,
     height = height,
@@ -70,5 +91,3 @@ ggsave(
     dpi = 600
 )
 platemap_figure
-
-

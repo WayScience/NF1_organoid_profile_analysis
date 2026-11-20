@@ -31,6 +31,7 @@ profile_base_dir = bandicoot_check(
     pathlib.Path(os.path.expanduser("~/mnt/bandicoot")).resolve(), root_dir
 )
 
+
 # In[2]:
 
 
@@ -54,6 +55,7 @@ platemap_file_paths_list = [path for path in platemap_file_paths_list if path.ex
 platemaps = pd.concat([pd.read_csv(path) for path in platemap_file_paths_list])
 platemaps.drop_duplicates(inplace=True)
 drugs = sorted(platemaps["treatment"].unique())
+
 
 # In[3]:
 
@@ -130,6 +132,7 @@ drugs_df = pd.merge(
     validate="one_to_one",
 )
 
+
 # In[4]:
 
 
@@ -152,10 +155,12 @@ custom_MOA_palette = {
     "BRD4 inhibitor": "#ff0000",
 }
 
+
 # In[5]:
 
 
 drugs_df["drug"].unique()
+
 
 # In[6]:
 
@@ -166,6 +171,7 @@ drugs_df.sort_values(
     ascending=[False, False, True],
     inplace=True,
 )
+
 
 # In[7]:
 
@@ -204,5 +210,6 @@ plt.legend(title="FDA Status", bbox_to_anchor=(1.05, 1), loc="upper left")
 plt.tight_layout()
 plt.savefig(figures_dir / "drug_fda_approval_status.png", dpi=600)
 plt.show()
+
 
 # In[ ]:
