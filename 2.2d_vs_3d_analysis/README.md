@@ -39,6 +39,21 @@ Notebooks are numbered in the order they should be run.
 Run notebooks (or their paired scripts under `scripts/`) in numeric order.
 Python notebooks use the `GFF_analysis` conda environment; R notebooks use `gff_figure_env`, except `9.sparse_cca_analysis.ipynb`, which needs the `PMA` package and runs under `sparse_cca_env` instead.
 
+## Caching
+
+Every step skips work it has already done. An output is reused only if it exists and was produced from the same code and inputs. The fingerprint covers:
+
+- the step's script, so any edit to the code or its constants triggers a recompute,
+- each input file's path, size, and modification time (contents are not hashed, because the 3D profiles are tens of gigabytes).
+
+Each step records the fingerprint of each output it writes in `results/_cache_manifests/<step>.parquet`. Python steps use `utils/src/notebook_init_utils/result_cache.py`. R steps use `utils/r_result_cache.r`.
+
+- Set `RESULTS_CACHE_FORCE=1` to ignore all caches and recompute everything.
+- Delete a step's manifest to force that step to recompute.
+- Mirrored scripts are regenerated from the notebooks by `run_all_2d_vs_3d_local.sh`, so a notebook edit that is followed by a run also invalidates the cache.
+- The first run after adding caching has no manifests, so it recomputes everything once. Old mAP checkpoints in `results/mAP/cache/` are no longer read; they can be deleted.
+- Figures that are cached are not redrawn or displayed. Notebooks therefore show no plot for a cached figure.
+
 ## Shannon entropy
 
 ### Why compute it?

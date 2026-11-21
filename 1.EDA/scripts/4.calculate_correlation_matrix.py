@@ -29,7 +29,7 @@
 #   correlation values and per-cell treatment labels as nested list columns.
 #   **1 file total** (down from one file per patient).
 #
-# Preprocessing (`NF0037_T1_CQ1` exclusion, `_Texture_` feature drop,
+# Preprocessing (`NF0037_T1_CQ1` exclusion,
 # `pycytominer.feature_select` outlier drop) matches `0.generate_umap.ipynb` /
 # `2.generate_pca.ipynb`, via a shared helper used by both groups.
 #
@@ -186,9 +186,6 @@ samples_path = correlation_dir / "2D_sc_correlation_samples.parquet"
 pairs_df.to_parquet(pairs_path, index=False)
 samples_df.to_parquet(samples_path, index=False)
 
-print(f"Saved {pairs_path.name}: {len(pairs_df)} rows")
-print(f"Saved {samples_path.name}: {len(samples_df)} rows")
-
 
 # ## Group A -- 3D sc_agg / sc_consensus, replicate/treatment-level
 #
@@ -208,40 +205,48 @@ GROUP_A_3D_VARIANTS = [
 profile_dirs_3d = {"agg": "2.aggregated_profiles", "consensus": "3.consensus_profiles"}
 patient_col_3d = "Metadata_Biology_PatientTumor"
 
+# Each 3D aggregate/consensus profile is derived two ways -- summarized from the
+# feature-selected single cells (``from_fs``) and from the normalized single
+# cells (``from_norm``). Both are correlated, and the mode is appended to the
+# profile_type value (e.g. ``agg_from_fs``) so the long table stays unambiguous.
+MODES_3D = ["from_fs", "from_norm"]
+
 pairs_rows_3d = []
 samples_rows_3d = []
 
 for variant in tqdm.tqdm(GROUP_A_3D_VARIANTS):
     for profile_type in profile_types:
-        input_path = pathlib.Path(
-            f"{root_dir}/data/profiles_3D/all_patients/{profile_dirs_3d[profile_type]}/{variant}_sc_{profile_type}_profiles.parquet"
-        ).resolve(strict=True)
-        df = pd.read_parquet(input_path)
+        for mode in MODES_3D:
+            profile_type_mode = f"{profile_type}_{mode}"
+            input_path = pathlib.Path(
+                f"{root_dir}/data/profiles_3D/all_patients/{profile_dirs_3d[profile_type]}/{variant}_{profile_type}_{mode}.parquet"
+            ).resolve(strict=True)
+            df = pd.read_parquet(input_path)
 
-        df, metadata_columns, feature_columns = clean_profile(
-            df, patient_col=patient_col_3d
-        )
-        corr_mat = correlate_samples(df, feature_columns)
-
-        n = corr_mat.shape[0]
-        iu = np.triu_indices(n)
-        pairs_rows_3d.append(
-            pd.DataFrame(
-                {
-                    "normalization_variant": variant,
-                    "profile_type": profile_type,
-                    "sample_i": iu[0],
-                    "sample_j": iu[1],
-                    "correlation": corr_mat[iu],
-                }
+            df, metadata_columns, feature_columns = clean_profile(
+                df, patient_col=patient_col_3d
             )
-        )
+            corr_mat = correlate_samples(df, feature_columns)
 
-        sample_metadata = df[metadata_columns].reset_index(drop=True)
-        sample_metadata.insert(0, "sample_index", np.arange(n))
-        sample_metadata.insert(0, "profile_type", profile_type)
-        sample_metadata.insert(0, "normalization_variant", variant)
-        samples_rows_3d.append(sample_metadata)
+            n = corr_mat.shape[0]
+            iu = np.triu_indices(n)
+            pairs_rows_3d.append(
+                pd.DataFrame(
+                    {
+                        "normalization_variant": variant,
+                        "profile_type": profile_type_mode,
+                        "sample_i": iu[0],
+                        "sample_j": iu[1],
+                        "correlation": corr_mat[iu],
+                    }
+                )
+            )
+
+            sample_metadata = df[metadata_columns].reset_index(drop=True)
+            sample_metadata.insert(0, "sample_index", np.arange(n))
+            sample_metadata.insert(0, "profile_type", profile_type_mode)
+            sample_metadata.insert(0, "normalization_variant", variant)
+            samples_rows_3d.append(sample_metadata)
 
 pairs_df_3d = pd.concat(pairs_rows_3d, ignore_index=True)
 samples_df_3d = pd.concat(samples_rows_3d, ignore_index=True)
@@ -250,9 +255,6 @@ pairs_path_3d = correlation_dir / "3D_sc_correlation_pairs.parquet"
 samples_path_3d = correlation_dir / "3D_sc_correlation_samples.parquet"
 pairs_df_3d.to_parquet(pairs_path_3d, index=False)
 samples_df_3d.to_parquet(samples_path_3d, index=False)
-
-print(f"Saved {pairs_path_3d.name}: {len(pairs_df_3d)} rows")
-print(f"Saved {samples_path_3d.name}: {len(samples_df_3d)} rows")
 
 
 # ## Group B -- 3D sc_fs, single-cell, per patient
@@ -353,7 +355,4 @@ for variant in tqdm.tqdm(SC_FS_VARIANTS):
 if writer is not None:
     writer.close()
 
-print(
-    f"Saved {matrices_path.name}: {n_rows_written} rows (variant x patient combinations)"
-)
 print(pd.DataFrame(summary_rows).to_string(index=False))
