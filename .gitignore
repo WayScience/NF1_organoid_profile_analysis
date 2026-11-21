@@ -196,6 +196,8 @@ interactive_dashboard/data/
 7.treatment_predictive_model/trained_models/
 7.treatment_predictive_model/model_results/
 7.treatment_predictive_model/data_splits/
+figures/assembled_figure_3/figures
+figures/assembled_figure_3/data
 figures/assembled_figure_x/media/Whole_montage.png
 figures/assembled_figure_3/figures/umap_image_frame.pdf
 figures/assembled_figure_3/data/
