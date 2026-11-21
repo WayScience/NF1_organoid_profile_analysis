@@ -14,7 +14,7 @@ The steps after 3 only read these saved statistics; no model is refit.
 
 ## Pipeline
 
-Every step is a notebook in `notebooks/`; `run_all_linear_modeling_local.sh` regenerates the mirrored `scripts/` (same base names) from them with `jupyter nbconvert` before running.
+Every step is a notebook in `notebooks/`; `run_all_linear_modeling_local.sh` regenerates the mirrored `scripts/` (same base names) from them with `uv run jupyter nbconvert` before running.
 Python steps run in the `uv` environment and R (ggplot2) steps run in the `uvr` environment (see the [root README](../README.md#computational-environment)).
 
 | Step | Language | What it does | Main outputs |
@@ -60,4 +60,4 @@ source uv_setup.sh                                   # once: uv + uvr environmen
 bash 4.linear_modeling/run_all_linear_modeling_local.sh
 ```
 
-`run_all_linear_modeling_local.sh` regenerates `scripts/` from `notebooks/` with `jupyter nbconvert`, then runs every step in order.
+`run_all_linear_modeling_local.sh` regenerates `scripts/` from `notebooks/` with `uv run jupyter nbconvert`, then runs every step in order.

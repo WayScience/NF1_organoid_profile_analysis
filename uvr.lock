@@ -1,6 +1,6 @@
 [r]
-version = "4.3.0"
-bioc_version = "3.18"
+version = "4.4.3"
+bioc_version = "3.20"
 
 [[package]]
 name = "BH"
@@ -12,11 +12,11 @@ checksum = "md5:4b82aea7c6223ea0048c3edbe1a2caa0"
 
 [[package]]
 name = "BiocGenerics"
-version = "0.48.1"
+version = "0.52.0"
 source = "bioconductor"
-raw_version = "0.48.1"
-url = "https://bioconductor.org/packages/3.18/bioc/src/contrib/BiocGenerics_0.48.1.tar.gz"
-checksum = "md5:77629e64c2a9a0324eb11bb59b53b126"
+raw_version = "0.52.0"
+url = "https://bioconductor.org/packages/3.20/bioc/src/contrib/BiocGenerics_0.52.0.tar.gz"
+checksum = "md5:17433e48365e2cb89bc5e59de7ead46b"
 
 [[package]]
 name = "Cairo"
@@ -28,11 +28,11 @@ checksum = "md5:f3cbf08167279c9ebef64fd74565f025"
 
 [[package]]
 name = "ComplexHeatmap"
-version = "2.18.0"
+version = "2.22.0"
 source = "bioconductor"
-raw_version = "2.18.0"
-url = "https://bioconductor.org/packages/3.18/bioc/src/contrib/ComplexHeatmap_2.18.0.tar.gz"
-checksum = "md5:f4f19a1339c99471cb23ffc4a7272881"
+raw_version = "2.22.0"
+url = "https://bioconductor.org/packages/3.20/bioc/src/contrib/ComplexHeatmap_2.22.0.tar.gz"
+checksum = "md5:fe0371ce669fb3ae8d4caccf27833463"
 requires = [
     "circlize",
     "GetoptLong",
@@ -48,6 +48,14 @@ requires = [
     "doParallel",
     "codetools",
 ]
+
+[[package]]
+name = "FNN"
+version = "1.1.4-4.1"
+source = "cran"
+raw_version = "1.1.4.1"
+url = "https://cran.r-project.org/src/contrib/FNN_1.1.4.1.tar.gz"
+checksum = "md5:92df8f0a011ef9795b31b62450304b4e"
 
 [[package]]
 name = "GetoptLong"
@@ -72,11 +80,11 @@ checksum = "md5:a384a77386d8847c4bdf72667bf32bed"
 
 [[package]]
 name = "IRanges"
-version = "2.36.0"
+version = "2.40.1"
 source = "bioconductor"
-raw_version = "2.36.0"
-url = "https://bioconductor.org/packages/3.18/bioc/src/contrib/IRanges_2.36.0.tar.gz"
-checksum = "md5:87618d2e5ee94d7ab81d2e1c4d847120"
+raw_version = "2.40.1"
+url = "https://bioconductor.org/packages/3.20/bioc/src/contrib/IRanges_2.40.1.tar.gz"
+checksum = "md5:d8ecdaacbdba0f2c8a65c9146e64a324"
 requires = [
     "BiocGenerics",
     "S4Vectors",
@@ -111,12 +119,28 @@ requires = [
 ]
 
 [[package]]
+name = "MASS"
+version = "7.3.66"
+source = "cran"
+raw_version = "7.3-66"
+url = "https://cran.r-project.org/src/contrib/MASS_7.3-66.tar.gz"
+checksum = "md5:272648f9e6c9f1855417b099ea03ee46"
+
+[[package]]
 name = "NLP"
 version = "0.3.3"
 source = "cran"
 raw_version = "0.3-3"
 url = "https://cran.r-project.org/src/contrib/NLP_0.3-3.tar.gz"
 checksum = "md5:3362873eba9034f978b1efbe416395ec"
+
+[[package]]
+name = "PMA"
+version = "1.2.4"
+source = "cran"
+raw_version = "1.2-4"
+url = "https://cran.r-project.org/src/contrib/PMA_1.2-4.tar.gz"
+checksum = "md5:2c01838f9dff435f10538c623a46e1c8"
 
 [[package]]
 name = "R6"
@@ -144,11 +168,11 @@ checksum = "md5:353d35176db9c570705a0a324c06fdca"
 
 [[package]]
 name = "S4Vectors"
-version = "0.40.2"
+version = "0.44.0"
 source = "bioconductor"
-raw_version = "0.40.2"
-url = "https://bioconductor.org/packages/3.18/bioc/src/contrib/S4Vectors_0.40.2.tar.gz"
-checksum = "md5:ee94f4f6c25dcaf7a50f5814495310e3"
+raw_version = "0.44.0"
+url = "https://bioconductor.org/packages/3.20/bioc/src/contrib/S4Vectors_0.44.0.tar.gz"
+checksum = "md5:6f87d627de90deccd2bc907b36d6d75d"
 requires = ["BiocGenerics"]
 
 [[package]]
@@ -196,11 +220,11 @@ requires = [
 
 [[package]]
 name = "arrow"
-version = "25.0.1"
+version = "26.0.0"
 source = "cran"
-raw_version = "25.0.1"
-url = "https://cran.r-project.org/src/contrib/arrow_25.0.1.tar.gz"
-checksum = "md5:a337ef80e3605632842b5ed5846f12cd"
+raw_version = "26.0.0"
+url = "https://cran.r-project.org/src/contrib/arrow_26.0.0.tar.gz"
+checksum = "md5:856f159373ecc6746d3eef6e963993b0"
 requires = [
     "assertthat",
     "bit64",
@@ -381,11 +405,11 @@ checksum = "md5:b6d2fb49c00a528b04f574892359aa55"
 
 [[package]]
 name = "colorspace"
-version = "2.1.3"
+version = "2.1.4"
 source = "cran"
-raw_version = "2.1-3"
-url = "https://cran.r-project.org/src/contrib/colorspace_2.1-3.tar.gz"
-checksum = "md5:44beb9a1ff66bf35b44663b4fa7ef2ae"
+raw_version = "2.1-4"
+url = "https://cran.r-project.org/src/contrib/colorspace_2.1-4.tar.gz"
+checksum = "md5:2b2d367a454e47b574db3839fd550e36"
 
 [[package]]
 name = "commonmark"
@@ -442,11 +466,11 @@ requires = [
 
 [[package]]
 name = "curl"
-version = "8.0.0"
+version = "8.1.0"
 source = "cran"
-raw_version = "8.0.0"
-url = "https://cran.r-project.org/src/contrib/curl_8.0.0.tar.gz"
-checksum = "md5:11e42cdbfa575a081e5bf9a710ee76bd"
+raw_version = "8.1.0"
+url = "https://cran.r-project.org/src/contrib/curl_8.1.0.tar.gz"
+checksum = "md5:196b1c5e8adafec4b5bb9123864b52b4"
 
 [[package]]
 name = "desc"
@@ -688,11 +712,11 @@ checksum = "md5:dda54b65216fe3c53571d2adaddc7461"
 
 [[package]]
 name = "gert"
-version = "2.4.1"
+version = "2.5.0"
 source = "cran"
-raw_version = "2.4.1"
-url = "https://cran.r-project.org/src/contrib/gert_2.4.1.tar.gz"
-checksum = "md5:a03c75ec3b3622841320c46ebf858bf5"
+raw_version = "2.5.0"
+url = "https://cran.r-project.org/src/contrib/gert_2.5.0.tar.gz"
+checksum = "md5:0dd025d2d2a0a6f38fb9c99bddac9c05"
 requires = [
     "askpass",
     "credentials",
@@ -736,11 +760,11 @@ requires = [
 
 [[package]]
 name = "ggfun"
-version = "0.2.1"
+version = "0.2.2"
 source = "cran"
-raw_version = "0.2.1"
-url = "https://cran.r-project.org/src/contrib/ggfun_0.2.1.tar.gz"
-checksum = "md5:78cdc8ca2371fa220c44ba471d8e67a1"
+raw_version = "0.2.2"
+url = "https://cran.r-project.org/src/contrib/ggfun_0.2.2.tar.gz"
+checksum = "md5:04814613a86523a50ff46897742ab1ff"
 requires = [
     "cli",
     "dplyr",
@@ -771,11 +795,11 @@ requires = [
 
 [[package]]
 name = "ggplotify"
-version = "0.1.3"
+version = "0.1.4"
 source = "cran"
-raw_version = "0.1.3"
-url = "https://cran.r-project.org/src/contrib/ggplotify_0.1.3.tar.gz"
-checksum = "md5:06f2d2b9f042fac7f4521b71a5ae49d9"
+raw_version = "0.1.4"
+url = "https://cran.r-project.org/src/contrib/ggplotify_0.1.4.tar.gz"
+checksum = "md5:39ec8abde205bdc56ceb6554fe0e4186"
 requires = [
     "ggplot2",
     "gridGraphics",
@@ -1034,6 +1058,20 @@ url = "https://cran.r-project.org/src/contrib/jsonlite_2.0.0.tar.gz"
 checksum = "md5:3e54e6fbc0c9063936e3d01e91419c14"
 
 [[package]]
+name = "kBET"
+version = "0.99.6"
+source = "github"
+url = "https://api.github.com/repos/theislab/kBET/tarball/afc5f431bcbefd73267acc066a0f2e4eaa10a355"
+checksum = "git:afc5f431bcbefd73267acc066a0f2e4eaa10a355"
+requires = [
+    "FNN",
+    "RColorBrewer",
+    "ggplot2",
+    "cluster",
+    "MASS",
+]
+
+[[package]]
 name = "knitr"
 version = "1.52.0"
 source = "cran"
@@ -1057,11 +1095,11 @@ checksum = "md5:915e6c823c1d8243641ce97253389f14"
 
 [[package]]
 name = "lambda.r"
-version = "1.2.4"
+version = "1.2.6"
 source = "cran"
-raw_version = "1.2.4"
-url = "https://cran.r-project.org/src/contrib/lambda.r_1.2.4.tar.gz"
-checksum = "md5:861157dc2fe66ce8ed1e755578a57e47"
+raw_version = "1.2.6"
+url = "https://cran.r-project.org/src/contrib/lambda.r_1.2.6.tar.gz"
+checksum = "md5:cfd18ed648c858a7873506af81469de2"
 requires = ["formatR"]
 
 [[package]]
@@ -1153,11 +1191,11 @@ requires = [
 
 [[package]]
 name = "openssl"
-version = "2.4.2"
+version = "2.5.0"
 source = "cran"
-raw_version = "2.4.2"
-url = "https://cran.r-project.org/src/contrib/openssl_2.4.2.tar.gz"
-checksum = "md5:748b0fa601173da477706803783b6943"
+raw_version = "2.5.0"
+url = "https://cran.r-project.org/src/contrib/openssl_2.5.0.tar.gz"
+checksum = "md5:70a9af88c771af0cec26fec55a5c780c"
 requires = ["askpass"]
 
 [[package]]
@@ -1298,6 +1336,18 @@ requires = [
     "processx",
     "rlang",
     "rprojroot",
+]
+
+[[package]]
+name = "platetools"
+version = "0.1.7"
+source = "cran"
+raw_version = "0.1.7"
+url = "https://cran.r-project.org/src/contrib/platetools_0.1.7.tar.gz"
+checksum = "md5:8ac37c9a8d360af1911b363dc2d0c702"
+requires = [
+    "RColorBrewer",
+    "ggplot2",
 ]
 
 [[package]]
@@ -1494,11 +1544,11 @@ requires = [
 
 [[package]]
 name = "roxygen2"
-version = "8.1.0"
+version = "8.1.1"
 source = "cran"
-raw_version = "8.1.0"
-url = "https://cran.r-project.org/src/contrib/roxygen2_8.1.0.tar.gz"
-checksum = "md5:db68d5c2c7cff5bf6c7db0069507a465"
+raw_version = "8.1.1"
+url = "https://cran.r-project.org/src/contrib/roxygen2_8.1.1.tar.gz"
+checksum = "md5:9c8666c36cdff91561fa7176dae67c98"
 requires = [
     "brew",
     "cli",
@@ -1937,11 +1987,11 @@ checksum = "md5:121bf3699aadb9d1b47d648964b934f8"
 
 [[package]]
 name = "xfun"
-version = "0.61.0"
+version = "0.62.0"
 source = "cran"
-raw_version = "0.61"
-url = "https://cran.r-project.org/src/contrib/xfun_0.61.tar.gz"
-checksum = "md5:70130070c686204fb71dbf20c6c871ac"
+raw_version = "0.62"
+url = "https://cran.r-project.org/src/contrib/xfun_0.62.tar.gz"
+checksum = "md5:93bc01d797fcdf1e4014998e4c248bd7"
 
 [[package]]
 name = "xml2"

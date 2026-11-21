@@ -37,17 +37,34 @@ results_dir <- file.path(root_dir, "1.EDA", "results", "mAP_vs_positive_controls
 figures_dir <- file.path(root_dir, "1.EDA", "figures", "mAP_vs_positive_controls")
 dir.create(figures_dir, recursive = TRUE, showWarnings = FALSE)
 
-# Every profile type from notebook 17
-profile_types <- tibble::tribble(
-    ~label, ~slug,
-    "2D Organoid", "2D_organoid",
-    "2D Single-cell", "2D_sc",
+# Every profile type from notebook 17. Each 3D profile is aggregated two ways --
+# from the feature-selected single cells (from_fs) and from the normalized single
+# cells (from_norm) -- so notebook 17 emits a _from_fs / _from_norm output per 3D
+# profile type. 2D profiles have no such split.
+modes <- tibble::tibble(
+    mode = c("from_fs", "from_norm"),
+    mode_label = c("from FS", "from norm")
+)
+base_3d <- tibble::tribble(
+    ~base_label, ~base_slug,
     "3D Organoid - Handcrafted", "3D_organoid_handcrafted",
     "3D Organoid - DL (SAM-Med3D)", "3D_organoid_sammed",
     "3D Single-cell - Handcrafted", "3D_sc_handcrafted",
     "3D Single-cell - DL (SAM-Med3D)", "3D_sc_sammed",
     "3D Single-cell - Nucleocentric DL (SAM-Med3D)", "3D_sc_sammed_nucleocentric",
     "3D Single-cell - Nucleocentric DL (MorphEM)", "3D_sc_nucleocentric_morphem"
+)
+profile_types <- dplyr::bind_rows(
+    tibble::tribble(
+        ~label, ~slug,
+        "2D Organoid", "2D_organoid",
+        "2D Single-cell", "2D_sc"
+    ),
+    tidyr::expand_grid(base_3d, modes) %>%
+        dplyr::transmute(
+            label = paste0(base_label, " (", mode_label, ")"),
+            slug = paste0(base_slug, "_", mode)
+        )
 )
 
 # Positive-control reference groups (y axis); DMSO is always the x axis

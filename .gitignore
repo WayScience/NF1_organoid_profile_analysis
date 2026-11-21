@@ -170,7 +170,7 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
-
+logs/
 data/profiles_2D*
 data/profiles_3D*
 shippable_dir.zip
@@ -183,6 +183,7 @@ shippable_dir.zip
 1.EDA/figures/linear_modeling/
 1.EDA/figures/montages/
 2.2d_vs_3d_analysis/results/
+2.2d_vs_3d_analysis/figures/correlation
 3.viability_prediction_models/logs/
 3.viability_prediction_models/model_results/
 3.viability_prediction_models/trained_models/
@@ -197,3 +198,6 @@ interactive_dashboard/data/
 7.treatment_predictive_model/data_splits/
 figures/assembled_figure_3/figures
 figures/assembled_figure_3/data
+figures/assembled_figure_x/media/Whole_montage.png
+figures/assembled_figure_3/figures/umap_image_frame.pdf
+figures/assembled_figure_3/data/
