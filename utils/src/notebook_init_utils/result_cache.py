@@ -4,7 +4,8 @@ Skip-if-unchanged result caching for analysis steps.
 A cached output is reused only when every one of the following holds:
 
 - the output file exists,
-- the step's code file (its mirrored script) has not changed, and
+- the step's code file (its mirrored script) has not changed, or, when
+  ``code_text`` is given, that text has not changed, and
 - every input file has the same path, size and modification time as when the
   output was last written.
 
@@ -23,7 +24,7 @@ manifest layout.
 import hashlib
 import os
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Iterable, Optional, Sequence
 
 import pandas as pd
 
@@ -37,7 +38,9 @@ def _input_signature(path: Path) -> str:
     return f"{path.resolve()}|{stat.st_size}|{stat.st_mtime_ns}"
 
 
-def fingerprint(code_path: Path, inputs: Iterable[Path]) -> str:
+def fingerprint(
+    code_path: Path, inputs: Iterable[Path], code_text: Optional[str] = None
+) -> str:
     """
     Fingerprint a step's code and inputs.
 
@@ -52,6 +55,10 @@ def fingerprint(code_path: Path, inputs: Iterable[Path]) -> str:
         including its constants, invalidates the cache.
     inputs : Iterable[pathlib.Path]
         Every file the step reads.
+    code_text : str, optional
+        Hashed in place of ``code_path``. Pass the source of only the functions
+        and parameters an output depends on, so that unrelated edits to the
+        script do not invalidate expensive results.
 
     Returns
     -------
@@ -59,7 +66,10 @@ def fingerprint(code_path: Path, inputs: Iterable[Path]) -> str:
         A hex digest.
     """
     digest = hashlib.md5()
-    digest.update(Path(code_path).read_bytes())
+    if code_text is not None:
+        digest.update(code_text.encode())
+    else:
+        digest.update(Path(code_path).read_bytes())
     for input_path in sorted(Path(path) for path in inputs):
         digest.update(_input_signature(input_path).encode())
     return digest.hexdigest()
@@ -82,6 +92,7 @@ def is_fresh(
     code_path: Path,
     outputs: Sequence[Path],
     inputs: Sequence[Path],
+    code_text: Optional[str] = None,
 ) -> bool:
     """
     Return True if all outputs exist and were produced from the current code and inputs.
@@ -98,6 +109,8 @@ def is_fresh(
         The files this step writes.
     inputs : Sequence[pathlib.Path]
         The files this step reads.
+    code_text : str, optional
+        Hashed in place of ``code_path``; see :func:`fingerprint`.
 
     Returns
     -------
@@ -107,7 +120,7 @@ def is_fresh(
     if os.environ.get(FORCE_ENV_VAR, "") == "1":
         return False
     recorded = _read_manifest(_manifest_path(results_dir, step))
-    current = fingerprint(code_path, inputs)
+    current = fingerprint(code_path, inputs, code_text)
     return all(
         Path(output).exists() and recorded.get(str(output)) == current
         for output in outputs
@@ -120,6 +133,7 @@ def mark_fresh(
     code_path: Path,
     outputs: Sequence[Path],
     inputs: Sequence[Path],
+    code_text: Optional[str] = None,
 ) -> None:
     """
     Record that the outputs were just written from the current code and inputs.
@@ -129,7 +143,7 @@ def mark_fresh(
     """
     manifest_path = _manifest_path(results_dir, step)
     recorded = _read_manifest(manifest_path)
-    current = fingerprint(code_path, inputs)
+    current = fingerprint(code_path, inputs, code_text)
     recorded.update({str(output): current for output in outputs})
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(

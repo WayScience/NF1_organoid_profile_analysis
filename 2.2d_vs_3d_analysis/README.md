@@ -15,7 +15,9 @@ Notebooks are numbered in the order they should be run.
 | `4.calculate_mAP.ipynb` | Computes mean average precision (mAP) for intra- and inter-patient retrieval, for every profile type. |
 | `5.plot_metrics_and_mAP.ipynb` | Plots mAP and distance metrics for every profile type and 2D-vs-3D pair, combined into PDFs. |
 | `6.calculate_shannon_entropy.ipynb` | Computes per-feature Shannon entropy for 2D and 3D profiles. See [Shannon entropy](#shannon-entropy) below. |
+| `6b.calculate_mutual_information.ipynb` | Computes mutual information between paired 2D and 3D profiles, for the whole profile and for every 2D × 3D feature pair. See [Mutual information](#mutual-information) below. |
 | `7.plot_shannon_entropy.ipynb` | Plots Shannon entropy distributions comparing 2D vs. 3D profiles. See [Shannon entropy](#shannon-entropy) below. |
+| `7b.plot_mutual_information.ipynb` | Plots the 2D–3D mutual information from notebook 6b as heatmaps, violins and redundancy fractions. See [Mutual information](#mutual-information) below. |
 | `8.kbet_analysis.ipynb` | Runs kBET to test whether patient identity or treatment drives local structure in feature space. |
 | `9.sparse_cca_analysis.ipynb` | Runs sparse canonical correlation analysis (CCA) between matched 2D and 3D profiles, for every profile-type pair. |
 | `10.plot_sparse_cca_results.ipynb` | Plots canonical score scatterplots for each 2D-vs-3D profile-type pair computed in notebook 9. |
@@ -26,11 +28,14 @@ Notebooks are numbered in the order they should be run.
 - `results/distance_metrics/` — Inter- and intra-patient distance tables.
 - `results/mAP/` — mAP tables per profile type.
 - `results/entropy/` — Per-feature Shannon entropy tables.
+- `results/mutual_information/` — 2D–3D mutual information per comparison (whole-profile, per-feature matrix, per-feature summary), plus the combined `all_profile_mi.parquet` and `all_feature_mi_summary.parquet`.
+- `results/mutual_information_stats/` — BH-adjusted whole-profile p-values and pairwise Mann-Whitney U results comparing 3D profile types.
 - `results/kbet/` — kBET results.
 - `results/sparse_cca/` — Sparse CCA canonical scores and feature loadings.
 - `figures/correlation/` — Correlation heatmaps, combined into a single PDF (gitignored, regenerate locally).
 - `figures/mAP_and_distance_metrics/` — mAP and distance metric plots, combined into PDFs.
 - `figures/entropy/` — Shannon entropy violin + boxplots.
+- `figures/mutual_information/` — 2D–3D mutual information plots, one multi-page PDF per resolution.
 - `figures/kbet/` — kBET result plots.
 - `figures/sparse_cca/` — Sparse CCA canonical score scatterplots.
 
@@ -89,3 +94,65 @@ Each plot is a violin + boxplot comparing the entropy distributions of 2D and 3D
 The violin shows the full shape of the distribution, while the boxplot inside shows the median, quartiles, and whiskers.
 Individual dots are outlier features with unusually high or low entropy.
 Each dot represents a single feature, not a treatment or patient.
+
+## Mutual information
+
+### Why compute it?
+Mutual information (MI) measures how much information two variables share.
+Here it answers whether 2D and 3D profiles measure the same thing or different things.
+High MI means 2D already captures what 3D measures. Low MI means 3D adds information that 2D does not have.
+
+### Pairing 2D and 3D
+MI needs paired samples. Cells and organoids are segmented separately in 2D and 3D, so they cannot be matched one to one.
+Profiles are therefore paired at the group level:
+
+1. Each profile is collapsed to the median of every feature per patient/tumor × treatment × dose.
+2. The 2D and 3D groups are inner-joined on those keys.
+3. Only matching resolutions (organoid ↔ organoid, single cell ↔ single cell) and stages (normal, fs, agg) are compared. The 2D `agg` stage is compared with both 3D aggregation modes (`from_fs`, `from_norm`).
+
+The 2D and 3D files use different metadata column names. `JOIN_KEY_CANDIDATES` lists the names tried for each key.
+Numeric keys are formatted before the join, because 2D stores dose as an integer (`1`) and 3D as a float (`1.0`).
+Comparisons with fewer than 10 paired groups are skipped.
+
+### How is it computed?
+MI is estimated with the Kraskov–Stögbauer–Grassberger (KSG) k-nearest-neighbour estimator (`k = 3`), not with histogram bins.
+The notebook checks the estimator against the exact MI of simulated Gaussian data.
+
+1. **Whole-profile MI.** Each side is reduced to its top `c` principal components (`c` = 2, 5 and 10), and MI is estimated between the two sets of PCs.
+   This is a lower bound on the MI of the full profiles. Several values of `c` show whether the result depends on that choice.
+2. **Permutation null.** The 3D rows are shuffled 200 times to give a null distribution. This gives a p-value and a bias-corrected MI (`mi_corrected_bits`).
+3. **Per-feature MI.** MI is estimated for every 2D feature × 3D feature pair. The 95th percentile of a shuffled-row null is the threshold for "more than chance".
+   A feature is **redundant** if its best match in the other modality is above that threshold.
+
+All MI values are in bits. They are also reported as the information coefficient of correlation, `r_I = sqrt(1 - 2^(-2 * MI))`, which runs from 0 (independent) to 1 (same information).
+
+### Outputs
+- `all_profile_mi.parquet`: one row per comparison × `c`, with `mi_corrected_bits`, `info_correlation`, `p_value` and the explained variance of each side.
+- `all_feature_mi_summary.parquet`: one row per feature, with its best match in the other modality, `max_mi_bits`, `max_info_correlation` and `redundant`.
+- `*_feature_mi.parquet`: the full 2D × 3D MI matrix per comparison, in long format.
+
+The notebook shows progress bars for the comparisons, the permutation nulls and the per-feature matrix.
+Each comparison and the combined tables are cached (see [Caching](#caching)), so a rerun only computes comparisons whose inputs or code changed.
+
+### Statistical tests
+Notebook 7b runs the tests:
+- Whole-profile permutation p-values are Benjamini-Hochberg adjusted within each resolution.
+- 3D profile types are compared on the best-match `r_I` of their features, using pairwise two-sided Mann-Whitney U tests with BH-adjusted p-values.
+- Cliff's delta is the effect size, from -1 to 1. A positive value means the column 3D type shares more information with 2D than the row 3D type.
+
+Results are saved in `results/mutual_information_stats/`.
+
+### Caveats
+- Aggregation removes cell-to-cell variation. The results describe agreement on group-level phenotypes, not on single cells or organoids.
+- KSG is biased downward when MI or dimension is large compared with the number of samples. Compare estimates made with the same `c` and a similar number of paired groups.
+- Per-feature MI is pairwise. A 3D feature that a combination of 2D features predicts, but no single 2D feature does, is not marked redundant.
+- Features within a set are not independent, so per-feature p-values are optimistic. Use Cliff's delta to judge how large a difference is.
+- The 2D projections are made from the same 3D image stacks, so some shared information is guaranteed. The more useful signal is how much of 3D is **not** shared.
+
+### Graphs
+One PDF per resolution (organoid, single-cell):
+- Page 1: one heatmap per stage of whole-profile `r_I`, with 3D types as rows and 2D projections as columns. Each cell shows the range across all values of `c`, and stars show BH-adjusted p-values.
+- One page per stage for per-feature MI:
+  - Top: violin + boxplot of the best-match `r_I` of each 3D feature, for every 3D type × 2D projection.
+  - Middle: fraction of redundant features in each direction (3D explained by 2D, and 2D explained by 3D).
+  - Bottom: lower-triangle heatmap of pairwise Cliff's delta between 3D types, with BH-adjusted significance stars.
