@@ -88,6 +88,7 @@ ggsave(
     width = width,
     height = height,
     units = "in",
-    dpi = 600
+    dpi = 600,
+    bg = "white"
 )
 platemap_figure

@@ -21,7 +21,8 @@ import re
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-from functools import lru_cache
+from functools import lru_cache, partial
+from itertools import combinations
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -332,6 +333,26 @@ UNIPROT_LOC_RULES = [
 # Gene-prefix overrides where the head-term rule misleads (edit freely)
 LOCATION_OVERRIDES = {"TUBA": "Cytoskeleton", "TUBB": "Cytoskeleton"}
 
+# Protein map only: every location a target is drawn at (replaces its single primary
+# location; the first entry is the main one). Extra entries are the organelle pools
+# UniProt's curated subcellular location supports with experimental evidence
+# (ECO:0000269), limited to the membrane-bound organelles the map draws
+# (mitochondria, ER, Golgi, lysosome). HSP90 is mainly cytosolic
+# (UniProt lists Nucleus first for HSP90α). Edit freely.
+MAP_LOCATIONS = {
+    "HSP90AA1": ["Cytoplasm", "Mitochondrion"],
+    "HSP90AB1": ["Cytoplasm", "Mitochondrion"],
+    "MTOR": [
+        "Endosome / Lysosome",
+        "Mitochondrion",  # outer membrane
+        "Endoplasmic reticulum",
+        "Golgi",
+    ],
+    "PRKCA": ["Cytoplasm", "Mitochondrion"],  # mitochondrial membrane
+    "PRKCD": ["Cytoplasm", "Mitochondrion"],
+    "KDR": ["Plasma membrane", "Endoplasmic reticulum"],  # VEGFR2
+}
+
 
 def _uniprot_comp(text):
     low = text.lower()
@@ -489,6 +510,26 @@ PROTEIN_NAMES = {
 }
 
 
+# Families shown on a protein-map card as just the family name when the card holds at
+# least `min_members` of them (e.g. "PKC" instead of seven isoforms).
+# (gene prefixes, display name, min_members). Edit freely.
+PROTEIN_FAMILIES = [
+    (("ATP1A", "ATP1B", "FXYD2"), "Na⁺/K⁺-ATPase", 2),
+    (("HSP90",), "HSP90", 2),
+    (("PRKC",), "PKC", 3),
+    (("HDAC",), "HDACs", 3),
+]
+
+
+def family_label(genes):
+    """(family name,) if every gene belongs to one family and there are enough of
+    them; otherwise None."""
+    for prefixes, name, min_members in PROTEIN_FAMILIES:
+        if len(genes) >= min_members and all(g.startswith(prefixes) for g in genes):
+            return (name,)
+    return None
+
+
 def protein_label(acc, gene):
     return PROTEIN_NAMES.get(gene, gene)
 
@@ -507,7 +548,8 @@ def protein_label(acc, gene):
 # ## Manual targets
 # `MANUAL_TARGETS` supplies targets for drugs ChEMBL has no mechanism for (research compounds such as ARV-825 and staurosporine). `MANUAL_ADD` adds targets on top of ChEMBL's, e.g. mTOR for rapalogs (ChEMBL records FKBP12, their direct binding partner).
 #
-# **✏️ Edit here:** `MANUAL_TARGETS`, `MANUAL_ADD`.
+# **✏️ Edit here:** `MANUAL_TARGETS`, `MANUAL_ADD`. `MAP_TARGETS` limits the protein map to each drug's pharmacological target (e.g. mTOR, not FKBP12, for rapalogs; BRD4, not cereblon, for ARV-825).
+#
 
 # In[9]:
 
@@ -536,6 +578,30 @@ MANUAL_ADD = {
 TARGET_EXCLUDE = {
     "BCR": "fusion partner in BCR-ABL; imatinib and nilotinib bind the ABL kinase domain",
 }
+
+# Protein map only: THE target(s) of each drug. ChEMBL/MANUAL_ADD also record binding
+# partners (FKBP12 for rapalogs), recruited proteins (cereblon for the ARV-825 PROTAC)
+# and secondary kinases; the map shows just the pharmacological target. Drugs not
+# listed keep all their targets (e.g. dual inhibitors such as fimepinostat,
+# linsitinib). Keys: lower-case drug names; values: gene symbols. Edit freely.
+MAP_TARGETS = {
+    "arv-825": ["BRD4"],  # degraded via cereblon, which is not the target
+    "everolimus": ["MTOR"],  # FKBP12 is the binding partner; mTORC1 is the target
+    "rapamycin": ["MTOR"],
+    "sirolimus": ["MTOR"],
+    "temsirolimus": ["MTOR"],
+    "imatinib": ["ABL1"],  # BCR-ABL; KIT and PDGFR are secondary targets
+    "cabozantinib": ["MET", "KDR"],  # c-MET / VEGFR2; AXL, RET, KIT, FLT3 secondary
+}
+
+
+def map_targets(d):
+    """The targets drawn on the protein map for drug d (see MAP_TARGETS)."""
+    keep = MAP_TARGETS.get(d["query"].lower()) or MAP_TARGETS.get(
+        (d["name"] or "").lower()
+    )
+    return [t for t in d["targets"] if keep is None or t["gene"] in keep]
+
 
 # Legend wording where a plain target list would mislead (keys: lower-case drug names).
 DRUG_LEGEND_TEXT = {
@@ -613,6 +679,14 @@ def stage_color(d):  # RGB tuple so _drug_dot / _ink work as before
     return tuple(int(h[i : i + 2], 16) / 255 for i in (1, 3, 5))
 
 
+def order_drugs(drugs):
+    """Number drugs by clinical stage (NF1-approved first), then alphabetically, so
+    each legend reads as stage groups and a drug's number is easy to look up."""
+    return sorted(
+        drugs, key=lambda d: (STAGE_ORDER.index(stage_of(d)), d["query"].lower())
+    )
+
+
 def stage_key_row(ax, x, y, size, r=0.22, vertical=False):
     """Key: dot colour -> clinical stage. Returns (right_x, bottom_y) drawn."""
     ax.text(
@@ -663,6 +737,40 @@ def stage_key_row(ax, x, y, size, r=0.22, vertical=False):
         )
         cx += 2 * r + 0.18 + _text_w(s, size) + 0.7
     return cx, y
+
+
+# How each drug acts on its target (ChEMBL action_type). Legends mark every drug that is
+# not a plain inhibitor (e.g. "antagonist", "agonist"). Drugs with manual targets have no
+# ChEMBL action, so they are set here. Keys: lower-case drug names. Edit freely.
+ACTION_OVERRIDES = {"arv-825": "degrader", "staurosporine": "inhibitor"}
+
+
+def drug_action(d):
+    """Lower-case action of drug d on its targets, e.g. "inhibitor", "antagonist"."""
+    o = ACTION_OVERRIDES.get(d["query"].lower()) or ACTION_OVERRIDES.get(
+        (d["name"] or "").lower()
+    )
+    if o:
+        return o
+    acts = {
+        t["action"].lower() for t in d["targets"] if t["action"] not in ("", "MANUAL")
+    }
+    return " / ".join(sorted(acts)) or "inhibitor"
+
+
+def action_note(d):
+    """Legend tag for drug d: its action, or "" for a plain inhibitor."""
+    a = drug_action(d)
+    return "" if a == "inhibitor" else a
+
+
+def action_footnote(plotted):
+    """One line saying what unmarked drugs are and whether any drug is an agonist."""
+    agonists = [
+        d for d in plotted if "agonist" in drug_action(d).replace("antagonist", "")
+    ]
+    tail = "none are agonists" if not agonists else "agonists are marked"
+    return f"Drugs are inhibitors unless marked; {tail}."
 
 
 def legend_text(d):
@@ -837,7 +945,7 @@ def curate_targets(drugs, experimental_only):
 # ## Drawing: shared style and cell body
 # **✏️ Edit here:** `FONT` sets every text size (points) and `DOT_R` / `LEGEND_DOT_R` the drug-dot sizes; `SCALE` is inches per data unit (the cell is ~15 units across). Both figures are cropped to their content.
 #
-# Also here: cell geometry, organelle colours and positions (`MITOS` holds the perinuclear mitochondria), the cell illustration used by both plots, and the shared drug dots and two-column drug legend (drugs 1–10 left, 11–20 right).
+# Also here: cell geometry, organelle colours and positions (`MITOS` holds the perinuclear mitochondria), the cell illustration used by both plots, and the shared drug dots and drug legend. Drugs are numbered by clinical stage (NF1-approved first), then alphabetically, and the legend lists them under stage headings.
 
 # In[11]:
 
@@ -845,16 +953,16 @@ def curate_targets(drugs, experimental_only):
 # ---- Figure style: change these to resize text and dots in both figures ----
 SCALE = 0.5  # inches per data unit; the cell is ~15 units across
 FONT = {
-    "card": 14,  # protein names on cards (protein map)
+    "card": 13,  # protein names on cards (protein map)
     "dot": 11,  # numbers inside the drug dots
     "label": 15,  # compartment labels (GO plot)
     "legend": 19,  # drug names in the legend
     "legend_sub": 12.5,  # targets under each drug name in the legend
 }
-DOT_R = 0.27  # drug-dot radius on the cell (data units)
+DOT_R = 0.25  # drug-dot radius on the cell (data units)
 LEGEND_DOT_R = 0.38  # drug-dot radius in the legend
 PT = 72 * SCALE  # points per data unit
-BG = "#fbfaf7"
+BG = "white"
 
 # Cell geometry (data units). The cell is an ellipse centred at (CX, CY).
 CX, CY, RX, RY = 11.5, 9.0, 7.4, 7.1
@@ -931,8 +1039,15 @@ def _mito(ax, x, y, w, h, ang, rng):
         ln.set_clip_path(inner)
 
 
-def _draw_cell_body(ax, rng, full=True):
-    """full=False draws a sparser cell (fewer decorative organelles) for the protein map."""
+def _draw_cell_body(ax, rng, full=True, organelles=None, mitos=None):
+    """full=False draws a sparser cell (fewer decorative organelles) for the protein map.
+    organelles: with full=False, draw only these compartments (ER, Golgi, mitochondria,
+    lysosome) so organelles that hold no target don't suggest that one sits there.
+    None draws them all. mitos: the mitochondria to draw (default depends on `full`)."""
+
+    def show(comp):
+        return full or organelles is None or comp in organelles
+
     # --- extracellular matter: matrix fibres and a few ligands
     fill, edge = ORG_COLORS["Extracellular"]
     for _ in range(26):
@@ -976,7 +1091,8 @@ def _draw_cell_body(ax, rng, full=True):
     # --- cytoskeleton: microtubules from the centrosome, actin cortex at the edge
     cfill, cedge = ORG_COLORS["Cytoskeleton"]
     cx0, cy0 = CENTROSOME
-    for t in np.linspace(0, 360, 22, endpoint=False):
+    microtubules = np.linspace(0, 360, 22, endpoint=False)
+    for t in microtubules if show("Cytoskeleton") else ():
         x1, y1 = _ell(t + rng.uniform(-6, 6), 0.9)
         mx, my = (
             (cx0 + x1) / 2 + rng.uniform(-0.5, 0.5),
@@ -986,7 +1102,8 @@ def _draw_cell_body(ax, rng, full=True):
         bx = (1 - tt) ** 2 * cx0 + 2 * (1 - tt) * tt * mx + tt**2 * x1
         by = (1 - tt) ** 2 * cy0 + 2 * (1 - tt) * tt * my + tt**2 * y1
         ax.plot(bx, by, color=cedge, lw=0.9, alpha=0.45, zorder=1)
-    for dx, dy, ang in ((0, 0, 0), (0.12, 0.05, 90)):
+    centrioles = ((0, 0, 0), (0.12, 0.05, 90))
+    for dx, dy, ang in centrioles if show("Cytoskeleton") else ():
         ax.add_patch(
             FancyBboxPatch(
                 (cx0 + dx - 0.22, cy0 + dy - 0.07),
@@ -1036,7 +1153,8 @@ def _draw_cell_body(ax, rng, full=True):
     # --- rough ER: stacked cisternae wrapped around the nucleus, studded with ribosomes
     efill, eedge = ORG_COLORS["Endoplasmic reticulum"]
     nx0, ny0, nr = NUC
-    for k, r in enumerate((nr + 0.5, nr + 0.95, nr + 1.4)):
+    er_radii = (nr + 0.5, nr + 0.95, nr + 1.4)
+    for k, r in enumerate(er_radii if show("Endoplasmic reticulum") else ()):
         t1, t2 = 108 + 6 * k, 222 - 5 * k
         _band_arc(ax, (nx0, ny0), r, t1, t2, efill, eedge, w=6.5)
         for t in np.arange(t1 + 2, t2 - 1, 4.5):
@@ -1105,22 +1223,26 @@ def _draw_cell_body(ax, rng, full=True):
     # --- Golgi: curved stack of cisternae with budding vesicles
     gfill, gedge = ORG_COLORS["Golgi"]
     gc = (19.6, 8.2)
-    for k, r in enumerate((2.55, 2.9, 3.25, 3.6)):
+    golgi_radii = (2.55, 2.9, 3.25, 3.6) if show("Golgi") else ()
+    for k, r in enumerate(golgi_radii):
         half = 24 - 3 * k
         _band_arc(ax, gc, r, 180 - half, 180 + half, gfill, gedge, w=5.5)
-    for dx, dy in (
+    golgi_vesicles = (
         (-3.2, 1.9),
         (-3.55, -1.75),
         (-2.3, 1.55),
         (-4.15, 0.6),
         (-4.2, -0.9),
-    ):
+    )
+    for dx, dy in golgi_vesicles if show("Golgi") else ():
         ax.add_patch(
             Circle((gc[0] + dx, gc[1] + dy), 0.14, fc=gfill, ec=gedge, lw=1.1, zorder=3)
         )
 
     # --- mitochondria
-    for x, y, w, h, ang in MITOS if full else MITOS[:2]:
+    if mitos is None:
+        mitos = MITOS if full else MITOS[:2]
+    for x, y, w, h, ang in mitos if show("Mitochondrion") else ():
         _mito(ax, x, y, w, h, ang, rng)
 
     # --- endosomes (with intraluminal vesicles) and lysosomes (with granules)
@@ -1131,7 +1253,8 @@ def _draw_cell_body(ax, rng, full=True):
         (7.5, 5.0, 0.36, "lyso"),
         (13.9, 3.6, 0.42, "endo"),
     ]
-    for x, y, r, kind in vesicles if full else [LYSO + ("lyso",)]:
+    vesicles = vesicles if full else [LYSO + ("lyso",)]
+    for x, y, r, kind in vesicles if show("Endosome / Lysosome") else ():
         ax.add_patch(Circle((x, y), r, fc=lfill, ec=ledge, lw=1.6, zorder=3))
         for _ in range(6 if kind == "endo" else 9):
             ang, rad = rng.uniform(0, 2 * math.pi), rng.uniform(0, r * 0.6)
@@ -1221,46 +1344,99 @@ def _drug_dot(ax, x, y, i, colors, r=DOT_R, size=None, z=9):
     )
 
 
-def _drug_legend(
-    ax, plotted, colors, x0, y_mid, ncols=2, row_h=1.45, stage_size=None, stage_r=0.22
-):
-    """`ncols` columns of drugs, filling down each column before the next.
-    Each row: numbered dot and drug name. A clinical-stage key sits below.
+def _stage_rows(plotted):
+    """Legend rows: a ("head", stage) row before each stage's ("drug", i) rows."""
+    rows = []
+    for s in STAGE_ORDER:
+        idx = [i for i, d in enumerate(plotted) if stage_of(d) == s]
+        if idx:
+            rows.append(("head", s))
+            rows += [("drug", i) for i in idx]
+    return rows
+
+
+def _split_columns(rows, ncols):
+    """Split rows into at most `ncols` columns, breaking only before a stage heading,
+    so the longest column is as short as possible."""
+    heads = [k for k, (kind, _) in enumerate(rows) if kind == "head" and k > 0]
+    best = [rows]
+    for n_breaks in range(1, min(ncols, len(heads) + 1)):
+        for cut in combinations(heads, n_breaks):
+            edges = [0, *cut, len(rows)]
+            cols = [rows[edges[j] : edges[j + 1]] for j in range(len(edges) - 1)]
+            if max(map(len, cols)) < max(map(len, best)):
+                best = cols
+    return best
+
+
+def _drug_legend(ax, plotted, colors, x0, y_mid, ncols=2, row_h=1.45):
+    """Drugs listed under clinical-stage headings, in their numbered order (see
+    order_drugs), in up to `ncols` columns that break between stages.
     Returns the legend's bounding box (x0, y0, x1, y1)."""
-    n = len(plotted)
-    ncols = max(1, min(ncols, n))
-    per_col = max(1, math.ceil(n / ncols))
+    cols = _split_columns(_stage_rows(plotted), ncols)
     gap = LEGEND_DOT_R * 2 + 0.3
-    name_w = max(_text_w(d["query"], FONT["legend"], "bold") for d in plotted)
-    text_w = max(name_w, 4.2)
-    col_w = gap + text_w + 0.9
-    top = y_mid + per_col * row_h / 2
-    for i, d in enumerate(plotted):
-        col, row = divmod(i, per_col)
-        cx = x0 + col * col_w + LEGEND_DOT_R
-        cy = top - (row + 0.5) * row_h
-        _drug_dot(ax, cx, cy, i, colors, r=LEGEND_DOT_R, size=FONT["dot"] + 2)
-        tx = cx + LEGEND_DOT_R + 0.3
-        ax.text(
-            tx,
-            cy + 0.2,
-            d["query"],
-            ha="left",
-            va="center",
-            fontsize=FONT["legend"],
-            fontweight="bold",
-            color="#1e1e1e",
+    note_size = FONT["legend"] - 5
+    name_w = max(
+        _text_w(d["query"], FONT["legend"], "bold")
+        + (
+            _text_w(action_note(d), note_size, style="italic") + 0.3
+            if action_note(d)
+            else 0
         )
-    bottom = top - per_col * row_h
-    kx, ky = stage_key_row(
-        ax,
-        x0,
-        bottom - 0.9,
-        stage_size or FONT["legend_sub"],
-        r=stage_r,
-        vertical=True,
+        for d in plotted
     )
-    return (x0, min(bottom - 0.9, ky), max(x0 + ncols * col_w - 0.9, kx), top)
+    head_w = max(_text_w(s, FONT["legend"], "bold") for s in STAGE_ORDER)
+    col_w = max(gap + name_w, head_w) + 0.9
+    n_rows = max(map(len, cols))
+    top = y_mid + n_rows * row_h / 2
+    for col, rows in enumerate(cols):
+        for row, (kind, v) in enumerate(rows):
+            cx = x0 + col * col_w + LEGEND_DOT_R
+            cy = top - (row + 0.5) * row_h
+            if kind == "head":
+                ax.text(
+                    x0 + col * col_w,
+                    cy - 0.1,
+                    v,
+                    ha="left",
+                    va="center",
+                    fontsize=FONT["legend"],
+                    fontweight="bold",
+                    fontstyle="italic",
+                    color="#555",
+                )
+                ax.plot(
+                    [x0 + col * col_w, x0 + col * col_w + col_w - 0.9],
+                    [cy - 0.55, cy - 0.55],
+                    color=STAGE_COLORS[v],
+                    lw=3,
+                    solid_capstyle="round",
+                )
+                continue
+            _drug_dot(ax, cx, cy, v, colors, r=LEGEND_DOT_R, size=FONT["dot"] + 2)
+            tx = cx + LEGEND_DOT_R + 0.3
+            ax.text(
+                tx,
+                cy,
+                plotted[v]["query"],
+                ha="left",
+                va="center",
+                fontsize=FONT["legend"],
+                fontweight="bold",
+                color="#1e1e1e",
+            )
+            if action_note(plotted[v]):  # e.g. "antagonist"
+                ax.text(
+                    tx + _text_w(plotted[v]["query"], FONT["legend"], "bold") + 0.3,
+                    cy,
+                    action_note(plotted[v]),
+                    ha="left",
+                    va="center",
+                    fontsize=note_size,
+                    fontstyle="italic",
+                    color="#555",
+                )
+    return (x0, top - n_rows * row_h, x0 + len(cols) * col_w - 0.9, top)
 
 
 def _finish(fig, ax, bounds, out_png, pad=0.3, cut_bottom=None):
@@ -1277,7 +1453,7 @@ def _finish(fig, ax, bounds, out_png, pad=0.3, cut_bottom=None):
     ax.axis("off")
     fig.set_size_inches((x1 - x0) * SCALE, (y1 - y0) * SCALE)
     fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
-    fig.savefig(out_png, dpi=200, facecolor=BG)
+    fig.savefig(out_png, dpi=600, facecolor=BG)
     plt.close(fig)
 
 
@@ -1479,24 +1655,27 @@ def draw_cell(drugs, out_png, evidence_label):
 
 
 # ## Plot 2: protein map
-# Proteins in the same compartment, with the same process and the identical set of drugs, share one card. Each card shows the protein names, gene symbols in italics, and a numbered dot for every drug that hits it. Membrane proteins keep their own bar in the bilayer, grouped and joined to the shared card. Cards are packed into free space without overlaps; the drug legend sits to the right.
+# Proteins in the same compartment, with the same process and the identical set of drugs, share one card. Each card shows the protein names, gene symbols in italics, and a numbered dot for every drug that hits it. Membrane proteins keep their own bar in the bilayer, grouped and joined to the shared card. Cards are packed into free space without overlaps; the drug legend sits to the right. Families on one card are shown as the family name (`PROTEIN_FAMILIES`); each drug shows only its primary target(s) (`MAP_TARGETS`), and `MAP_LOCATIONS` adds the mitochondrial pools of HSP90 and mTOR; and organelles that hold no target are not drawn, so a card's position only means nucleus, cytosol, membrane or the organelle it is tethered to.
+#
 
 # In[13]:
 
 
-PROCESS_COLORS = {
-    "MAPK cascade": "#e07b39",
-    "PI3K–AKT–mTOR": "#2f8f6a",
-    "Chromatin & epigenetics": "#5161b5",
-    "Protein folding (HSP90)": "#c2457a",
-    "Ubiquitin–proteasome": "#8b5bb5",
-    "PKC / Ca²⁺ signalling": "#c9a227",
-    "Ion pumps & channels": "#2b8cbf",
-    "Receptor tyrosine kinases": "#c0392b",
-    "Non-receptor tyrosine kinases": "#9c5b2e",
-    "GPCR signalling": "#3aa39b",
-    "Other": "#7a7a7a",
-}
+# Order in which cards of one compartment are packed (keeps related targets together).
+# Cards are all one neutral colour: the target class did not add information.
+PROCESS_ORDER = [
+    "MAPK cascade",
+    "PI3K–AKT–mTOR",
+    "Chromatin & epigenetics",
+    "Protein folding (HSP90)",
+    "Ubiquitin–proteasome",
+    "PKC / Ca²⁺ signalling",
+    "Ion pumps & channels",
+    "Receptor tyrosine kinases",
+    "Non-receptor tyrosine kinases",
+    "GPCR signalling",
+    "Other",
+]
 # Points on organelles that organelle-bound protein cards are tethered to
 ORGANELLE_ANCHOR = {
     "Endosome / Lysosome": LYSO[:2],
@@ -1508,13 +1687,13 @@ ORGANELLE_ANCHOR = {
 }
 
 
-def _tint(hex_color, amount=0.82):
-    r, g, b = (int(hex_color[i : i + 2], 16) / 255 for i in (1, 3, 5))
-    return (r + (1 - r) * amount, g + (1 - g) * amount, b + (1 - b) * amount)
+def _in_cytoplasm(px, py, organelles=None, mitos=MITOS):
+    """True if a point is free cytoplasm (inside the cell, clear of drawn organelles).
+    organelles: only these organelles block space (None = all of them)."""
 
+    def drawn(comp):
+        return organelles is None or comp in organelles
 
-def _in_cytoplasm(px, py):
-    """True if a point is free cytoplasm (inside the cell, clear of drawn organelles)."""
     nx0, ny0, nr = NUC
     if ((px - CX) / (RX * 0.89)) ** 2 + ((py - CY) / (RY * 0.89)) ** 2 > 1:
         return False
@@ -1522,14 +1701,16 @@ def _in_cytoplasm(px, py):
     ang = math.degrees(math.atan2(py - ny0, px - nx0)) % 360
     if d < nr + 0.25:  # nucleus
         return False
-    if nr + 0.2 < d < nr + 1.8 and 102 < ang < 230:  # rough ER
+    if drawn("Endoplasmic reticulum") and nr + 0.2 < d < nr + 1.8 and 102 < ang < 230:
         return False
-    if px > 15.2 and abs(py - 8.2) < 2.3:  # Golgi
+    if drawn("Golgi") and px > 15.2 and abs(py - 8.2) < 2.3:
         return False
-    for mx, my, mw, mh, _ in MITOS[:2]:  # mitochondria
+    for mx, my, mw, mh, _ in mitos if drawn("Mitochondrion") else ():
         if math.hypot(px - mx, py - my) < mw / 2 + 0.2:
             return False
-    if math.hypot(px - LYSO[0], py - LYSO[1]) < LYSO[2] + 0.2:
+    if drawn("Endosome / Lysosome") and (
+        math.hypot(px - LYSO[0], py - LYSO[1]) < LYSO[2] + 0.2
+    ):
         return False
     return True
 
@@ -1591,6 +1772,51 @@ class _Packer:
                 return x, y
         return None
 
+    def place_near_any(self, w, h, anchors, region):
+        """Place a w x h card whose EDGE is as close as possible to any of `anchors`
+        (points along an organelle). Returns ((x, y), anchor used) or (None, None)."""
+
+        def gap(c):
+            best = None
+            for ax_, ay_ in anchors:
+                dx = max(abs(c[0] - ax_) - w / 2, 0)
+                dy = max(abs(c[1] - ay_) - h / 2, 0)
+                d = dx * dx + dy * dy
+                if best is None or d < best[0]:
+                    best = (d, (ax_, ay_))
+            return best
+
+        scored = sorted((gap(c), c) for c in self.cands)
+        for (_, anchor), (x, y) in scored:
+            if self._clear(x, y, w, h, region):
+                self.rects.append((x - w / 2, y - h / 2, x + w / 2, y + h / 2))
+                return (x, y), anchor
+        return None, None
+
+
+def _organelle_anchors(comp, mitos=MITOS):
+    """Points along an organelle that its cards may be tethered to."""
+    nx0, ny0, nr = NUC
+    if comp == "Endoplasmic reticulum":  # along the middle ER cisterna
+        return [
+            (
+                nx0 + (nr + 0.95) * math.cos(math.radians(t)),
+                ny0 + (nr + 0.95) * math.sin(math.radians(t)),
+            )
+            for t in range(112, 220, 8)
+        ]
+    if comp == "Golgi":  # along the Golgi stack
+        return [
+            (
+                19.6 + 3.0 * math.cos(math.radians(t)),
+                8.2 + 3.0 * math.sin(math.radians(t)),
+            )
+            for t in range(162, 200, 6)
+        ]
+    if comp == "Mitochondrion":
+        return [m[:2] for m in mitos]
+    return [ORGANELLE_ANCHOR[comp]]
+
 
 CARD_TEXT_W = 4.0  # widest a card's text may get before wrapping (data units)
 CARD_PAD = 0.17
@@ -1599,12 +1825,12 @@ DOT_STEP = 2 * DOT_R + 0.07
 LH_CARD = 1.22 * FONT["card"] / PT  # line height in data units
 
 
-def _card_layout(proteins, n_drugs):
+def _card_layout(proteins, n_drugs, lines=None):
     """Wrap the comma-separated protein names; return (name_lines, w, h). The card
     also holds a row (or rows) of numbered drug dots under the text. Gene symbols are
     left out: the protein name alone already identifies the target, and showing both
     only repeats the same information (and is often what gets clipped by card width)."""
-    name_lines = _wrap_items(
+    name_lines = lines or _wrap_items(
         _compact_names(proteins), FONT["card"], CARD_TEXT_W, "bold"
     )
     dot_rows = math.ceil(n_drugs / DOTS_PER_ROW)
@@ -1616,8 +1842,25 @@ def _card_layout(proteins, n_drugs):
     return name_lines, w, h
 
 
+TAG_SIZE = FONT["card"] - 2  # text size of the tags for extra organelle pools
+EXTRA_POOL_COMPS = (
+    "Endosome / Lysosome",
+    "Endoplasmic reticulum",
+    "Golgi",
+    "Mitochondrion",
+    "Cytoskeleton",
+)
+
+
+def _tag_layout(proteins):
+    """Name-only tag for an extra organelle pool of a target that is already drawn,
+    with its drugs, at its main location. Small enough to sit on the organelle.
+    Returns (name_lines, w, h)."""
+    name = ", ".join(_compact_names(proteins))
+    return [name], _text_w(name, TAG_SIZE, "bold") + 0.3, 1.45 * TAG_SIZE / PT
+
+
 def _card(ax, x, y, group, colors):
-    col = PROCESS_COLORS.get(group["process"], PROCESS_COLORS["Other"])
     w, h = group["w"], group["h"]
     ax.add_patch(
         FancyBboxPatch(
@@ -1625,12 +1868,25 @@ def _card(ax, x, y, group, colors):
             w,
             h,
             boxstyle="round,pad=0.02,rounding_size=0.14",
-            fc=_tint(col),
-            ec=col,
+            fc=NEUTRAL_FILL,
+            ec=NEUTRAL_EDGE,
             lw=1.8,
             zorder=8,
         )
     )
+    if group.get("tag"):  # extra organelle pool: name only
+        ax.text(
+            x,
+            y,
+            group["name_lines"][0],
+            ha="center",
+            va="center",
+            fontsize=TAG_SIZE,
+            fontweight="bold",
+            color="#1e1e1e",
+            zorder=9,
+        )
+        return
     ty = y + h / 2 - CARD_PAD - LH_CARD / 2
     for line in group["name_lines"]:
         ax.text(
@@ -1670,13 +1926,13 @@ def draw_protein_map(drugs, out_png):
     # one entry per protein: where it sits, its process, and which drugs hit it
     prots = {}
     for i, d in enumerate(plotted):
-        for t in d["targets"]:
+        for t in map_targets(d):
             p = prots.setdefault(
                 t["accession"],
                 dict(
                     gene=t["gene"],
                     protein=t["protein"],
-                    comp=t["primary"],
+                    comps=MAP_LOCATIONS.get(t["gene"], [t["primary"]]),
                     tm=t["transmembrane"],
                     process=t["process"],
                     drugs=[],
@@ -1685,33 +1941,44 @@ def draw_protein_map(drugs, out_png):
             if i not in p["drugs"]:
                 p["drugs"].append(i)
 
-    # group proteins in the same place, same process, hit by exactly the same drugs
+    # group proteins in the same place, same process, hit by exactly the same drugs;
+    # a protein with several MAP_LOCATIONS gets a card in each
     groups = {}
     for p in prots.values():
-        kind = (
-            ("tm" if p["tm"] else "peripheral")
-            if p["comp"] == "Plasma membrane"
-            else p["comp"]
-        )
-        k = (p["comp"], kind, p["process"], tuple(sorted(p["drugs"])))
-        g = groups.setdefault(
-            k,
-            dict(
-                comp=p["comp"],
-                kind=kind,
-                process=p["process"],
-                drugs=sorted(p["drugs"]),
-                members=[],
-            ),
-        )
-        g["members"].append(p)
-    order = list(PROCESS_COLORS)
+        for comp in p["comps"]:
+            kind = (
+                ("tm" if p["tm"] else "peripheral")
+                if comp == "Plasma membrane"
+                else comp
+            )
+            # an extra organelle pool of a target drawn in full elsewhere -> small tag
+            extra = comp != p["comps"][0] and comp in EXTRA_POOL_COMPS
+            k = (comp, kind, p["process"], tuple(sorted(p["drugs"])), extra)
+            g = groups.setdefault(
+                k,
+                dict(
+                    comp=comp,
+                    kind=kind,
+                    tag=extra,
+                    process=p["process"],
+                    drugs=sorted(p["drugs"]),
+                    members=[],
+                ),
+            )
+            g["members"].append(p)
+    order = PROCESS_ORDER
     for g in groups.values():
         g["members"].sort(key=lambda p: _natural_key(p["protein"]))
-        g["name_lines"], g["w"], g["h"] = _card_layout(
-            [p["protein"] for p in g["members"]],
-            len(g["drugs"]),
+        g["family"] = family_label([p["gene"] for p in g["members"]])
+        names = (
+            list(g["family"]) if g["family"] else [p["protein"] for p in g["members"]]
         )
+        if g["tag"]:
+            g["name_lines"], g["w"], g["h"] = _tag_layout(names)
+        else:
+            g["name_lines"], g["w"], g["h"] = _card_layout(
+                names, len(g["drugs"]), lines=list(g["family"]) if g["family"] else None
+            )
     by_comp = defaultdict(list)
     for g in groups.values():
         by_comp[g["comp"]].append(g)
@@ -1723,10 +1990,29 @@ def draw_protein_map(drugs, out_png):
             )
         )
 
+    # Only draw organelles that hold a target: decorative ones read as locations.
+    organelles = set(by_comp) & set(ORGANELLE_ANCHOR)
+    # one mitochondrion per mitochondrial card/tag; unused ones would only take space
+    mitos = MITOS[: max(1, len(by_comp.get("Mitochondrion", [])))]
+    free = partial(_in_cytoplasm, organelles=organelles, mitos=mitos)
+
+    def clear_of_small(px, py):
+        """Anywhere in the cell but the nucleus, mitochondria and lysosome: a card
+        may cover the edge of the big ER/Golgi, never hide a small organelle."""
+        if not _in_cell_not_nucleus(px, py):
+            return False
+        if "Mitochondrion" in organelles and any(
+            math.hypot(px - mx, py - my) < mw / 2 + 0.2 for mx, my, mw, _, _ in mitos
+        ):
+            return False
+        return "Endosome / Lysosome" not in organelles or (
+            math.hypot(px - LYSO[0], py - LYSO[1]) > LYSO[2] + 0.2
+        )
+
     fig, ax = plt.subplots()
     fig.patch.set_facecolor(BG)
     ax.set_facecolor(BG)
-    _draw_cell_body(ax, rng, full=False)
+    _draw_cell_body(ax, rng, full=False, organelles=organelles, mitos=mitos)
     packer = _Packer()
     bounds = [(CX - RX * 1.03, CY - RY * 1.03, CX + RX * 1.03, CY + RY * 1.03)]
 
@@ -1744,14 +2030,16 @@ def draw_protein_map(drugs, out_png):
         span = 360 * wt / total
         tg = t_acc + span / 2
         t_acc += span
-        col = PROCESS_COLORS.get(g["process"], "#777")
+        col = NEUTRAL_EDGE
         nx_, ny_ = _normal(tg)
         bx0, by0 = _ell(tg, 1.0)
         ext = abs(nx_) * g["w"] / 2 + abs(ny_) * g["h"] / 2
         cx, cy = bx0 + (0.85 + ext) * nx_, by0 + (0.85 + ext) * ny_
-        m = len(g["members"])
+        # a collapsed family (e.g. Na⁺/K⁺-ATPase subunits) is one complex: one bar
+        members = g["members"][:1] if g["family"] else g["members"]
+        m = len(members)
         spread = min(2.4, span * 0.8 / max(m, 1))
-        for j, p in enumerate(g["members"]):
+        for j, p in enumerate(members):
             t = tg + (j - (m - 1) / 2) * spread
             ux, uy = _normal(t)
             bx, by = _ell(t, 0.95)
@@ -1789,41 +2077,57 @@ def draw_protein_map(drugs, out_png):
     for g in sorted(by_comp.get("Nucleus", []), key=lambda g: -g["w"] * g["h"]):
         spot = packer.place(g["w"], g["h"], nuc_anchor, region=_in_nucleus)
         if spot is None:
-            spot = packer.place(g["w"], g["h"], NUC[:2])
+            spot = packer.place(g["w"], g["h"], NUC[:2], region=free)
             if spot is None:
                 print(f"  warning: no room for {g['name_lines']}")
                 continue
-            ax.plot(
-                [spot[0], NUC[0]], [spot[1], NUC[1]], color="#3f63a0", lw=1.2, zorder=7
+            # tether to the nearest point of the nuclear envelope
+            a = math.atan2(spot[1] - NUC[1], spot[0] - NUC[0])
+            env = (NUC[0] + NUC[2] * math.cos(a), NUC[1] + NUC[2] * math.sin(a))
+            ax.plot(*zip(spot, env), color="#3f63a0", lw=1.5, zorder=7)
+            ax.add_patch(
+                Circle(env, 0.12, fc="white", ec="#3f63a0", lw=1.8, zorder=7.5)
             )
         place_card(g, *spot)
 
-    # --- organelle-bound proteins: nearest free spot, tethered to the organelle
-    for comp in (
-        "Endosome / Lysosome",
-        "Endoplasmic reticulum",
-        "Golgi",
-        "Mitochondrion",
-        "Cytoskeleton",
-    ):
-        anchor = ORGANELLE_ANCHOR[comp]
-        edge = ORG_COLORS[comp][1]
-        for g in by_comp.get(comp, []):
-            spot = packer.place(g["w"], g["h"], anchor)
-            if spot is None:
-                spot = packer.place(g["w"], g["h"], anchor, region=_in_cell_not_nucleus)
-            if spot is None:
-                print(f"  warning: no room for {g['name_lines']}")
-                continue
-            ax.plot(
-                [spot[0], anchor[0]], [spot[1], anchor[1]], color=edge, lw=1.5, zorder=7
-            )
-            ax.add_patch(Circle(anchor, 0.12, fc="white", ec=edge, lw=1.8, zorder=7.5))
-            place_card(g, *spot)
+    # --- organelle-bound proteins: nearest free spot, tethered to the organelle.
+    # Tags for extra pools go first (small, they sit right on their organelle), then the
+    # full boxes of targets whose main location is an organelle.
+    anchors_by_comp = {c: _organelle_anchors(c, mitos) for c in EXTRA_POOL_COMPS}
+    for want_tag in (True, False):
+        for comp in EXTRA_POOL_COMPS:
+            edge = ORG_COLORS[comp][1]
+            anchors = anchors_by_comp[comp]
+            for g in by_comp.get(comp, []):
+                if g["tag"] != want_tag:
+                    continue
+                # may overlap its own organelle (reads as "on it"), not other ones
+                own = partial(
+                    _in_cytoplasm, organelles=organelles - {comp}, mitos=mitos
+                )
+                spot, anchor = packer.place_near_any(g["w"], g["h"], anchors, own)
+                if spot is None:
+                    spot, anchor = packer.place_near_any(
+                        g["w"], g["h"], anchors, _in_cell_not_nucleus
+                    )
+                if spot is None:
+                    print(f"  warning: no room for {g['name_lines']}")
+                    continue
+                if comp == "Mitochondrion" and len(anchors) > 1:
+                    anchors.remove(anchor)  # one target per mitochondrion
+                ax.plot(*zip(spot, anchor), color=edge, lw=1.5, zorder=7)
+                ax.add_patch(
+                    Circle(anchor, 0.12, fc="white", ec=edge, lw=1.8, zorder=7.5)
+                )
+                place_card(g, *spot)
 
     # --- cytoplasm: biggest cards first, filling outward from the cytoplasm centre
     for g in sorted(by_comp.get("Cytoplasm", []), key=lambda g: -g["w"] * g["h"]):
-        spot = packer.place(g["w"], g["h"], ORGANELLE_ANCHOR["Cytoplasm"])
+        spot = packer.place(g["w"], g["h"], ORGANELLE_ANCHOR["Cytoplasm"], region=free)
+        if spot is None:  # may cover ER/Golgi edges, never the small organelles
+            spot = packer.place(
+                g["w"], g["h"], ORGANELLE_ANCHOR["Cytoplasm"], region=clear_of_small
+            )
         if spot is None:
             spot = packer.place(
                 g["w"],
@@ -1836,20 +2140,42 @@ def draw_protein_map(drugs, out_png):
             continue
         place_card(g, *spot)
 
+    # label the cytosol (the nucleus is obvious), so a card's place reads clearly
+    for text, near, region in (("cytosol", (CX - RX * 0.45, CY - RY * 0.55), free),):
+        w = _text_w(text, FONT["label"], "bold", "italic") + 0.2
+        spot = packer.place(w, FONT["label"] / PT + 0.1, near, region=region)
+        if spot:
+            ax.text(
+                *spot,
+                text,
+                ha="center",
+                va="center",
+                fontsize=FONT["label"],
+                fontweight="bold",
+                fontstyle="italic",
+                color="#8a7a5c",
+                zorder=8,
+            )
+
     x_leg = max(b[2] for b in bounds) + 0.9
-    bounds.append(
-        _drug_legend(
-            ax,
-            plotted,
-            colors,
-            x_leg,
-            CY,
-            ncols=2,
-            row_h=1.2,
-            stage_size=FONT["legend"] + 3,
-            stage_r=0.4,
-        )
-    )
+    leg = _drug_legend(ax, plotted, colors, x_leg, CY + 2.2, ncols=2, row_h=1.2)
+    bounds.append(leg)
+    tags = [g for g in groups.values() if g["tag"]]
+    if tags:  # explain the small name-only tags
+        sample = dict(tags[0])
+        y = leg[1] - 0.9
+        _card(ax, x_leg + sample["w"] / 2, y, sample, colors)
+        note = "Tag: the same target, also found at that organelle"
+        size = FONT["legend"] - 3
+        tx = x_leg + sample["w"] + 0.35
+        ax.text(tx, y, note, ha="left", va="center", fontsize=size, color="#333")
+        bounds.append((x_leg, y - 0.5, tx + _text_w(note, size), y + 0.5))
+    else:
+        y = leg[1] - 0.4
+    foot = action_footnote(plotted)
+    size = FONT["legend"] - 3
+    ax.text(x_leg, y - 1.0, foot, ha="left", va="center", fontsize=size, color="#333")
+    bounds.append((x_leg, y - 1.5, x_leg + _text_w(foot, size), y - 0.5))
     _finish(fig, ax, bounds, out_png)
 
 
@@ -1890,8 +2216,7 @@ RAS_NUC = tuple(v * RAS_G for v in (9.4, 0.0, 8.8, 4.4))
 RAS_VIEW = tuple(v * RAS_G for v in (-1.2, 0.0, 35.2, 19.6))
 
 # Pathway nodes. Each node: box title, the genes it stands for (a drug's dot goes on the node
-# when one of its target genes is listed here), position, and process (box colour, from
-# PROCESS_COLORS). Receptors give `theta` (degrees round the membrane) instead of `at`, so
+# when one of its target genes is listed here), position, and process. Receptors give `theta` (degrees round the membrane) instead of `at`, so
 # they sit in the membrane. Optional: sub = fixed subtitle; otherwise the subtitle lists which
 # of the node's proteins the drugs hit. Nodes no drug hits are drawn as dashed white
 # "context" boxes, so the whole pathway is shown.
@@ -2061,21 +2386,21 @@ RAS_NODES = {
     "4ebp1": dict(
         title="4E-BP1",
         genes=["EIF4EBP1"],
-        at=(25.4, 2.2),
+        at=(27.2, 2.95),
         process="PI3K–AKT–mTOR",
         sub="",
     ),
     "transl": dict(
         title="Translation",
         genes=["EIF4E"],
-        at=(23.7, 0.8),
+        at=(24.4, 0.75),
         process="PI3K–AKT–mTOR",
         sub="",
     ),
     "hdac6": dict(
         title="HDAC6/10",
         genes=["HDAC6", "HDAC10"],
-        at=(27.4, 3.7),
+        at=(28.9, 4.4),
         process="Chromatin & epigenetics",
         sub="",
     ),
@@ -2090,21 +2415,21 @@ RAS_NODES = {
     "hdac": dict(
         title="HDACs",
         genes=[f"HDAC{k}" for k in (1, 2, 3, 4, 5, 7, 8, 9, 11)],
-        at=(3.95, 1.2),
+        at=(3.75, 1.2),
         process="Chromatin & epigenetics",
         sub="",
     ),
     "brd4": dict(
         title="BRD4",
         genes=["BRD2", "BRD3", "BRD4"],
-        at=(8.3, 1.31),
+        at=(8.75, 1.31),
         process="Chromatin & epigenetics",
         sub="",
     ),
     "tf": dict(
         title="ELK1 · FOS · MYC",
         genes=["ELK1", "FOS", "MYC"],
-        at=(13.6, 1.31),
+        at=(14.0, 1.31),
         process="MAPK cascade",
         sub="→ proliferation genes",
     ),
@@ -2338,6 +2663,92 @@ def _draw_half_cell(ax, rng, layouts):
     ax.text(8.85 * G, 3.6 * G, "Nucleus", ha="center", va="center", color=nedge, **lab)
 
 
+INH_COLOR = "#1e1e1e"
+INH_GAP = 0.35  # space between a T-bar and the box it inhibits
+INH_BAR = 0.8  # half-length of the T-bar
+
+
+def _inh_edge(ax, start, end, lw=4.0, zorder=7):
+    """Inhibition: a stem from start to just short of end, then a bar across it
+    perpendicular to the stem, so the T reads clearly at any angle."""
+    (sx, sy), (ex, ey) = start, end
+    L = math.hypot(ex - sx, ey - sy) or 1
+    ux, uy = (ex - sx) / L, (ey - sy) / L
+    ex, ey = ex - INH_GAP * ux, ey - INH_GAP * uy
+    ax.plot(
+        [sx, ex],
+        [sy, ey],
+        color=INH_COLOR,
+        lw=lw,
+        solid_capstyle="round",
+        zorder=zorder,
+    )
+    px, py = -uy * INH_BAR, ux * INH_BAR
+    ax.plot(
+        [ex - px, ex + px],
+        [ey - py, ey + py],
+        color=INH_COLOR,
+        lw=lw * 1.8,
+        solid_capstyle="butt",
+        zorder=zorder,
+    )
+
+
+def _edge_key(ax, x, y, size):
+    """Key for the three edge types. Returns the right-most x drawn."""
+    ax.text(
+        x,
+        y,
+        "Arrows:",
+        ha="left",
+        va="center",
+        fontsize=size,
+        fontweight="bold",
+        color="#1e1e1e",
+        zorder=10,
+    )
+    cx = x + _text_w("Arrows:", size, "bold") + 0.6
+    for kind, text in (
+        ("act", "activates"),
+        ("inh", "inhibits"),
+        ("reg", "binds / regulates"),
+    ):
+        x0_, x1_ = cx, cx + 2.2
+        if kind == "act":
+            ax.annotate(
+                "",
+                xy=(x1_, y),
+                xytext=(x0_, y),
+                arrowprops=dict(
+                    arrowstyle="-|>", color="#3a3a3a", lw=3.4, mutation_scale=40
+                ),
+                zorder=10,
+            )
+        elif kind == "inh":
+            _inh_edge(ax, (x0_, y), (x1_ + INH_GAP, y), zorder=10)
+        else:
+            ax.plot(
+                [x0_, x1_], [y, y], color="#7a7a7a", lw=2.8, ls=(0, (4, 3)), zorder=10
+            )
+        ax.text(
+            x1_ + (0.35 + INH_GAP if kind == "inh" else 0.35),
+            y,
+            text,
+            ha="left",
+            va="center",
+            fontsize=size,
+            color="#333",
+            zorder=10,
+        )
+        cx = (
+            x1_
+            + (0.35 + INH_GAP if kind == "inh" else 0.35)
+            + _text_w(text, size)
+            + 1.0
+        )
+    return cx
+
+
 def _ras_legend(ax, plotted, colors, x0, x1, y_top, ncols=4):
     """`ncols` columns under the figure, drugs filling down each column before moving to
     the next. Each row is the numbered dot and the drug name."""
@@ -2365,6 +2776,18 @@ def _ras_legend(ax, plotted, colors, x0, x1, y_top, ncols=4):
             color="#1e1e1e",
             zorder=10,
         )
+        if action_note(d):  # e.g. "antagonist"
+            ax.text(
+                tx + _text_w(d["query"], f["legend"], "bold") + 0.35,
+                cy,
+                action_note(d),
+                ha="left",
+                va="center",
+                fontsize=f["legend"] - 6,
+                fontstyle="italic",
+                color="#555",
+                zorder=10,
+            )
     return (x0, y_top - per_col * row_h, x1, y_top)
 
 
@@ -2500,14 +2923,23 @@ def draw_ras_pathway(drugs, out_png):
         rad = edge[4] if len(edge) > 4 else 0.0
         if a not in patches or b not in patches:
             continue
+        if kind == "inh":  # straight T-bar from box edge to just short of box edge
+            (ax_, ay_), (bx_, by_) = RAS_NODES[a]["at"], RAS_NODES[b]["at"]
+            ddx, ddy = bx_ - ax_, by_ - ay_
+
+            def _inside(k):  # fraction of the centre-to-centre line inside box k
+                hw, hh = layouts[k]["w"] / 2, layouts[k]["h"] / 2
+                return min(hw / abs(ddx) if ddx else 9, hh / abs(ddy) if ddy else 9)
+
+            t0, t1 = _inside(a), 1 - _inside(b)
+            _inh_edge(
+                ax,
+                (ax_ + t0 * ddx, ay_ + t0 * ddy),
+                (ax_ + t1 * ddx, ay_ + t1 * ddy),
+            )
+            continue
         style = {
             "act": dict(arrowstyle="-|>", color="#3a3a3a", lw=3.4, mutation_scale=40),
-            "inh": dict(
-                arrowstyle="-[, widthB=1.1, lengthB=0",
-                color="#2a2a2a",
-                lw=6.5,
-                mutation_scale=44,
-            ),
             "reg": dict(arrowstyle="-", color="#7a7a7a", lw=2.8, ls=(0, (4, 3))),
         }[kind]
         ax.annotate(
@@ -2570,6 +3002,29 @@ def draw_ras_pathway(drugs, out_png):
     leg = _ras_legend(ax, plotted, colors, x0 + 0.4, x1 - 0.4, y0 - 2.6)
     bounds.append((x0 + 0.4, y0 - 2.8, x1 - 0.4, y0 - 0.3))
     bounds.append(leg)
+    # what the arrows mean, and what kind of drug each is
+    ky = leg[1] - 1.3
+    kx = _edge_key(ax, x0 + 0.4, ky, f["legend"])
+    foot = action_footnote(plotted)
+    ax.text(
+        x0 + 0.4,
+        ky - 1.6,
+        foot,
+        ha="left",
+        va="center",
+        fontsize=f["legend"] - 4,
+        fontstyle="italic",
+        color="#333",
+        zorder=10,
+    )
+    bounds.append(
+        (
+            x0 + 0.4,
+            ky - 2.3,
+            max(kx, x0 + 0.4 + _text_w(foot, f["legend"] - 4)),
+            ky + 0.6,
+        )
+    )
     _finish(fig, ax, bounds, out_png, pad=0.3)
 
 
@@ -2884,6 +3339,8 @@ if not any(d["targets"] for d in drugs):
         "No targets were retrieved for any drug - ChEMBL/UniProt may be down. "
         "Re-run this cell later."
     )
+# Number drugs by clinical stage, then A-Z, in both figures
+drugs = order_drugs(drugs)
 # GO-compartment figure dropped (redundant with the pathway figure)
 draw_protein_map(drugs, cell_protein_targets_image_out_file_path)
 draw_ras_pathway(drugs, ras_pathway_targets_image_out_file_path)

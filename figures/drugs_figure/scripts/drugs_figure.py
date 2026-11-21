@@ -208,7 +208,7 @@ plt.ylabel("Drug")
 plt.title("FDA Approval Status of Drugs Used in Organoid Treatments")
 plt.legend(title="FDA Status", bbox_to_anchor=(1.05, 1), loc="upper left")
 plt.tight_layout()
-plt.savefig(figures_dir / "drug_fda_approval_status.png", dpi=600)
+plt.savefig(figures_dir / "drug_fda_approval_status.png", dpi=600, facecolor="white")
 plt.show()
 
 
