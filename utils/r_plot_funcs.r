@@ -173,7 +173,7 @@ save_umap_pca_plots_pdf <- function(plots, output_path, width = 10, height = 5) 
 # bar/box, scatter comparison) aren't reimplemented per-notebook.
 # All of them apply theme_manuscript() so styling stays consistent.
 
-save_ggplot <- function(plot, path, width, height, dpi = 600) {
+save_ggplot <- function(plot, path, width, height, dpi = 600, ...) {
     #' Save a ggplot object and display the saved file inline.
     #'
     #' Displays the PNG that was just written to disk rather than
@@ -184,7 +184,7 @@ save_ggplot <- function(plot, path, width, height, dpi = 600) {
     #' divides by zero on very narrow bars) and silently drops the image.
     #' Displaying the already-correctly-rendered file sidesteps that
     #' entirely.
-    ggsave(filename = path, plot = plot, width = width, height = height, dpi = dpi)
+    ggsave(filename = path, plot = plot, width = width, height = height, dpi = dpi, ...)
     IRdisplay::display_png(file = path)
     invisible(plot)
 }
