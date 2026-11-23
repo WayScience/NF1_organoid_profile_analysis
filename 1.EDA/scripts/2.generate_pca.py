@@ -165,7 +165,6 @@ for i, (
     # Skip files with too few rows/features to fit the requested number of components
     n_components = min(N_COMPONENTS, features_df.shape[0], features_df.shape[1])
     if n_components < 1:
-        print(f"Skipping {input_path}: not enough valid data after cleaning.")
         continue
 
     # Initialize and fit PCA model. randomized (rather than full) SVD is

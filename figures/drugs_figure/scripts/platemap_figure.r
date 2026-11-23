@@ -23,14 +23,19 @@ root_dir <- find_git_root()
 figures_dir <- file.path(root_dir, "figures", "drugs_figure", "figures")
 dir.create(figures_dir, recursive = TRUE, showWarnings = FALSE)
 
-platemap_file_path <- file.path(
-    root_dir, "config/platemaps/platemap2.csv"
-)
+git_root <- system("git rev-parse --show-toplevel", intern = TRUE)
+source(file.path(git_root, "utils", "r_plot_themes.r"))
+
+platemap_figure_file_path <- file.path(git_root,"figures/drugs_figure/figures/platemap_figure.png")
+if (!file.exists(platemap_figure_file_path)) {
+    dir.create(dirname(platemap_figure_file_path), recursive = TRUE)
+}
+platemap_file_path <- file.path(git_root,"config/platemaps/platemap2.csv")
 platemap <- read.csv(platemap_file_path, stringsAsFactors = FALSE)
 
 # Add leading zeros if needed (uncomment the commented code in your notebook)
 platemap <- platemap %>%
-  mutate(WellRow = str_replace(WellRow, "([A-H])([1-9])$", "\\10\\2"))
+  mutate(well_position = str_replace(WellPosition, "([A-H])([1-9])$", "\\10\\2"))
 platemap$dose_unit <- paste0(platemap$Dose, " ", platemap$Unit)
 head(platemap)
 
@@ -44,7 +49,7 @@ axis_text_size <- font_size - 2
 platemap_figure <- (
     platetools::raw_map(
         data = platemap$Treatment,
-        well = platemap$WellPosition,
+        well = platemap$well_position,
         # shape = platemap$dose_unit,
         plate = 96,
         size = 15
@@ -59,10 +64,11 @@ platemap_figure <- (
         # make the legend go from left to right,
         legend.text = element_text(size = axis_text_size-2),
         legend.title = element_text(size = axis_text_size, face = "bold", hjust = 0.5)
-
-        )
+        
+        ) 
     + ggplot2::geom_point(aes(shape = platemap$dose_unit), size = 3)
     + ggplot2::scale_shape_discrete(name = "Dose")
+    + ggplot2::scale_fill_manual(values = custom_treatment_palette)
     # make the legend three columns
     + guides(
         fill  = guide_legend(
@@ -83,7 +89,7 @@ platemap_figure <- (
 
 )
 ggsave(
-    filename = file.path(figures_dir, "platemap_figure.png"),
+    filename = platemap_figure_file_path,
     plot = platemap_figure,
     width = width,
     height = height,

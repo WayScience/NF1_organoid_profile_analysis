@@ -30,6 +30,12 @@ find_git_root <- function() {
 }
 
 root_dir <- find_git_root()
+source(file.path(root_dir, "utils/r_result_cache.r"))
+
+# Caching: skip work whose outputs were built from unchanged inputs and code
+CACHE_STEP <- "7.plot_shannon_entropy"
+CODE_PATH <- file.path(root_dir, "2.2d_vs_3d_analysis", "scripts", "7.plot_shannon_entropy.r")
+results_root <- file.path(root_dir, "2.2d_vs_3d_analysis", "results")
 cat("Git root directory:", root_dir, "\n")
 
 entropy_dir <- file.path(root_dir, "2.2d_vs_3d_analysis", "results", "entropy")
@@ -42,11 +48,55 @@ all_files <- list.files(entropy_dir, pattern = "_entropy\\.parquet$", full.names
 pooled_files <- all_files[!grepl("_per_patient_entropy\\.parquet$", all_files)]
 per_patient_files <- all_files[grepl("_per_patient_entropy\\.parquet$", all_files)]
 
-entropy_pooled <- bind_rows(lapply(pooled_files, arrow::read_parquet))
-entropy_per_patient <- bind_rows(lapply(per_patient_files, arrow::read_parquet))
+# Stale 3D aggregated files written before the from_fs / from_norm split have
+# no mode in their name, so they are not read.
+is_stale_3d_agg <- function(name) {
+    grepl("^3D_.*_agg(_per_patient)?_entropy\\.parquet$", name)
+}
+
+# 3D aggregated profiles are written twice, from feature-selected and from
+# normalized single cells. The file name says which one, so each gets its own
+# stage_label (agg_from_fs / agg_from_norm). 2D aggregated profiles keep "agg".
+read_entropy_files <- function(files) {
+    files <- files[!vapply(basename(files), is_stale_3d_agg, logical(1))]
+    bind_rows(lapply(files, function(path) {
+        name <- basename(path)
+        df <- as.data.frame(arrow::read_parquet(path))
+        df$stage_label <- as.character(df$stage)
+        if (grepl("_agg_from_(fs|norm)_", name)) {
+            mode <- sub(".*_(agg_from_(fs|norm))_.*", "\\1", name)
+            df$stage_label[df$imaging_modality == "3D" & df$stage == "agg"] <- mode
+        }
+        df
+    }))
+}
+
+entropy_pooled <- read_entropy_files(pooled_files)
+entropy_per_patient <- read_entropy_files(per_patient_files)
 
 entropy_pooled$group_label <- factor(entropy_pooled$group_label)
 entropy_per_patient$group_label <- factor(entropy_per_patient$group_label)
+
+# Each PNG is redrawn only when the entropy files it is drawn from have changed
+entropy_inputs <- all_files
+save_plot_if_stale <- function(plot, filename, width, height) {
+    if (result_cache_is_fresh(CACHE_STEP, results_root, CODE_PATH, filename, entropy_inputs)) {
+        cat("Using cached result:", basename(filename), "\n")
+        return(invisible(FALSE))
+    }
+    print(plot)
+    ggsave(
+        filename = filename,
+        plot     = plot,
+        width    = width,
+        height   = height,
+        dpi      = dpi,
+        units    = "in"
+    )
+    result_cache_mark_fresh(CACHE_STEP, results_root, CODE_PATH, filename, entropy_inputs)
+    invisible(TRUE)
+}
+
 
 # Plot styling
 entropy_theme <- theme(
@@ -59,7 +109,14 @@ entropy_theme <- theme(
     legend.text  = element_text(size = 12)
 )
 
-stage_titles <- c(normal = "Normal", fs = "Feature-Selected", agg = "Aggregated")
+# agg is 2D only; the 3D aggregated stages are split by the mode they were built from
+stage_titles <- c(
+    normal = "Normal",
+    fs = "Feature-Selected",
+    agg = "Aggregated (2D)",
+    agg_from_norm = "Aggregated (from Normalized)",
+    agg_from_fs = "Aggregated (from Feature-Selected)"
+)
 resolution_titles <- c(organoid = "Organoid", sc = "Single-Cell")
 
 make_entropy_plot <- function(df, title) {
@@ -83,7 +140,7 @@ dpi <- 300
 
 for (res in names(resolution_titles)) {
     for (stage in names(stage_titles)) {
-        df_subset <- entropy_pooled %>% filter(resolution == res, stage == !!stage)
+        df_subset <- entropy_pooled %>% filter(resolution == res, stage_label == !!stage)
         if (nrow(df_subset) == 0) {
             cat("SKIPPED (no data):", res, stage, "\n")
             next
@@ -94,15 +151,7 @@ for (res in names(resolution_titles)) {
             " Profiles (", stage_titles[[stage]], ")"
         )
         p <- make_entropy_plot(df_subset, title)
-        print(p)
-        ggsave(
-            filename = file.path(figures_dir, paste0(res, "_", stage, "_entropy.png")),
-            plot     = p,
-            width    = width,
-            height   = height,
-            dpi      = dpi,
-            units    = "in"
-        )
+        save_plot_if_stale(p, file.path(figures_dir, paste0(res, "_", stage, "_entropy.png")), width, height)
     }
 }
 
@@ -131,7 +180,7 @@ pp_height <- 8
 
 for (res in names(resolution_titles)) {
     for (stage in names(stage_titles)) {
-        df_subset <- entropy_per_patient %>% filter(resolution == res, stage == !!stage)
+        df_subset <- entropy_per_patient %>% filter(resolution == res, stage_label == !!stage)
         if (nrow(df_subset) == 0) {
             cat("SKIPPED (no data):", res, stage, "\n")
             next
@@ -142,14 +191,6 @@ for (res in names(resolution_titles)) {
             " Profiles (", stage_titles[[stage]], ")"
         )
         p <- make_per_patient_entropy_plot(df_subset, title)
-        print(p)
-        ggsave(
-            filename = file.path(figures_dir, paste0(res, "_", stage, "_per_patient_entropy.png")),
-            plot     = p,
-            width    = pp_width,
-            height   = pp_height,
-            dpi      = dpi,
-            units    = "in"
-        )
+        save_plot_if_stale(p, file.path(figures_dir, paste0(res, "_", stage, "_per_patient_entropy.png")), pp_width, pp_height)
     }
 }

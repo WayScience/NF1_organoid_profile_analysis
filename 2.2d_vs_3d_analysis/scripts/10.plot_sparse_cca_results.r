@@ -30,6 +30,12 @@ find_git_root <- function() {
 }
 
 root_dir <- find_git_root()
+source(file.path(root_dir, "utils/r_result_cache.r"))
+
+# Caching: skip work whose outputs were built from unchanged inputs and code
+CACHE_STEP <- "10.plot_sparse_cca_results"
+CODE_PATH <- file.path(root_dir, "2.2d_vs_3d_analysis", "scripts", "10.plot_sparse_cca_results.r")
+results_root <- file.path(root_dir, "2.2d_vs_3d_analysis", "results")
 cat("Git root directory:", root_dir, "\n")
 
 results_dir <- file.path(root_dir, "2.2d_vs_3d_analysis/results/sparse_cca")
@@ -92,5 +98,15 @@ plot_pair <- function(label, slug, results_dir, figures_dir) {
 }
 
 for (i in seq_len(nrow(profile_pairs))) {
-    plot_pair(profile_pairs$label[i], profile_pairs$slug[i], results_dir, figures_dir)
+    slug <- profile_pairs$slug[i]
+    pair_inputs <- file.path(results_dir, paste0(
+        slug, c("_canonical_scores.parquet", "_canonical_correlations.parquet")
+    ))
+    pair_outputs <- file.path(figures_dir, paste0("sparse_cca_", slug, "_score_scatter.png"))
+    if (result_cache_is_fresh(CACHE_STEP, results_root, CODE_PATH, pair_outputs, pair_inputs)) {
+        cat("Using cached result:", basename(pair_outputs), "\n")
+        next
+    }
+    plot_pair(profile_pairs$label[i], slug, results_dir, figures_dir)
+    result_cache_mark_fresh(CACHE_STEP, results_root, CODE_PATH, pair_outputs, pair_inputs)
 }

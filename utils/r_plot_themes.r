@@ -1,3 +1,4 @@
+library(RColorBrewer)
 # set custom colors for each MOA
 custom_MOA_palette <- c(
     'BRD4 inhibitor' = "#93152A",  # Dark red
@@ -145,10 +146,24 @@ organoid_compartment_palette = c(
 
 feature_type_palette = c(
     "AreaSizeShape" = brewer.pal(8, "Paired")[1],
+    # V3 3D profiles name the shape features VolumeSizeShape (was AreaSizeShape)
+    "VolumeSizeShape" = brewer.pal(8, "Paired")[1],
+    "Neighbors" = brewer.pal(8, "Paired")[4],
     "Colocalization" = brewer.pal(8, "Paired")[2],
     "Granularity" = brewer.pal(8, "Paired")[3],
     "Intensity" = brewer.pal(8, "Paired")[5],
     "Texture" = brewer.pal(8, "Paired")[8]
+)
+
+feature_type_palette_2D = c(
+    "AreaSizeShape" = brewer.pal(8, "Paired")[1],
+    "Colocalization" = brewer.pal(8, "Paired")[2],
+    "Granularity" = brewer.pal(8, "Paired")[3],
+    "Intensity" = brewer.pal(8, "Paired")[5],
+    "Location" = brewer.pal(8, "Paired")[4],
+    "Neighbors" = brewer.pal(8, "Paired")[6],
+    "Texture" = brewer.pal(8, "Paired")[8],
+    "RadialDistribution" = brewer.pal(8, "Paired")[7]
 )
 
 # Shared theme for manuscript-quality plots.

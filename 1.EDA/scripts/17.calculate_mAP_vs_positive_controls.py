@@ -16,6 +16,7 @@
 # In[1]:
 
 
+import logging
 import pathlib
 from typing import Union
 
@@ -25,10 +26,17 @@ from copairs import map
 from copairs.matching import assign_reference_index
 from notebook_init_utils.notebook_init_utils import init_notebook
 
+logging.getLogger("copairs").setLevel(logging.WARNING)
+
 root_dir, in_notebook = init_notebook()
 
+if in_notebook:
+    import tqdm.notebook as tqdm
+else:
+    import tqdm
 
-# In[2]:
+
+# In[ ]:
 
 
 path_2d_organoid = pathlib.Path(
@@ -41,41 +49,45 @@ dir_3d_agg = pathlib.Path(
     f"{root_dir}/data/profiles_3D/all_patients/2.aggregated_profiles"
 ).resolve(strict=True)
 
-# (label, slug, path) for every profile type in the 2D + 3D combinatorics
-profile_types = [
-    ("2D Organoid", "2D_organoid", path_2d_organoid),
-    ("2D Single-cell", "2D_sc", path_2d_sc),
-    (
-        "3D Organoid - Handcrafted",
-        "3D_organoid_handcrafted",
-        dir_3d_agg / "organoid_norm_sc_agg_profiles.parquet",
-    ),
-    (
-        "3D Organoid - DL (SAM-Med3D)",
-        "3D_organoid_sammed",
-        dir_3d_agg / "sammed_organoid_norm_sc_agg_profiles.parquet",
-    ),
-    (
-        "3D Single-cell - Handcrafted",
-        "3D_sc_handcrafted",
-        dir_3d_agg / "sc_norm_sc_agg_profiles.parquet",
-    ),
-    (
-        "3D Single-cell - DL (SAM-Med3D)",
-        "3D_sc_sammed",
-        dir_3d_agg / "sammed_sc_norm_sc_agg_profiles.parquet",
-    ),
+# Each 3D aggregated profile is derived two ways -- aggregated from the
+# feature-selected single cells (``from_fs``) and from the normalized single
+# cells (``from_norm``) -- so both variants are scored for every profile type.
+MODES = ["from_fs", "from_norm"]
+MODE_LABELS = {"from_fs": "from FS", "from_norm": "from norm"}
+
+# (label, slug, filename stem) base specs for every 3D profile type; the
+# ``_from_fs`` / ``_from_norm`` suffix is appended per mode below.
+base_3d_profile_types = [
+    ("3D Organoid - Handcrafted", "3D_organoid_handcrafted", "organoid_norm_agg"),
+    ("3D Organoid - DL (SAM-Med3D)", "3D_organoid_sammed", "sammed_organoid_norm_agg"),
+    ("3D Single-cell - Handcrafted", "3D_sc_handcrafted", "sc_norm_agg"),
+    ("3D Single-cell - DL (SAM-Med3D)", "3D_sc_sammed", "sammed_sc_norm_agg"),
     (
         "3D Single-cell - Nucleocentric DL (SAM-Med3D)",
         "3D_sc_sammed_nucleocentric",
-        dir_3d_agg / "sammed_nucleocentric_norm_sc_agg_profiles.parquet",
+        "sammed_nucleocentric_norm_agg",
     ),
     (
         "3D Single-cell - Nucleocentric DL (MorphEM)",
         "3D_sc_nucleocentric_morphem",
-        dir_3d_agg / "nucleocentric_morphem_norm_sc_agg_profiles.parquet",
+        "nucleocentric_morphem_norm_agg",
     ),
 ]
+
+# (label, slug, path) for every profile type in the 2D + 3D combinatorics
+profile_types = [
+    ("2D Organoid", "2D_organoid", path_2d_organoid),
+    ("2D Single-cell", "2D_sc", path_2d_sc),
+]
+for _label, _slug, _stem in base_3d_profile_types:
+    for _mode in MODES:
+        profile_types.append(
+            (
+                f"{_label} ({MODE_LABELS[_mode]})",
+                f"{_slug}_{_mode}",
+                dir_3d_agg / f"{_stem}_{_mode}.parquet",
+            )
+        )
 
 results_dir = pathlib.Path(
     f"{root_dir}/1.EDA/results/mAP_vs_positive_controls"
@@ -102,15 +114,15 @@ def convert_2d_metadata_to_3d_metadata_style(df: pd.DataFrame) -> pd.DataFrame:
     # Keep the full patient_tumor value: some patients (e.g. NF0014) have multiple
     # tumor samples, so stripping to bare patient would merge distinct tumors together.
     df["Metadata_patient"] = df["Metadata_Biology_PatientTumor"]
+    # Drop rows with no treatment recorded (e.g. failed wells with all-NaN
+    # experiment metadata) rather than letting NaN propagate into
+    # Metadata_treatment_dose and break downstream sorting/grouping.
+    df = df.dropna(subset=["Metadata_Experiment_Treatment"]).reset_index(drop=True)
     df["Metadata_treatment_dose"] = (
         df["Metadata_Experiment_Treatment"]
         + "_"
         + df["Metadata_Experiment_Dose"].fillna(0).astype(float).astype(int).astype(str)
     )
-    # Some upstream Texture features contain corrupted inf values; treat like NaN
-    # so the existing NaN-handling in calculate_mAP covers them too.
-    feature_cols = [c for c in df.columns if not c.startswith("Metadata_")]
-    df[feature_cols] = df[feature_cols].replace([np.inf, -np.inf], np.nan)
     return df
 
 
@@ -255,6 +267,11 @@ for label, slug, path in profile_types:
     metadata_cols = [c for c in df.columns if c.startswith("Metadata_")]
 
     for reference_group in sorted(df["Metadata_treatment_dose"].unique()):
+        output_path = (
+            results_dir / f"{slug}_inter_patient_mAP_vs_{reference_group}.parquet"
+        )
+        if output_path.exists():
+            continue
         calculate_inter_patient_mAP(
             df,
             metadata_columns=metadata_cols,
