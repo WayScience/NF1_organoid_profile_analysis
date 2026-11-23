@@ -10,6 +10,7 @@ feature ~ treatment + cell_count + organoid_count + cell_per_organoid_count     
 ```
 
 For every model and term the results store the coefficient, the p-value, the Benjamini-Hochberg FDR (`pvalue_fdr`, corrected separately per term across all features, treatments and patients), R2 / adjusted R2, and the variance shares (`term_pct_of_total_var` from type II sums of squares, `residual_pct`).
+In the `_mek_groups` files (step 3, MEKi groups only), `pvalue_fdr` is instead corrected per term x `mek_group`.
 The steps after 3 only read these saved statistics; no model is refit.
 
 ## Pipeline
@@ -22,7 +23,7 @@ Python steps run in the `uv` environment and R (ggplot2) steps run in the `uvr` 
 | `0.aggregating_non_fs_profiles` | Python | Aggregates the normalized organoid and single-cell profiles to one row per well (median) | `data/organoid_norm_aggregated_profile.parquet`, `data/sc_norm_aggregated_profile.parquet` |
 | `1.calculate_well_manhattan_distance` | Python | Manhattan distance of every well from the plate center | `results/well_manhattan_distance/` (parquet + platemap pdf) |
 | `2.linear_modeling` | Python | Treatment + count covariate models for four profiles (organoid, single cell, and their well-aggregated versions) | `results/linear_modeling/{organoid_norm,sc_norm,organoid_agg,single_cell_agg}.parquet` |
-| `3.linear_modeling_technical_vars` | Python | Same four profiles refit with the plate-position and cell-position covariates | `results/linear_modeling/<profile>_technical_model.parquet` |
+| `3.linear_modeling_technical_vars` | Python | Same four profiles refit with the plate-position and cell-position covariates; also fits the MEKi groups (pooled "All MEKi" vs DMSO, plus each MEK drug x dose) | `results/linear_modeling/<profile>_technical_model.parquet`, `results/linear_modeling/<profile>_technical_model_mek_groups.parquet` |
 | `4.variance_decomposition` | Python | Where the variance goes, and why so much of it is residual | `figures/variance_decomposition/variance_decomposition.pdf` (all figures in one pdf), `results/decomposed_variance/`, `results/residual_diagnostics/`, `results/variate_vs_residual/`, `results/top_models/` |
 | `5.calculate_variate_importance` | Python | Venn / UpSet tables of which features are hits for which term (`sc_norm` fits, original and technical models) | `results/variate_importance/` |
 | `6.plot_variate_importance` | R | Venn / UpSet plots, treatment-only co-occurrence heatmaps, title-free multiresult-figure subpanels | `figures/variate_importance/` (subpanels in `multiresult_figure_subpanels/`) |
@@ -31,6 +32,7 @@ Python steps run in the `uv` environment and R (ggplot2) steps run in the `uvr` 
 | `9.explore_linear_model_haystacks` | Python | Exhaustive exploration of the technical models: effect sizes, hit landscape, reproducibility, dose response, the "needles" | `results/explore_linear_models/` |
 | `10.plot_explore_linear_model_haystacks` | R | Plots for step 9 | `figures/explore_linear_models/explore_linear_models.pdf` |
 | `11.assembled_multiresult_figure` | R | Multi-panel summary figure from the outputs of 6 and 9 | `figures/headline_results_figure/multiresult_figure.png` |
+| `12.plot_mek_group_linear_models` | R | Port of `5.differential_analysis/9.plot_mek_signatures` to the step-3 MEKi group models, with the step-3 staurosporine 10 nM vs DMSO model (FDR rerun per term on its fits only) as a positive control: significant feature counts per term, features significant only for treatment (no other term significant) per patient and per tumor type, UpSets of shared treatment features across MEKi groups, VolumeSizeShape treatment-coefficient distributions per feature across MEKi groups (well-aggregated models only; plus nuclei extent, nuclei volume, and cell volume by tumor type, as coefficients and as well-level feature values), feature categories, recurrence across patients | `figures/mek_group_linear_models/`, `results/linear_modeling/mek_group_treatment_unique_features.parquet` |
 
 Step 7 is configurable from the command line (`python scripts/7.calculate_variate_class_upsets_and_clustermap.py --help`); its run tag (for example `sc_T-O-C-N-M-X-Y-Z-D`) names its results folder.
 Step 8 plots one run: set `tag` in its parameter cell (the figures go to `figure_name`, `sc_technical_model_results` for the default tag).
@@ -46,7 +48,7 @@ Each step uses the hit definition that suits its question, so the counts are not
 
 ## Plotting code
 
-The R steps (6, 8, 10, 11) share code in `utils/`:
+The R steps (6, 8, 10, 11, 12) share code in `utils/`:
 
 * `utils/r_plot_themes.r`: every palette (for example `linear_modeling_term_palette`, `profile_palette`, `patient_palette`, `treatment_only_palette`), `variate_letters`, and the themes `theme_manuscript` and `theme_manuscript_void`. All plots use these themes.
 * `utils/r_plot_funcs.r`: the plotting functions (`plot_venn`, `plot_upset`, `plot_patient_upset`, `cooccurrence_heatmap`, `plot_clustermap`, plus the shared heatmap and pdf helpers). Dense point layers are rasterized with `ggrastr`; the title-free panels that step 11 embeds are called multiresult-figure subpanels.
