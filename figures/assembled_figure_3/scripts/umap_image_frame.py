@@ -56,6 +56,7 @@ image_cache_dir.mkdir(parents=True, exist_ok=True)
 # All image-frame figures are written as pages of this one multi-page PDF.
 umap_image_frame_pdf_path = figures_dir / "umap_image_frame.pdf"
 
+
 # ## Load data
 
 # In[2]:
@@ -65,6 +66,7 @@ umap_data_file_path = pathlib.Path(
     f"{root_dir}/1.EDA/results/umap/3D_scfs_umap.parquet"
 ).resolve(strict=True)
 umap_data = pd.read_parquet(umap_data_file_path)
+
 
 # In[3]:
 
@@ -83,6 +85,7 @@ umap_data[f"Metadata_raw_image_filepath"] = umap_data.apply(
     lambda row: _raw_image_filepath_channelx(row), axis=1
 )
 umap_data.head()
+
 
 # In[4]:
 
@@ -193,6 +196,7 @@ treatment_palette = {
     for lab in pd.unique(labels_treatment)
 }
 
+
 # In[5]:
 
 
@@ -203,6 +207,7 @@ plt.xlabel("UMAP 1")
 plt.ylabel("UMAP 2")
 plt.title("UMAP of 3D SCFS Data")
 plt.show()
+
 
 # ## Choose which points to show
 #
@@ -683,12 +688,14 @@ def frame_and_save(labels_arr, palette, legend_title, scheme):
 
 frame_and_save(labels_tumor, tumor_type_palette, "Tumor type", "tumor_type")
 
+
 # ### Colored by patient
 
 # In[9]:
 
 
 frame_and_save(labels_patient, patient_palette, "Patient", "patient")
+
 
 # ### Colored by treatment (drug + dose)
 
@@ -698,6 +705,7 @@ frame_and_save(labels_patient, patient_palette, "Patient", "patient")
 frame_and_save(
     labels_treatment, treatment_palette, "Treatment (drug + dose)", "treatment"
 )
+
 
 # ### All three together
 #

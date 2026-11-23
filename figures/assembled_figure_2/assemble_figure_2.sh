@@ -16,10 +16,13 @@ uv run jupyter nbconvert --to=script \
     --FilesWriter.build_directory="$module_dir"/scripts/ \
     "$module_dir"/notebooks/*.ipynb
 
-# deactivate any existing conda environment
-conda deactivate >/dev/null 2>&1 || true
-# deactivate any existing venv environment
-deactivate >/dev/null 2>&1 || true
+# "try" block: deactivate any active environments, ignore failures
+{
+    # deactivate any existing conda environment
+    conda deactivate 2>/dev/null
+    # deactivate any existing venv environment
+    deactivate 2>/dev/null
+} || true
 
 uv run python "$module_dir/scripts/featurization_figure.py"
 uvr run "$module_dir/scripts/assembled_figure_2.r"
