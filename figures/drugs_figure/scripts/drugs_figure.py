@@ -6,6 +6,7 @@
 
 import os
 import pathlib
+import sys
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -28,73 +29,16 @@ drug_information_file_path = pathlib.Path(
     f"{root_dir}/config/drug_information/drug_information.csv"
 ).resolve(strict=True)
 drug_information = pd.read_csv(drug_information_file_path)
-# get a list of all dirs within the dir
-list_of_patients_file_path = pathlib.Path(
-    f"{profile_base_dir}/data/patient_IDs.txt"
-).resolve(strict=True)
-figures_dir = pathlib.Path(f"{root_dir}/figures/drugs_figure/figures").resolve()
+
+drugs_df = pd.read_csv(drug_information_file_path)
+
+figures_dir = pathlib.Path(f"{profile_base_dir}/figures/drugs_figure/figures").resolve()
 figures_dir.mkdir(parents=True, exist_ok=True)
-patients_list = pd.read_csv(list_of_patients_file_path, header=None)[0].tolist()
-patients_list.sort()
-platemap_file_paths_list = [
-    platemap_dir / f"{patient}/platemap/platemap.csv" for patient in patients_list
-]
-platemap_file_paths_list = [path for path in platemap_file_paths_list if path.exists()]
-platemaps = pd.concat([pd.read_csv(path) for path in platemap_file_paths_list])
-platemaps.drop_duplicates(inplace=True)
-drugs = platemaps["treatment"].unique()
 
 
 # In[3]:
 
 
-drugs_dict = {
-    "drug": [],
-    "FDA_status": [],
-}
-drugs_dict["drug"].append("ARV-825")
-drugs_dict["FDA_status"].append("Investigational")
-drugs_dict["drug"].append("Binimetinib")
-drugs_dict["FDA_status"].append("Approved")
-drugs_dict["drug"].append("Cabozantinib")
-drugs_dict["FDA_status"].append("Approved")
-drugs_dict["drug"].append("Copanlisib")
-drugs_dict["FDA_status"].append("Withdrawn")
-drugs_dict["drug"].append("Digoxin")
-drugs_dict["FDA_status"].append("Approved")
-drugs_dict["drug"].append("Everolimus")
-drugs_dict["FDA_status"].append("Approved")
-drugs_dict["drug"].append("Fimepinostat")
-drugs_dict["FDA_status"].append("Phase 1/2")
-drugs_dict["drug"].append("Imatinib")
-drugs_dict["FDA_status"].append("Approved")
-drugs_dict["drug"].append("Ketotifen")
-drugs_dict["FDA_status"].append("Approved")
-drugs_dict["drug"].append("Linsitinib")
-drugs_dict["FDA_status"].append("Phase 3")
-drugs_dict["drug"].append("Mirdametinib")
-drugs_dict["FDA_status"].append("NF1 Approved")
-drugs_dict["drug"].append("Nilotinib")
-drugs_dict["FDA_status"].append("Approved")
-drugs_dict["drug"].append("Onalespib")
-drugs_dict["FDA_status"].append("Approved")
-drugs_dict["drug"].append("Panobinostat")
-drugs_dict["FDA_status"].append("Approved")
-drugs_dict["drug"].append("Rapamycin")
-drugs_dict["FDA_status"].append("Approved")
-drugs_dict["drug"].append("Sapanisertib")
-drugs_dict["FDA_status"].append("Phase 2")
-drugs_dict["drug"].append("Selumetinib")
-drugs_dict["FDA_status"].append("NF1 Approved")
-drugs_dict["drug"].append("Staurosporine")
-drugs_dict["FDA_status"].append("Withdrawn")
-drugs_dict["drug"].append("Trabectedin")
-drugs_dict["FDA_status"].append("Approved")
-drugs_dict["drug"].append("Trametinib")
-drugs_dict["FDA_status"].append("Approved")
-drugs_dict["drug"].append("Vistusertib")
-drugs_dict["FDA_status"].append("Withdrawn")
-drugs_df = pd.DataFrame(drugs_dict, columns=["drug", "FDA_status"])
 drugs_df["numerical_approval"] = drugs_df["FDA_status"].map(
     {
         "NF1 Approved": 5,
@@ -107,38 +51,24 @@ drugs_df["numerical_approval"] = drugs_df["FDA_status"].map(
     }
 )
 drugs_df.sort_values(
-    by=["numerical_approval", "drug"], ascending=[False, True], inplace=True
+    by=["numerical_approval", "Treatment"], ascending=[False, True], inplace=True
 )
 drugs_df.reset_index(drop=True, inplace=True)
-drug_information
-drugs_df = pd.merge(
-    drugs_df,
-    drug_information,
-    how="left",
-    left_on="drug",
-    right_on="Treatment",
-    validate="one_to_one",
-)
+drugs_df
 
 
-# In[5]:
-
-
-drugs_df["drug"].unique()
-
-
-# In[6]:
+# In[4]:
 
 
 # order the dataframe by Target
 drugs_df.sort_values(
-    by=["numerical_approval", "Target", "drug"],
+    by=["numerical_approval", "Target", "Treatment"],
     ascending=[False, False, True],
     inplace=True,
 )
 
 
-# In[7]:
+# In[5]:
 
 
 # plot the drug and the approval status as graph
@@ -147,15 +77,11 @@ sns.set_style("whitegrid")
 sns.scatterplot(
     data=drugs_df,
     x="numerical_approval",
-    y="drug",
+    y="Treatment",
     hue="Target",
     palette=custom_MOA_palette,
     s=300,
 )
-# plt.yticks(
-#     rotation=90,
-#     # ha="right"
-# )
 plt.xticks(
     ticks=[0, 1, 2, 3, 4, 5],
     labels=[
@@ -173,5 +99,6 @@ plt.ylabel("Drug")
 plt.title("FDA Approval Status of Drugs Used in Organoid Treatments")
 plt.legend(title="FDA Status", bbox_to_anchor=(1.05, 1), loc="upper left")
 plt.tight_layout()
-plt.savefig(figures_dir / "drug_fda_approval_status.png", dpi=600)
+plt.savefig(figures_dir / "drug_fda_approval_status.png", dpi=600, facecolor="white")
 plt.show()
+

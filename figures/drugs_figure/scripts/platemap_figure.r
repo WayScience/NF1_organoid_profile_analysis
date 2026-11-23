@@ -1,16 +1,32 @@
-packages <- c("dplyr", "stringr", "ggplot2", "platetools", "patchwork")
-for (package in packages) {
-    suppressWarnings(
-        suppressPackageStartupMessages(
-            library(package, character.only = TRUE)
-        )
-    )
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(stringr))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(platetools))
+suppressPackageStartupMessages(library(patchwork))
+find_git_root <- function() {
+    cwd <- getwd()
+    if (dir.exists(file.path(cwd, ".git"))) {
+        return(cwd)
+    }
+    current_path <- cwd
+    while (dirname(current_path) != current_path) {
+        parent_path <- dirname(current_path)
+        if (dir.exists(file.path(parent_path, ".git"))) {
+            return(parent_path)
+        }
+        current_path <- parent_path
+    }
+    stop("No Git root directory found.")
 }
+
+root_dir <- find_git_root()
+figures_dir <- file.path(root_dir, "figures", "drugs_figure", "figures")
+dir.create(figures_dir, recursive = TRUE, showWarnings = FALSE)
 
 git_root <- system("git rev-parse --show-toplevel", intern = TRUE)
 source(file.path(git_root, "utils", "r_plot_themes.r"))
 
-platemap_figure_file_path <- file.path(git_root,"figures/drugs_figure/platemap_figure.png")
+platemap_figure_file_path <- file.path(git_root,"figures/drugs_figure/figures/platemap_figure.png")
 if (!file.exists(platemap_figure_file_path)) {
     dir.create(dirname(platemap_figure_file_path), recursive = TRUE)
 }
@@ -48,8 +64,8 @@ platemap_figure <- (
         # make the legend go from left to right,
         legend.text = element_text(size = axis_text_size-2),
         legend.title = element_text(size = axis_text_size, face = "bold", hjust = 0.5)
-
-        )
+        
+        ) 
     + ggplot2::geom_point(aes(shape = platemap$dose_unit), size = 3)
     + ggplot2::scale_shape_discrete(name = "Dose")
     + ggplot2::scale_fill_manual(values = custom_treatment_palette)
@@ -78,6 +94,7 @@ ggsave(
     width = width,
     height = height,
     units = "in",
-    dpi = 600
+    dpi = 600,
+    bg = "white"
 )
 platemap_figure

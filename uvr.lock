@@ -177,11 +177,11 @@ requires = ["BiocGenerics"]
 
 [[package]]
 name = "S7"
-version = "0.2.2"
+version = "1.0.0"
 source = "cran"
-raw_version = "0.2.2"
-url = "https://cran.r-project.org/src/contrib/S7_0.2.2.tar.gz"
-checksum = "md5:6a40d3eae470be0f06a03737b9391269"
+raw_version = "1.0.0"
+url = "https://cran.r-project.org/src/contrib/S7_1.0.0.tar.gz"
+checksum = "md5:efb87f59334cee4c9ea0a8af20bf80e6"
 
 [[package]]
 name = "VennDiagram"
@@ -517,11 +517,11 @@ requires = [
 
 [[package]]
 name = "diffobj"
-version = "0.3.9"
+version = "0.3.10"
 source = "cran"
-raw_version = "0.3.9"
-url = "https://cran.r-project.org/src/contrib/diffobj_0.3.9.tar.gz"
-checksum = "md5:2211ade9964a649d33567a67bbbac2de"
+raw_version = "0.3.10"
+url = "https://cran.r-project.org/src/contrib/diffobj_0.3.10.tar.gz"
+checksum = "md5:b5a1dc88ccdd18229343946d39a0e672"
 requires = ["crayon"]
 
 [[package]]
@@ -776,11 +776,11 @@ requires = [
 
 [[package]]
 name = "ggplot2"
-version = "4.0.3"
+version = "4.0.4"
 source = "cran"
-raw_version = "4.0.3"
-url = "https://cran.r-project.org/src/contrib/ggplot2_4.0.3.tar.gz"
-checksum = "md5:c50d6864f6226ed9759e5deaa0a25e7f"
+raw_version = "4.0.4"
+url = "https://cran.r-project.org/src/contrib/ggplot2_4.0.4.tar.gz"
+checksum = "md5:311e2e3e31a41b99269a46575056c10f"
 requires = [
     "cli",
     "gtable",
@@ -1200,19 +1200,19 @@ requires = ["askpass"]
 
 [[package]]
 name = "otel"
-version = "0.2.0"
+version = "0.3.0"
 source = "cran"
-raw_version = "0.2.0"
-url = "https://cran.r-project.org/src/contrib/otel_0.2.0.tar.gz"
-checksum = "md5:cecd0f434a6327dcf5ca0bc2da494d06"
+raw_version = "0.3.0"
+url = "https://cran.r-project.org/src/contrib/otel_0.3.0.tar.gz"
+checksum = "md5:b9c41923305ec69ba71e80b63e86ec02"
 
 [[package]]
 name = "pak"
-version = "0.11.1"
+version = "0.11.2"
 source = "cran"
-raw_version = "0.11.1"
-url = "https://cran.r-project.org/src/contrib/pak_0.11.1.tar.gz"
-checksum = "md5:201eaa969a601b2efc6253432a283741"
+raw_version = "0.11.2"
+url = "https://cran.r-project.org/src/contrib/pak_0.11.2.tar.gz"
+checksum = "md5:808f7dc401bd4d503f2323a8b199cefd"
 
 [[package]]
 name = "patchwork"
@@ -1376,11 +1376,11 @@ checksum = "md5:2e2db8105f214b80d3d4254b8aabb255"
 
 [[package]]
 name = "processx"
-version = "3.9.0"
+version = "3.10.0"
 source = "cran"
-raw_version = "3.9.0"
-url = "https://cran.r-project.org/src/contrib/processx_3.9.0.tar.gz"
-checksum = "md5:c4e0ed59285d195cdb03c66e3a9cb76d"
+raw_version = "3.10.0"
+url = "https://cran.r-project.org/src/contrib/processx_3.10.0.tar.gz"
+checksum = "md5:787f91ac0ed47ea60bba66d8b548b2d4"
 requires = [
     "ps",
     "R6",
@@ -1592,17 +1592,17 @@ requires = ["curl"]
 
 [[package]]
 name = "sass"
-version = "0.4.10"
+version = "0.5.0"
 source = "cran"
-raw_version = "0.4.10"
-url = "https://cran.r-project.org/src/contrib/sass_0.4.10.tar.gz"
-checksum = "md5:16054a7117a81ba75893fec17da62209"
+raw_version = "0.5.0"
+url = "https://cran.r-project.org/src/contrib/sass_0.5.0.tar.gz"
+checksum = "md5:fdc11cc1b8f6cffd1ceef6b4d96b529c"
 requires = [
     "fs",
-    "rlang",
     "htmltools",
     "R6",
     "rappdirs",
+    "rlang",
 ]
 
 [[package]]
@@ -1643,11 +1643,11 @@ checksum = "md5:42b7951c69b6c93178c07f2d189d0c89"
 
 [[package]]
 name = "shiny"
-version = "1.14.0"
+version = "1.15.0"
 source = "cran"
-raw_version = "1.14.0"
-url = "https://cran.r-project.org/src/contrib/shiny_1.14.0.tar.gz"
-checksum = "md5:309459688ceae1e8b018d1595eae8879"
+raw_version = "1.15.0"
+url = "https://cran.r-project.org/src/contrib/shiny_1.15.0.tar.gz"
+checksum = "md5:944e93bbd58350e085f1c4b317c8e159"
 requires = [
     "bslib",
     "cachem",
@@ -1667,6 +1667,7 @@ requires = [
     "R6",
     "rlang",
     "sourcetools",
+    "watcher",
     "withr",
     "xtable",
 ]
@@ -1722,11 +1723,11 @@ checksum = "md5:ffb4244c6d4cacdd4ac8ef187699707c"
 
 [[package]]
 name = "systemfonts"
-version = "1.3.2"
+version = "1.3.3"
 source = "cran"
-raw_version = "1.3.2"
-url = "https://cran.r-project.org/src/contrib/systemfonts_1.3.2.tar.gz"
-checksum = "md5:57b95280ca9bba2bb18477eb512ac971"
+raw_version = "1.3.3"
+url = "https://cran.r-project.org/src/contrib/systemfonts_1.3.3.tar.gz"
+checksum = "md5:db0e538d68e478ef0eaa970fe3f6411c"
 requires = [
     "base64enc",
     "jsonlite",
@@ -1762,11 +1763,11 @@ requires = [
 
 [[package]]
 name = "textshaping"
-version = "1.0.5"
+version = "1.1.0"
 source = "cran"
-raw_version = "1.0.5"
-url = "https://cran.r-project.org/src/contrib/textshaping_1.0.5.tar.gz"
-checksum = "md5:93771d8cfc50a7ed021df061ce71e07f"
+raw_version = "1.1.0"
+url = "https://cran.r-project.org/src/contrib/textshaping_1.1.0.tar.gz"
+checksum = "md5:5f79be037dcb57d6ce6fd6b88d6f5100"
 requires = [
     "lifecycle",
     "stringi",
@@ -1970,6 +1971,19 @@ requires = [
 ]
 
 [[package]]
+name = "watcher"
+version = "0.2.2"
+source = "cran"
+raw_version = "0.2.2"
+url = "https://cran.r-project.org/src/contrib/watcher_0.2.2.tar.gz"
+checksum = "md5:c0f4049028385b1a98b3a8b8661cf247"
+requires = [
+    "later",
+    "R6",
+    "rlang",
+]
+
+[[package]]
 name = "whisker"
 version = "0.4.1"
 source = "cran"
@@ -2032,11 +2046,11 @@ checksum = "md5:6beea9b09717960f6c79fcbc1e129c41"
 
 [[package]]
 name = "yulab.utils"
-version = "0.2.5"
+version = "0.2.6"
 source = "cran"
-raw_version = "0.2.5"
-url = "https://cran.r-project.org/src/contrib/yulab.utils_0.2.5.tar.gz"
-checksum = "md5:09c42a5753acb5f2b98badebf5dc3ec6"
+raw_version = "0.2.6"
+url = "https://cran.r-project.org/src/contrib/yulab.utils_0.2.6.tar.gz"
+checksum = "md5:a6eb9c0e13d9257dd3e07e2acffa6954"
 requires = [
     "cli",
     "digest",
