@@ -10,7 +10,7 @@
 # ## Setup
 # Requires `requests`, `matplotlib` and `numpy` (`pip install requests matplotlib numpy`). API calls retry automatically on rate limits and server errors.
 
-# In[1]:
+# In[19]:
 
 
 import csv
@@ -58,7 +58,7 @@ def get(url, **params):
     return r.json()
 
 
-# In[2]:
+# In[20]:
 
 
 # Input: a plate-map CSV (drug names in COLUMN), a text file (one drug per line),
@@ -113,7 +113,7 @@ ras_pathway_targets_image_out_file_path.parent.mkdir(parents=True, exist_ok=True
 # ## Drug name → ChEMBL ID
 # Tries an exact preferred name, then an exact synonym, then free-text search. Prefers the parent compound (not a salt) and the most advanced clinical phase. ChEMBL IDs are accepted directly.
 
-# In[3]:
+# In[21]:
 
 
 def resolve_drug(query):
@@ -159,7 +159,7 @@ def resolve_drug(query):
 # ## ChEMBL mechanisms and targets
 # Mechanisms are often filed under a salt form, so they are queried by parent **and** by ID. A ChEMBL target can be a single protein, a complex or a family; each component's UniProt accession is returned.
 
-# In[4]:
+# In[22]:
 
 
 def get_mechanisms(chembl_id):
@@ -192,7 +192,7 @@ def target_accessions(target_chembl_id):
 
 # ## UniProt entries and GO Cellular Component terms
 
-# In[5]:
+# In[23]:
 
 
 @lru_cache(maxsize=None)
@@ -224,7 +224,7 @@ def uniprot_info(acc):
 # ## GO term → cell compartment (GO plot)
 # Keyword matching on GO term names; first match wins. `EXPERIMENTAL` lists the GO evidence codes kept when `ALL_EVIDENCE = False`.
 
-# In[6]:
+# In[24]:
 
 
 # Keyword matching on GO CC term names. Order matters (first match wins).
@@ -299,7 +299,7 @@ def compartment_of(term_name):
 #
 # **✏️ Edit here:** `LOCATION_OVERRIDES`, `PROCESS_GENE_RULES`, `PROCESS_KEYWORD_RULES`.
 
-# In[7]:
+# In[25]:
 
 
 # UniProt's curated "Subcellular location" lists locations with the main one first.
@@ -458,7 +458,7 @@ def process_of(acc, gene):
 #
 # **✏️ Edit here:** `PROTEIN_NAMES`.
 
-# In[8]:
+# In[26]:
 
 
 # Common protein names for display (gene symbol -> protein). Unlisted genes show the gene
@@ -551,7 +551,7 @@ def protein_label(acc, gene):
 # **✏️ Edit here:** `MANUAL_TARGETS`, `MANUAL_ADD`. `MAP_TARGETS` limits the protein map to each drug's pharmacological target (e.g. mTOR, not FKBP12, for rapalogs; BRD4, not cereblon, for ARV-825).
 #
 
-# In[9]:
+# In[27]:
 
 
 # Drugs whose mechanism ChEMBL doesn't annotate. Gene symbols (human). Edit freely.
@@ -804,7 +804,7 @@ def accession_for_gene(gene):
 # ## Per-drug processing
 # Resolves the drug, collects its targets (deduplicated by UniProt accession), and attaches GO compartments, primary location, protein name and process to each target.
 
-# In[10]:
+# In[28]:
 
 
 def _make_target(acc, org, target_chembl_id, ttype, moa, action, experimental_only):
@@ -947,7 +947,7 @@ def curate_targets(drugs, experimental_only):
 #
 # Also here: cell geometry, organelle colours and positions (`MITOS` holds the perinuclear mitochondria), the cell illustration used by both plots, and the shared drug dots and drug legend. Drugs are numbered by clinical stage (NF1-approved first), then alphabetically, and the legend lists them under stage headings.
 
-# In[11]:
+# In[29]:
 
 
 # ---- Figure style: change these to resize text and dots in both figures ----
@@ -1464,7 +1464,7 @@ def _finish(fig, ax, bounds, out_png, pad=0.3, cut_bottom=None):
 # ## Plot 1: GO plot
 # Each drug appears as a numbered, coloured dot on every compartment its targets' GO terms place it in. `GO_CLUSTERS` sets where each compartment's dots and label sit on the cell. The drug legend sits to the right.
 
-# In[12]:
+# In[30]:
 
 
 # Where each compartment's drug dots sit on the cell, and where its label goes.
@@ -1658,7 +1658,7 @@ def draw_cell(drugs, out_png, evidence_label):
 # Proteins in the same compartment, with the same process and the identical set of drugs, share one card. Each card shows the protein names, gene symbols in italics, and a numbered dot for every drug that hits it. Membrane proteins keep their own bar in the bilayer, grouped and joined to the shared card. Cards are packed into free space without overlaps; the drug legend sits to the right. Families on one card are shown as the family name (`PROTEIN_FAMILIES`); each drug shows only its primary target(s) (`MAP_TARGETS`), and `MAP_LOCATIONS` adds the mitochondrial pools of HSP90 and mTOR; and organelles that hold no target are not drawn, so a card's position only means nucleus, cytosol, membrane or the organelle it is tethered to.
 #
 
-# In[13]:
+# In[31]:
 
 
 # Order in which cards of one compartment are packed (keeps related targets together).
@@ -2190,7 +2190,7 @@ def draw_protein_map(drugs, out_png):
 #
 # **✏️ Edit here:** `RAS_NODES` (boxes, the genes each stands for, positions), `RAS_EDGES` (arrows), `RAS_NOTES` (free text).
 
-# In[14]:
+# In[32]:
 
 
 # The figure is a half view of a round cell, cut straight across its middle: the plasma
@@ -2694,61 +2694,6 @@ def _inh_edge(ax, start, end, lw=4.0, zorder=7):
     )
 
 
-def _edge_key(ax, x, y, size):
-    """Key for the three edge types. Returns the right-most x drawn."""
-    ax.text(
-        x,
-        y,
-        "Arrows:",
-        ha="left",
-        va="center",
-        fontsize=size,
-        fontweight="bold",
-        color="#1e1e1e",
-        zorder=10,
-    )
-    cx = x + _text_w("Arrows:", size, "bold") + 0.6
-    for kind, text in (
-        ("act", "activates"),
-        ("inh", "inhibits"),
-        ("reg", "binds / regulates"),
-    ):
-        x0_, x1_ = cx, cx + 2.2
-        if kind == "act":
-            ax.annotate(
-                "",
-                xy=(x1_, y),
-                xytext=(x0_, y),
-                arrowprops=dict(
-                    arrowstyle="-|>", color="#3a3a3a", lw=3.4, mutation_scale=40
-                ),
-                zorder=10,
-            )
-        elif kind == "inh":
-            _inh_edge(ax, (x0_, y), (x1_ + INH_GAP, y), zorder=10)
-        else:
-            ax.plot(
-                [x0_, x1_], [y, y], color="#7a7a7a", lw=2.8, ls=(0, (4, 3)), zorder=10
-            )
-        ax.text(
-            x1_ + (0.35 + INH_GAP if kind == "inh" else 0.35),
-            y,
-            text,
-            ha="left",
-            va="center",
-            fontsize=size,
-            color="#333",
-            zorder=10,
-        )
-        cx = (
-            x1_
-            + (0.35 + INH_GAP if kind == "inh" else 0.35)
-            + _text_w(text, size)
-            + 1.0
-        )
-    return cx
-
-
 def _ras_legend(ax, plotted, colors, x0, x1, y_top, ncols=4):
     """`ncols` columns under the figure, drugs filling down each column before moving to
     the next. Each row is the numbered dot and the drug name."""
@@ -3002,29 +2947,6 @@ def draw_ras_pathway(drugs, out_png):
     leg = _ras_legend(ax, plotted, colors, x0 + 0.4, x1 - 0.4, y0 - 2.6)
     bounds.append((x0 + 0.4, y0 - 2.8, x1 - 0.4, y0 - 0.3))
     bounds.append(leg)
-    # what the arrows mean, and what kind of drug each is
-    ky = leg[1] - 1.3
-    kx = _edge_key(ax, x0 + 0.4, ky, f["legend"])
-    foot = action_footnote(plotted)
-    ax.text(
-        x0 + 0.4,
-        ky - 1.6,
-        foot,
-        ha="left",
-        va="center",
-        fontsize=f["legend"] - 4,
-        fontstyle="italic",
-        color="#333",
-        zorder=10,
-    )
-    bounds.append(
-        (
-            x0 + 0.4,
-            ky - 2.3,
-            max(kx, x0 + 0.4 + _text_w(foot, f["legend"] - 4)),
-            ky + 0.6,
-        )
-    )
     _finish(fig, ax, bounds, out_png, pad=0.3)
 
 
@@ -3033,7 +2955,7 @@ def draw_ras_pathway(drugs, out_png):
 
 # ## Heatmap and CSV
 
-# In[15]:
+# In[33]:
 
 
 def write_csv(drugs, out_csv):
@@ -3097,7 +3019,7 @@ def write_csv(drugs, out_csv):
     print(f"Saved {out_csv}")
 
 
-# In[16]:
+# In[34]:
 
 
 def load_drugs_from_csv(in_csv):
@@ -3186,7 +3108,7 @@ def load_drugs_from_csv(in_csv):
 # ## Reading the input
 # Accepts a plate-map CSV, a text list or a list of names. Vehicle controls (DMSO, PBS, media, …) are dropped.
 
-# In[17]:
+# In[35]:
 
 
 CONTROLS = {
@@ -3248,7 +3170,7 @@ def read_inputs(items, column="Treatment"):
 # ## Run
 # Looks up every drug (in parallel), prints a summary, and writes the CSV and the three plots.
 
-# In[18]:
+# In[36]:
 
 
 items = INPUT if isinstance(INPUT, (list, tuple)) else [INPUT]
@@ -3353,7 +3275,7 @@ draw_ras_pathway(drugs, ras_pathway_targets_image_out_file_path)
 
 # ## Results
 
-# In[19]:
+# In[37]:
 
 
 display(Image(f"{cell_protein_targets_image_out_file_path}", width=1100))
