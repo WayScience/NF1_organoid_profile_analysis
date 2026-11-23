@@ -26,10 +26,13 @@ fi
     --FilesWriter.build_directory="$module_dir"/scripts/ \
     "$module_dir"/notebooks/*.ipynb
 
-# deactivate any existing conda environment
-conda deactivate >/dev/null 2>&1 || true
-# deactivate any existing venv environment
-deactivate >/dev/null 2>&1 || true
+# "try" block: deactivate any active environments, ignore failures
+{
+    # deactivate any existing conda environment
+    conda deactivate 2>/dev/null
+    # deactivate any existing venv environment
+    deactivate 2>/dev/null
+} || true
 
 "$venv_python" "$module_dir/scripts/0.extract_clinical_trial_stats.py"
 uvr run "$module_dir/scripts/1.plot_clinical_trial_efficacy_heterogeneity.r"

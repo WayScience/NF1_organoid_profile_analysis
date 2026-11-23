@@ -8,10 +8,13 @@ fi
 
 uv run jupyter nbconvert --to=script --FilesWriter.build_directory="$git_root"/figures/assembled_figures/scripts/ "$git_root"/figures/assembled_figures/notebooks/*.ipynb
 
-# deactivate any existing conda environment
-conda deactivate
-# deactivate any existing venv environment
-deactivate 2>/dev/null
+# "try" block: deactivate any active environments, ignore failures
+{
+    # deactivate any existing conda environment
+    conda deactivate 2>/dev/null
+    # deactivate any existing venv environment
+    deactivate 2>/dev/null
+} || true
 
 uv run python "$git_root"/figures/assembled_figures/scripts/full_figure1.py
 
