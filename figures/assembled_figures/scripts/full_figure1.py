@@ -10,11 +10,11 @@
 #    plate → one well magnified (Matrigel ring, top and side views) → assay timeline (Day 0 seeding,
 #    Days 1–3 organoid formation, Days 4–5 drug treatment, Day 6 Cell Painting) → arrow to the microscope
 # 2. **Cell Painting + high-content volumetric imaging**: AGP, DNA, ER and Mito z-stacks
-# 3. **2.5D/3D segmentation**: nuclei, cells, cytoplasm and whole-organoid masks
+# 3. **3D segmentation**: nuclei, cells, cytoplasm and whole-organoid masks
 # 4. **3D feature extraction**: handcrafted features are measured for every compartment × channel;
 #    nuclei, cell and cytoplasm profiles are joined into single-cell profiles, organoid profiles stay separate;
 #    each feature type is illustrated with its tile from the hand-drawn feature-type illustration (two rows);
-#    the ZEDprofiler logo marks the panel
+#    the ZEDprofiler logo follows the feature-type label
 # 5. **Image-based profiling**: quality control (coSMicQC) → normalize → feature selection → aggregate (per well)
 #    → consensus (per drug); each step card carries its tool's logo (coSMicQC or pycytominer)
 #
@@ -675,7 +675,9 @@ def well_zoom(ax, src, src_r, bx, by, bw, bh):
 
 
 def assay_timeline(ax, x0, x1, y_line, xs, cy, r):
-    arrow(ax, (x0, y_line), (x1, y_line), w=0.07, hw=0.24, hl=0.2)
+    bar(
+        ax, (x0, y_line), (x1, y_line), w=0.08
+    )  # continues into the connector to panel B
     for k, (cx, (day, desc)) in enumerate(zip(xs, STAGES)):
         well_top(ax, cx, cy, r, stage=k)
         poly(
@@ -700,27 +702,20 @@ def assay_timeline(ax, x0, x1, y_line, xs, cy, r):
 # ## Feature extraction
 # Every profile column is one **compartment × channel × feature type** combination, and the panel is laid out to show that:
 #
-# * **Rows = compartments.** Each compartment mask (Organoid, Nuclei, Cell, Cytoplasm) is applied to every Cell Painting
-#   channel (the grid), giving one profile table per compartment.
-# * **Column blocks = feature types.** Every table has one block of columns per feature type (alphabetical). Each
-#   feature type's drawing (cut from the feature-type illustration; `FEATURE_TILES` gives each tile's pixel box) sits
-#   directly above its block, framed in the same `FEATURE_COLORS` colour as the block's top strip, with a pointer into it.
-# * **Columns within a block = channels.** One column per channel (AGP, DNA, ER, Mito), marked by its `CH_COLORS` strip;
-#   Colocalization has one column per channel pair (`CHANNEL_PAIRS`; each pair's strip is split in both colours).
-#   The block, channel and compartment layout follows ZEDprofiler: single-channel features run per compartment × channel,
-#   Colocalization per compartment × channel pair.
-# * **Outputs.** The nuclei, cell and cytoplasm tables share the object-ID column and are joined side by side into the
-#   single-cell profiles; the organoid table follows its own lane to the organoid profiles, kept separate.
-# * The key in the top-left corner states the rule with the same colour markers: compartment × channel × feature type =
+# * **Compartment × channel grid (left).** Each compartment mask (Organoid, Nuclei, Cell, Cytoplasm) points, with one arrow
+#   in the compartment colour, into the group of Cell Painting channels (AGP, DNA, ER, Mito), whose images carry the mask
+#   outlines. The channel group is set apart from the mask column.
+# * **Feature types (middle to right).** Each feature type's drawing (cut from the feature-type illustration;
+#   `FEATURE_TILES` gives each tile's pixel box), two rows of three, framed in its `FEATURE_COLORS` colour and as large as
+#   the panel width allows. The ZEDprofiler logo sits right after the "Feature types" label.
+# * **Outputs.** In the left column under the key, fed from the Neighbors drawing: the nuclei, cell and cytoplasm
+#   profiles share the object-ID column and are joined side by side into the single-cell profiles; the organoid
+#   profiles sit below them, kept separate. Feature totals (`PROFILE_TOTALS`) come from the ZEDprofiler output. In the output tables, each feature type
+#   is a block of columns (one per channel or channel pair; a single grey-marked column for channel-independent types),
+#   and Neighbors is left empty (dashed) for the single-cell compartments.
+# * The key under the grid states the rule with the same colour markers: compartment × channel × feature type =
 #   one profile column.
 #
-# The ZEDprofiler logo sits at the right end of the panel header.
-#
-# **How the link is drawn**: three numbered steps read left to right as an equation:
-# (1) the compartment × channel grid, × (2) every feature type (the drawings, two rows of three),
-# = (3) one profile column per combination. A small copy of each drawing sits over its column block in (3), framed in the
-# same feature-type colour, so each drawing maps visibly onto its columns. The key under the grid states the rule:
-# compartment × channel × feature type = one profile column.
 
 # In[11]:
 
@@ -774,6 +769,14 @@ FEATURE_TILES = {
 FEATURE_TYPES = sorted(
     FEATURE_TILES
 )  # alphabetical; also the order of the column blocks
+PROFILE_TOTALS = {"Organoid": 877, "Single-cell": 2625}  # features per profile
+NO_CHANNEL = ("Neighbors", "VolumeSizeShape")  # measured once per compartment
+NO_CHANNEL_COLOR = "#bdbdbd"
+# Neighbors is measured for organoids only
+MEASURED = {
+    c: set(FEATURE_TYPES) - (set() if c == "Organoid" else {"Neighbors"})
+    for c in COMP_COLORS
+}
 
 
 def seg_cyto(ax, x, y, s, clip, z):
@@ -826,13 +829,26 @@ def overlay_tile(ax, x, y, s, img, compartment, z=10):
 
 
 def block_channels(ftype):
-    """Columns of one feature-type block: one per channel, or one per channel pair for Colocalization."""
-    return CHANNEL_PAIRS if ftype == "Colocalization" else CHANNELS
+    """Columns of one feature-type block: one per channel, one per channel pair for Colocalization,
+    or a single channel-independent column (None)."""
+    if ftype == "Colocalization":
+        return CHANNEL_PAIRS
+    if ftype in NO_CHANNEL:
+        return [None]
+    return CHANNELS
+
+
+def block_weight(ftype):
+    """Relative block width; channel-independent blocks get two column widths so their drawings stay legible."""
+    return max(len(block_channels(ftype)), 2)
 
 
 def channel_strip(ax, x, y, w, h, ch, z=7):
-    """Channel marker above a column; a channel pair is split into its two channel colours."""
-    if isinstance(ch, tuple):
+    """Channel marker above a column; a channel pair is split into its two channel colours,
+    a channel-independent column (None) is grey."""
+    if ch is None:
+        poly(ax, rect(x, y, w, h), fc=NO_CHANNEL_COLOR, ec="none", z=z)
+    elif isinstance(ch, tuple):
         poly(ax, rect(x, y, w / 2, h), fc=CH_COLORS[ch[0]], ec="none", z=z)
         poly(ax, rect(x + w / 2, y, w / 2, h), fc=CH_COLORS[ch[1]], ec="none", z=z)
     else:
@@ -857,9 +873,23 @@ def n_columns():
     return sum(len(block_channels(f)) for f in FEATURE_TYPES)
 
 
-def draw_profile(ax, x0, y, h, vals, blocks, id_colors, edge, idw, strip=0.075, z=6):
+def draw_profile(
+    ax,
+    x0,
+    y,
+    h,
+    vals,
+    blocks,
+    id_colors,
+    edge,
+    idw,
+    strip=0.075,
+    z=6,
+    measured=None,
+):
     """Profile table: rows = objects (ID column on the left), columns grouped into feature-type blocks.
-    Above every block: its feature-type strip; above every column: its channel (or channel-pair) strip."""
+    Above every block: its feature-type strip; above every column: its channel (or channel-pair) strip.
+    Blocks whose feature type is not in `measured` are drawn empty (dashed)."""
     n_rows = vals.shape[0]
     rh = h / n_rows
     for i, c in enumerate(id_colors):  # object-ID column
@@ -874,6 +904,18 @@ def draw_profile(ax, x0, y, h, vals, blocks, id_colors, edge, idw, strip=0.075, 
             ec="none",
             z=z,
         )
+        if measured is not None and ftype not in measured:
+            poly(
+                ax,
+                rect(bx, y, bw, h),
+                fc="white",
+                ec=GREY,
+                lw=0.5,
+                ls=(0, (2, 1.5)),
+                z=z + 0.5,
+            )
+            j += len(cols)
+            continue
         for ch, cx, cw in cols:
             channel_strip(ax, cx + 0.01, y + h + 0.03, cw - 0.02, strip, ch, z=z)
             for i in range(n_rows):
@@ -927,9 +969,11 @@ def formula_key(ax, x, y_top, dy=0.33):
 # ---------------------------------------------------------------------------------------------
 # Shared pieces of the feature-extraction panel
 # ---------------------------------------------------------------------------------------------
-ROW_PITCH, TH = 0.74, 0.5  # table row spacing and height
 TILE_S, TILE_PITCH, GRID_X = 0.5, 0.6, 2.05  # compartment x channel grid
-IDW, BLOCK_GAP, X_END = 0.22, 0.14, 18.85  # tables
+MASK_GAP = 0.4  # extra space separating the mask column from the channel group
+IDW, X_END = 0.22, 18.85  # output tables: ID column width, right edge
+X_RIGHT = 19.5  # right edge of the feature-type drawings
+LOGO_H = 1.2  # ZEDprofiler logo height, next to the feature-type label
 ORG_IDS = [
     LinearSegmentedColormap.from_list("o", ["#eeeeee", "#555555"])(v)
     for v in (0.2, 0.55, 0.9)
@@ -939,6 +983,7 @@ SC_IDS = [
     for v in np.linspace(0.05, 1, 6)
 ]
 SMALL_ARROW = dict(w=0.07, hw=0.2, hl=0.15)
+PATH_ARROW = dict(w=0.05, hw=0.16, hl=0.12)  # mask -> channel group, one per grid row
 
 
 def drawing_aspects():
@@ -967,171 +1012,74 @@ def draw_tile(ax, illustration, ftype, x, y_top, w, h):
     )
 
 
-def blocks_by_columns(tx, x_end=None):
-    """Column blocks whose widths follow their number of columns, filling tx..x_end."""
-    x_end = X_END if x_end is None else x_end
-    cw = (x_end - tx - IDW - BLOCK_GAP * len(FEATURE_TYPES)) / n_columns()
-    return column_layout(
-        tx, [cw * len(block_channels(f)) for f in FEATURE_TYPES], BLOCK_GAP, IDW
-    )
-
-
-def compartment_grid(ax, imgs, row_c, to_x=None):
-    """Compartment (rows) x channel (columns) grid; optional arrows from each row to to_x.
+def compartment_grid(ax, imgs, row_c):
+    """Compartment (rows) x channel (columns) grid. The channels form one group, set apart from the mask
+    column; each row's mask points into the group with one arrow in the compartment colour.
     Returns the grid's right edge."""
     s, pitch, gx = TILE_S, TILE_PITCH, GRID_X
-    for j, ch in enumerate(CHANNELS, start=1):
-        cx_ = gx + j * pitch
+    xs = [gx] + [gx + MASK_GAP + j * pitch for j in range(1, 5)]  # mask, then channels
+    for x, (label, color) in zip(
+        xs, [("Mask", INK)] + [(ch, CH_COLORS[ch]) for ch in CHANNELS]
+    ):
         text(
-            ax,
-            cx_ + s / 2,
-            row_c[0] + s / 2 + 0.22,
-            ch,
-            FS_SMALL - 1.5,
-            CH_COLORS[ch],
-            "bold",
+            ax, x + s / 2, row_c[0] + s / 2 + 0.22, label, FS_SMALL - 1.5, color, "bold"
         )
-        poly(
-            ax,
-            rect(cx_, row_c[0] + s / 2 + 0.05, s, 0.05),
-            fc=CH_COLORS[ch],
-            ec="none",
-            z=5,
-        )
-    right = gx + 4 * pitch + s
+        if label != "Mask":
+            poly(
+                ax,
+                rect(x, row_c[0] + s / 2 + 0.05, s, 0.05),
+                fc=color,
+                ec="none",
+                z=5,
+            )
     for (name, draw), yc in zip(COMPARTMENTS, row_c):
         col = COMP_COLORS[name]
         text(ax, gx - 0.08, yc, name, FS_LABEL - 0.5, col, "bold", ha="right")
         mask_tile(ax, gx, yc - s / 2, s, draw, col)
         for j, ch in enumerate(CHANNELS, start=1):
-            overlay_tile(ax, gx + j * pitch, yc - s / 2, s, imgs[ch], name)
-        if to_x is not None:
-            arrow(ax, (right + 0.05, yc), (to_x - 0.04, yc), color=col, **SMALL_ARROW)
-    return right
+            overlay_tile(ax, xs[j], yc - s / 2, s, imgs[ch], name)
+        arrow(ax, (gx + s + 0.04, yc), (xs[1] - 0.04, yc), color=col, **PATH_ARROW)
+    return xs[-1] + s
 
 
-def compartment_tables(ax, tx, blocks, row_c, rl):
-    """One profile table per compartment, aligned with the grid rows."""
-    tables = {}
-    for (name, _), yc in zip(COMPARTMENTS, row_c):
-        ids = ORG_IDS if name == "Organoid" else SC_IDS
-        vals = table_values(rl, len(ids), n_columns())
-        tables[name] = vals
-        draw_profile(ax, tx, yc - TH / 2, TH, vals, blocks, ids, COMP_COLORS[name], IDW)
-    return tables
-
-
-def profile_outputs(ax, x_end, row_c, tables):
-    """Nuclei | cell | cytoplasm joined into single-cell profiles; organoid profiles in their own lane.
-    Returns the lowest y drawn."""
-    sc_lane, org_lane = x_end + 0.22, x_end + 0.42
-    y_m, y_o = row_c[3] - 1.05, row_c[3] - 1.8
-    for name, yc in zip(SC_COMPARTMENTS, row_c[1:]):
-        bar(ax, (x_end + 0.02, yc), (sc_lane, yc), w=0.05, color=COMP_COLORS[name])
-    bar(ax, (sc_lane, row_c[1]), (sc_lane, y_m), w=0.05, color=SC_C)
-    bar(ax, (x_end + 0.02, row_c[0]), (org_lane, row_c[0]), w=0.05, color=ORG_C)
-    bar(ax, (org_lane, row_c[0]), (org_lane, y_o), w=0.05, color=ORG_C)
-
-    mcw, mgap, sgap, oh = 0.075, 0.05, 0.22, 0.42  # small output tables
-    small_widths = [len(block_channels(f)) * mcw for f in FEATURE_TYPES]
+def profile_outputs(ax, tables, y_top, x_right, src, x_left=0.6):
+    """Single-cell profiles (nuclei | cell | cytoplasm joined on object ID) above the organoid profiles (kept
+    separate), stacked in the left column under the key and right-aligned to x_right. Both are fed from src
+    (x, y), the left edge of the Neighbors drawing. Returns the lowest y drawn."""
+    mcw, mgap, sgap, oh = 0.055, 0.045, 0.2, 0.42
+    small_widths = [block_weight(f) * mcw for f in FEATURE_TYPES]
     sec_w = sum(small_widths) + mgap * len(FEATURE_TYPES)
-    m_end = sc_lane - 0.3
-    m_x0 = m_end - (IDW + 3 * sec_w + 2 * sgap)
-    arrow(ax, (sc_lane, y_m), (m_end + 0.03, y_m), color=SC_C, **SMALL_ARROW)
-    x = m_x0 + IDW
-    for k, name in enumerate(SC_COMPARTMENTS):
-        sec_blocks = column_layout(x - IDW - mgap, small_widths, mgap, IDW)
-        if k == 0:
-            draw_profile(
-                ax,
-                m_x0,
-                y_m - oh / 2,
-                oh,
-                tables[name],
-                sec_blocks,
-                SC_IDS,
-                COMP_COLORS[name],
-                IDW,
-                strip=0.06,
-            )
-        else:
-            draw_profile(
-                ax,
-                x - IDW,
-                y_m - oh / 2,
-                oh,
-                tables[name],
-                sec_blocks,
-                SC_IDS,
-                COMP_COLORS[name],
-                0,
-                strip=0.06,
-            )
-        band_y = y_m + oh / 2 + 0.2
-        poly(ax, rect(x, band_y, sec_w, 0.05), fc=COMP_COLORS[name], ec="none", z=6)
-        text(
-            ax, x + sec_w / 2, band_y + 0.17, name, FS_SMALL, COMP_COLORS[name], "bold"
-        )
-        x += sec_w + sgap
+
+    # single-cell profiles: title, compartment bands, then the three joined tables
     text(
         ax,
-        m_x0 - 0.15,
-        y_m,
-        "Single-cell profiles\n(joined on object ID)",
+        x_left,
+        y_top - 0.15,
+        "Single-cell profiles",
         FS_LABEL,
         SC_C,
         "bold",
-        ha="right",
-    )
-
-    o_end = org_lane - 0.3
-    o_x0 = o_end - (IDW + sec_w)
-    arrow(ax, (org_lane, y_o), (o_end + 0.03, y_o), color=ORG_C, **SMALL_ARROW)
-    draw_profile(
-        ax,
-        o_x0,
-        y_o - oh / 2,
-        oh,
-        tables["Organoid"],
-        column_layout(o_x0, small_widths, mgap, IDW),
-        ORG_IDS,
-        ORG_C,
-        IDW,
-        strip=0.06,
+        ha="left",
     )
     text(
         ax,
-        o_x0 - 0.15,
-        y_o,
-        "Organoid profiles (kept separate)",
-        FS_LABEL,
-        ORG_C,
+        x_left,
+        y_top - 0.45,
+        f"({PROFILE_TOTALS['Single-cell']:,} features; joined on ID)",
+        FS_SMALL,
+        SC_C,
         "bold",
-        ha="right",
+        ha="left",
     )
-    return y_o - oh / 2
-
-
-def profile_outputs_line(ax, tables, y_top, x_left=0.6):
-    """One line along the bottom of the panel: single-cell profiles on the left (nuclei | cell | cytoplasm joined on
-    object ID), organoid profiles on the right (kept separate). Lanes run from the right edge of the step-3 tables.
-    Returns the lowest y drawn."""
-    mcw, mgap, sgap, oh = 0.068, 0.045, 0.2, 0.42
-    small_widths = [len(block_channels(f)) * mcw for f in FEATURE_TYPES]
-    sec_w = sum(small_widths) + mgap * len(FEATURE_TYPES)
-    y_ch = y_top - 0.1  # routing channel for the single-cell lane
-    y_out = y_top - 0.82  # centre of the output tables (band labels above)
-    sc_lane, org_lane = X_END + 0.22, X_END + 0.42
-
-    # single-cell profiles, left
-    m_x0 = x_left
+    y_sc = y_top - 1.45  # centre of the single-cell tables
+    m_x0 = x_right - (IDW + 3 * sec_w + 2 * sgap)
     x = m_x0 + IDW
     for k, name in enumerate(SC_COMPARTMENTS):
         sec_blocks = column_layout(x - IDW - mgap, small_widths, mgap, IDW)
         draw_profile(
             ax,
             x - IDW if k else m_x0,
-            y_out - oh / 2,
+            y_sc - oh / 2,
             oh,
             tables[name],
             sec_blocks,
@@ -1139,39 +1087,23 @@ def profile_outputs_line(ax, tables, y_top, x_left=0.6):
             COMP_COLORS[name],
             0 if k else IDW,
             strip=0.06,
+            measured=MEASURED[name],
         )
-        band_y = y_out + oh / 2 + 0.2
+        band_y = y_sc + oh / 2 + 0.2
         poly(ax, rect(x, band_y, sec_w, 0.05), fc=COMP_COLORS[name], ec="none", z=6)
         text(
             ax, x + sec_w / 2, band_y + 0.17, name, FS_SMALL, COMP_COLORS[name], "bold"
         )
         x += sec_w + sgap
-    m_end = x - sgap
-    drop = m_end + 0.18
-    bar(ax, (sc_lane, row_ends["sc_top"]), (sc_lane, y_ch), w=0.05, color=SC_C)
-    bar(ax, (sc_lane, y_ch), (drop, y_ch), w=0.05, color=SC_C)
-    bar(ax, (drop, y_ch), (drop, y_out), w=0.05, color=SC_C)
-    arrow(ax, (drop, y_out), (m_end + 0.03, y_out), color=SC_C, **SMALL_ARROW)
-    text(
-        ax,
-        drop + 0.2,
-        y_out,
-        "Single-cell profiles\n(joined on object ID)",
-        FS_LABEL,
-        SC_C,
-        "bold",
-        ha="left",
-    )
 
-    # organoid profiles, right
+    # organoid profiles: table right-aligned under the single-cell tables, label to its left
+    y_org = y_sc - 0.95
     o_w = IDW + sec_w
-    o_x0 = X_END + 0.1 - o_w
-    bar(ax, (org_lane, row_ends["org"]), (org_lane, y_out), w=0.05, color=ORG_C)
-    arrow(ax, (org_lane, y_out), (o_x0 + o_w + 0.03, y_out), color=ORG_C, **SMALL_ARROW)
+    o_x0 = x_right - o_w
     draw_profile(
         ax,
         o_x0,
-        y_out - oh / 2,
+        y_org - oh / 2,
         oh,
         tables["Organoid"],
         column_layout(o_x0, small_widths, mgap, IDW),
@@ -1179,142 +1111,96 @@ def profile_outputs_line(ax, tables, y_top, x_left=0.6):
         ORG_C,
         IDW,
         strip=0.06,
+        measured=MEASURED["Organoid"],
     )
     text(
         ax,
         o_x0 - 0.15,
-        y_out,
-        "Organoid profiles\n(kept separate)",
+        y_org,
+        f"Organoid profiles\n({PROFILE_TOTALS['Organoid']} features;\nkept separate)",
         FS_LABEL,
         ORG_C,
         "bold",
         ha="right",
     )
-    return y_out - oh / 2
 
-
-row_ends = {}  # y where each output lane starts (filled by fe_steps)
-
-
-def table_stubs(ax, row_c):
-    """Short coloured stubs from the right edge of each step-3 table into the two output lanes."""
-    sc_lane, org_lane = X_END + 0.22, X_END + 0.42
-    for name, yc in zip(SC_COMPARTMENTS, row_c[1:]):
-        bar(ax, (X_END + 0.02, yc), (sc_lane, yc), w=0.05, color=COMP_COLORS[name])
-    bar(ax, (X_END + 0.02, row_c[0]), (org_lane, row_c[0]), w=0.05, color=ORG_C)
-    row_ends["sc_top"], row_ends["org"] = row_c[1], row_c[0]
-
-
-def rows_from(t_top0, pitch=ROW_PITCH):
-    return [t_top0 - TH / 2 - k * pitch for k in range(4)]
+    # feed: from the Neighbors drawing, down a short bus, into the right end of each output
+    bus = src[0] - 0.12
+    bar(ax, src, (bus, src[1]), w=0.05, color=INK)
+    bar(ax, (bus, src[1]), (bus, y_org), w=0.05, color=INK)
+    arrow(ax, (bus, y_sc), (x_right + 0.03, y_sc), color=SC_C, **SMALL_ARROW)
+    arrow(ax, (bus, y_org), (x_right + 0.03, y_org), color=ORG_C, **SMALL_ARROW)
+    return y_org - 0.45
 
 
 # ---------------------------------------------------------------------------------------------
-# Panel body, in three numbered steps:
-#   (1) compartment x channel grid  x  (2) every feature type (drawings)  =  (3) one column per combination
-# A small copy of each drawing sits over its column block, so (2) maps visibly onto (3).
+# Panel body, in two labelled steps:
+#   (1) compartment x channel grid, (2) every feature type (drawings, filling the rest of the width),
+# then the single-cell and organoid profiles along the bottom.
 # ---------------------------------------------------------------------------------------------
-def step_badge(ax, x, y, n, label):
-    poly(ax, circle(x, y, 0.16, 32), fc=INK, ec="none", z=8)
-    text(ax, x, y - 0.005, str(n), FS_SMALL, "white", "bold")
-    text(ax, x + 0.26, y, label, FS_LABEL, ha="left", weight="bold")
+def step_label(ax, x, y, label):
+    text(ax, x, y, label, FS_LABEL, ha="left", weight="bold")
 
 
-def block_thumbnails(ax, illustration, blocks, y_bottom, max_h=0.62):
-    """A small copy of each feature-type drawing over its column block, framed in the feature-type colour."""
-    for ftype, bx, bw, _ in blocks:
-        px0, px1, py0, py1 = FEATURE_TILES[ftype]
-        a = (px1 - px0) / (py1 - py0)
-        w = min(bw, max_h * a)
-        h = w / a
-        x = bx + (bw - w) / 2
-        ax.imshow(
-            illustration[py0:py1, px0:px1],
-            extent=[x, x + w, y_bottom, y_bottom + h],
-            zorder=5,
-            interpolation="lanczos",
-        )
-        poly(
-            ax,
-            rect(x - 0.02, y_bottom - 0.02, w + 0.04, h + 0.04),
-            ec=FEATURE_COLORS[ftype],
-            lw=1.2,
-            z=6,
-        )
-        poly(
-            ax,
-            [
-                (bx + bw / 2 - 0.07, y_bottom - 0.03),
-                (bx + bw / 2 + 0.07, y_bottom - 0.03),
-                (bx + bw / 2, y_bottom - 0.12),
-            ],
-            fc=FEATURE_COLORS[ftype],
-            ec="none",
-            z=6,
-        )
+def label_width(ax, label, size):
+    """Width of a bold label in drawing units (the x scale is fixed: W units across FIG_W_IN inches)."""
+    t = ax.text(0, 0, label, fontsize=size, weight="bold")
+    w = t.get_window_extent(ax.figure.canvas.get_renderer()).width
+    t.remove()
+    return w / ax.figure.dpi / (FIG_W_IN / W)
 
 
-def fe_steps(ax, imgs, bt, illustration, rl):
-    dh, dgap, rgap = (
-        2.15,
-        0.14,
-        0.14,
-    )  # drawing height, gap between drawings, gap between rows
-    yb = bt - 0.22  # step labels
-    d_top = bt - 0.5
-    span = 2 * dh + rgap  # height of the two drawing rows
-    d_bottom = d_top - span
-    # (1) compact compartment x channel grid, top-left; the key sits right under it
+def fe_steps(ax, imgs, bt, illustration, rl, logo_path):
+    dgap, rgap = 0.14, 0.14  # gap between drawings, between rows
+    yb = bt - 0.35  # step labels and logo
+    d_top = bt - 0.75
+    # (1) compartment x channel grid, top-left; the key sits right under it
     grid_c = [d_top - 0.62 - k * (TILE_S + 0.1) for k in range(4)]
     right = compartment_grid(ax, imgs, grid_c)
-    formula_key(ax, 0.75, grid_c[3] - TILE_S / 2 - 0.42)
-    # (2) drawings, two rows of three
-    dx0 = right + 0.6
+    key_top = grid_c[3] - TILE_S / 2 - 0.42
+    formula_key(ax, 0.75, key_top)
+    step_label(ax, 0.6, yb, "Compartment × channel")
+    # (2) drawings, two rows of three, as large as the remaining width allows, below the large logo
+    logo_y = (
+        bt - 0.08 - LOGO_H / 2
+    )  # centre of the logo and of the "Feature types" label
+    ft_top = bt - 0.08 - LOGO_H - 0.12  # top of the drawings
+    dx0 = right + 0.5
     aspects = dict(zip(FEATURE_TYPES, drawing_aspects()))
-    row_w = []
-    for r, row in enumerate([FEATURE_TYPES[:3], FEATURE_TYPES[3:]]):
+    rows = [FEATURE_TYPES[:3], FEATURE_TYPES[3:]]
+    dh = min(
+        (X_RIGHT - dx0 - dgap * (len(row) - 1)) / sum(aspects[n] for n in row)
+        for row in rows
+    )
+    for r, row in enumerate(rows):
         x = dx0
         for n in row:
             w = dh * aspects[n]
-            draw_tile(ax, illustration, n, x, d_top - r * (dh + rgap), w, dh)
+            draw_tile(ax, illustration, n, x, ft_top - r * (dh + rgap), w, dh)
             x += w + dgap
-        row_w.append(x - dgap)
-    dx1 = max(row_w)
-    # (3) one table per compartment; thumbnails tie each block to its drawing
-    thumb = 0.62
-    row_c = rows_from(d_top - thumb - 0.15, pitch=(span - thumb - 0.15 - TH) / 3)
-    tx = dx1 + 0.45
-    blocks = blocks_by_columns(tx)
-    block_thumbnails(
-        ax, illustration, blocks, row_c[0] + TH / 2 + 0.3, max_h=thumb - 0.1
-    )
-    tables = compartment_tables(ax, tx, blocks, row_c, rl)
-    ymid = d_top - span / 2
-    text(
-        ax,
-        (right + dx0) / 2,
-        (grid_c[0] + grid_c[3]) / 2,
-        "×",
-        FS_TITLE + 8,
-        weight="bold",
-    )
-    text(ax, (dx1 + tx) / 2, ymid, "=", FS_TITLE + 8, weight="bold")
-    step_badge(ax, 0.75, yb, 1, "Compartment × channel")
-    step_badge(ax, dx0 + 0.1, yb, 2, "× every feature type")
-    step_badge(ax, tx, yb, 3, "= profile columns")
-    # outputs: one line along the bottom
-    table_stubs(ax, row_c)
-    return profile_outputs_line(ax, tables, d_bottom - 0.12)
+    d_bottom = ft_top - 2 * dh - rgap - 0.03  # bottom of the second row's frames
+    step_label(ax, dx0, logo_y, "Feature types")
+    lw = label_width(ax, "Feature types", FS_LABEL)
+    place_logo(ax, logo_path, dx0 + lw + 0.3, logo_y, LOGO_H, anchor="left")
+    # outputs: in the left column under the key, fed from the Neighbors drawing (first of the second row)
+    tables = {
+        name: table_values(
+            rl, len(ORG_IDS if name == "Organoid" else SC_IDS), n_columns()
+        )
+        for name, _ in COMPARTMENTS
+    }
+    src = (dx0 - 0.05, ft_top - dh - rgap - dh / 2)
+    lowest = profile_outputs(ax, tables, key_top - 1.55, right - 0.3, src)
+    return min(lowest, d_bottom)
 
 
 def feature_extraction(ax, imgs, top, illustration, logo_path):
     """Feature-extraction panel. Returns the y of the panel's bottom edge."""
-    head = 1.0  # taller header bar so the ZEDprofiler logo can be large
+    head = HEAD_H
     bt = top - head - 0.15  # top of the panel body
-    lowest = fe_steps(ax, imgs, bt, illustration, np.random.default_rng(4))
+    lowest = fe_steps(ax, imgs, bt, illustration, np.random.default_rng(4), logo_path)
     bottom = lowest - 0.2
     panel(ax, 0.3, bottom, 19.4, bt - bottom, head, "3D feature extraction", letter="D")
-    place_logo(ax, logo_path, 19.6, top - head / 2, head * 0.9, anchor="right")
     return bottom
 
 
@@ -1718,11 +1604,12 @@ def build_figure():
     text(ax, 6.7, LY, "Plating", **LKW)
     well_zoom(ax, src, src_r, 7.9, 4.95, 2.0, 1.35)
     text(ax, 8.9, LY, "Matrigel ring", **LKW)
-    assay_timeline(ax, 10.1, 19.45, 5.27, xs=[11.15, 13.3, 15.45, 17.6], cy=6.0, r=0.4)
+    assay_timeline(ax, 10.1, 19.34, 5.27, xs=[11.15, 13.3, 15.45, 17.6], cy=6.0, r=0.4)
 
     # ---- Cell Painting imaging ----
-    # culture panel (far right) -> down, back along the gap between rows -> microscope
-    connector(ax, [(19.3, 4.08), (19.3, 3.9), (0.3, 3.9), (0.3, 1.55), (1.0, 1.55)])
+    # timeline (far right) -> down, back along the gap between rows -> microscope
+    # the assay timeline (Day 6) turns down and runs on into the imaging panel
+    connector(ax, [(19.3, 5.27), (19.3, 3.9), (0.3, 3.9), (0.3, 1.55), (1.0, 1.55)])
     panel(
         ax,
         0.6,
@@ -1744,7 +1631,7 @@ def build_figure():
 
     # ---- Segmentation ----
     arrow(ax, (9.6, 1.3), (10.1, 1.3), **small)
-    panel(ax, 10.15, 0.15, 9.55, 2.45, 0.95, "2.5D/3D segmentation", letter="C")
+    panel(ax, 10.15, 0.15, 9.55, 2.45, 0.95, "3D segmentation", letter="C")
     cards = [
         ("2.5D\nsegmentation", "Nuclei", seg_nuclei),
         ("3D seeded\nwatershed", "Cell", seg_cells),
