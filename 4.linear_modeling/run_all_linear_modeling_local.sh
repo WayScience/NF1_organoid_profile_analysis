@@ -59,5 +59,8 @@ uvr run "$module_dir/scripts/10.plot_explore_linear_model_haystacks.r"
 # 11: multi-panel summary figure (patchwork), built from the outputs of 6 and 9
 uvr run "$module_dir/scripts/11.assembled_multiresult_figure.r"
 
+# 12: MEKi group (pooled "All MEKi" + individual drug x dose) models from 3
+uvr run "$module_dir/scripts/12.plot_mek_group_linear_models.r"
+
 
 echo "4.linear_modeling pipeline complete."
