@@ -9,8 +9,10 @@
 # Here we want to know **whether 2D and 3D profiles measure the same or different things**, i.e. how much redundant information exists between them.
 #
 # - The overlap $I(\text{2D}; \text{3D})$ quantifies the amount of information shared between the 2D and 3D profiles.
-# - The 3D unique information $H(\text{3D} \mid \text{2D})$ is the information present in the 3D profile but not shared with the 2D profile.
-# - The 2D unique information $H(\text{2D} \mid \text{3D})$ is the information present in the 2D profile but not shared with the 3D profile.
+# - What is *not* shared would be the conditional entropies $H(\text{3D} \mid \text{2D})$ and $H(\text{2D} \mid \text{3D})$.
+#   For continuous features these are differential entropies, which depend on units and can be negative (see below),
+#   so we don't report them. Instead we put $I$ on a 0–1 scale ($r_I$) and, per feature, report the fraction of features
+#   that are *not* matched by any feature in the other modality.
 #
 # We run two separate analyses:
 #
@@ -18,6 +20,13 @@
 # 2. **Per-feature MI**: a matrix of MI between every 2D feature and every 3D feature, which shows *which* features are redundant.
 #
 # Both use the Kraskov–Stögbauer–Grassberger (KSG) $k$-nearest-neighbour estimator rather than histogram binning.
+#
+# Two **control comparisons** run through the same pipeline, to show how much MI two profiles of the *same* objects share:
+#
+# - **MIP vs. Middle Slice**: two 2D projections of the same image stack.
+# - **ZedProfiler vs. SAM-Med3D**: two 3D feature extractors applied to the same segmented (masked) objects.
+#
+# A 2D ↔ 3D value well below the controls means 2D and 3D share less information than two views or two feature sets of the same data do.
 
 # ## Mutual information
 #
@@ -63,10 +72,13 @@
 # - The `normal` and `fs` stages are single-cell or organoid level, so they're aggregated here, on the fly, to the same keys.
 # - 2D and 3D are only compared at the same resolution (organoid ↔ organoid, single cell ↔ single cell) and the same stage.
 #   The 2D `agg` stage is compared with both 3D aggregation modes (`from_fs`, `from_norm`).
+# - Controls are paired the same way. In a control, the first profile (MIP, ZedProfiler) fills the "2D" slot of the output tables
+#   and the second (Middle Slice, SAM-Med3D) the "3D" slot. The `comparison_type` column in the combined tables tells them apart.
+#   ZedProfiler and SAM-Med3D `agg` profiles are only compared within the same aggregation mode.
 #
 # > **Check the join keys.** `JOIN_KEY_CANDIDATES` below lists the column names tried for each key. The pairing report prints how many groups matched. A low count usually means the 2D and 3D files spell patient or treatment values differently.
 
-# In[ ]:
+# In[1]:
 
 
 import hashlib
@@ -89,7 +101,7 @@ from tqdm.auto import tqdm
 root_dir, in_notebook = init_notebook()
 
 
-# In[ ]:
+# In[2]:
 
 
 _2d_base_dir = root_dir / "data" / "profiles_2D" / "all_patients"
@@ -159,8 +171,11 @@ for proj_label, proj_dir_name in _2d_projections:
     proj_dir = _2d_base_dir / proj_dir_name
     for resolution, stage, filename in _2d_stage_filenames:
         suffix = "" if stage == "normal" else f"_{stage}"
+        path_2d = proj_dir / filename
+        if not path_2d.is_file():
+            raise FileNotFoundError(f"Missing 2D profile: {path_2d}")
         profiles_2d[f"2D_{proj_dir_name}_{resolution}{suffix}"] = {
-            "input": next(proj_dir.glob(filename)),
+            "input": path_2d,
             "group_label": proj_label,
             "resolution": resolution,
             "stage": stage,
@@ -173,12 +188,22 @@ for slug, group_label, resolution, file_prefix in _3d_types:
         # agg stage is written two ways (from_fs / from_norm); keep both
         modes = ["from_fs", "from_norm"] if stage == "agg" else [None]
         for mode in modes:
-            path = sorted(
+            matches = sorted(
                 f
                 for f in stage_dir.glob("*.parquet")
                 if f.name.startswith(f"{file_prefix}_")
                 and (mode is None or f.stem.endswith(mode))
-            )[0]
+            )
+            if not matches:
+                raise FileNotFoundError(
+                    f"No 3D file for prefix {file_prefix!r}, mode {mode} in {stage_dir}"
+                )
+            if len(matches) > 1:
+                print(
+                    f"Warning: {len(matches)} 3D files match {file_prefix!r} "
+                    f"(mode {mode}) in {stage_dir.name}; using {matches[0].name}"
+                )
+            path = matches[0]
             mode_suffix = f"_{mode}" if mode is not None else ""
             suffix = ("" if stage == "normal" else f"_{stage}") + mode_suffix
             profiles_3d[f"3D_{slug}{suffix}"] = {
@@ -189,33 +214,60 @@ for slug, group_label, resolution, file_prefix in _3d_types:
                 "agg_mode": mode,
             }
 
+COMPARISON_2D_VS_3D = "2D vs 3D"
+# Controls: (comparison_type, profiles, label in the 2D slot, label in the 3D slot)
+CONTROLS = [
+    ("Control: MIP vs Middle Slice", "2d", "MIP", "Middle Slice"),
+    ("Control: ZedProfiler vs SAM-Med3D", "3d", "ZedProfiler", "SAM-Med3D"),
+]
+
+
+def make_comparison(
+    key_2d: str, cfg_2d: dict, key_3d: str, cfg_3d: dict, comparison_type: str
+) -> dict:
+    name = f"{key_2d}__vs__{key_3d}"
+    return {
+        "name": name,
+        "comparison_type": comparison_type,
+        "key_2d": key_2d,
+        "key_3d": key_3d,
+        "cfg_2d": cfg_2d,
+        "cfg_3d": cfg_3d,
+        "profile_output": _mi_dir / f"{name}_profile_mi.parquet",
+        "feature_output": _mi_dir / f"{name}_feature_mi.parquet",
+        # v2: best-match null threshold (old files used a single-pair
+        # threshold and flagged every feature as redundant)
+        "feature_summary_output": _mi_dir / f"{name}_feature_mi_summary_v2.parquet",
+    }
+
+
 # Every 2D x 3D comparison at matching resolution and stage
-comparisons: List[dict] = []
-for key_2d, cfg_2d in profiles_2d.items():
-    for key_3d, cfg_3d in profiles_3d.items():
-        if (cfg_2d["resolution"], cfg_2d["stage"]) != (
-            cfg_3d["resolution"],
-            cfg_3d["stage"],
-        ):
-            continue
-        name = f"{key_2d}__vs__{key_3d}"
-        comparisons.append(
-            {
-                "name": name,
-                "key_2d": key_2d,
-                "key_3d": key_3d,
-                "cfg_2d": cfg_2d,
-                "cfg_3d": cfg_3d,
-                "profile_output": _mi_dir / f"{name}_profile_mi.parquet",
-                "feature_output": _mi_dir / f"{name}_feature_mi.parquet",
-                "feature_summary_output": _mi_dir
-                / f"{name}_feature_mi_summary.parquet",
-            }
-        )
-print(f"{len(comparisons)} 2D x 3D comparisons")
+comparisons: List[dict] = [
+    make_comparison(key_2d, cfg_2d, key_3d, cfg_3d, COMPARISON_2D_VS_3D)
+    for key_2d, cfg_2d in profiles_2d.items()
+    for key_3d, cfg_3d in profiles_3d.items()
+    if (cfg_2d["resolution"], cfg_2d["stage"])
+    == (cfg_3d["resolution"], cfg_3d["stage"])
+]
+
+# Control comparisons at matching resolution, stage and aggregation mode
+_profile_sets = {"2d": profiles_2d, "3d": profiles_3d}
+for comparison_type, profile_set, label_a, label_b in CONTROLS:
+    profiles = _profile_sets[profile_set]
+    for key_a, cfg_a in profiles.items():
+        for key_b, cfg_b in profiles.items():
+            if (cfg_a["group_label"], cfg_b["group_label"]) != (label_a, label_b):
+                continue
+            match_on = ("resolution", "stage", "agg_mode")
+            if all(cfg_a[m] == cfg_b[m] for m in match_on):
+                comparisons.append(
+                    make_comparison(key_a, cfg_a, key_b, cfg_b, comparison_type)
+                )
+
+print(pd.Series([c["comparison_type"] for c in comparisons]).value_counts().to_string())
 
 
-# In[ ]:
+# In[3]:
 
 
 # --- Pairing ---------------------------------------------------------------
@@ -253,13 +305,19 @@ PCA_COMPONENTS = [2, 5, 10]  # PCs kept per side; several values = sensitivity c
 N_PERMUTATIONS = 200  # permutation null for each profile-level MI
 
 # --- Per-feature MI --------------------------------------------------------
-N_FEATURE_NULL_PERMUTATIONS = 1  # shuffled copies of the full matrix for the null
+# Shuffled copies of the full matrix for the null. Even 1 gives p_3d null
+# best-match values for the 3D threshold (and p_2d for the 2D one), because the
+# null of the *max* is pooled across features; more copies make it smoother.
+N_FEATURE_NULL_PERMUTATIONS = 1
+REDUNDANCY_ALPHA = (
+    0.05  # a feature is redundant if its best match beats the null max at this level
+)
 # Worker processes for per-feature MI. The work is CPU-bound, so physical cores
 # (half of the logical CPUs on SMT machines) is the useful maximum.
 N_JOBS = max(1, (os.cpu_count() or 2) // 2)
 
 
-# In[ ]:
+# In[4]:
 
 
 def code_text(*funcs, **params) -> str:
@@ -318,8 +376,10 @@ def load_aggregated(path: pathlib.Path, keys: List[str]) -> pd.DataFrame:
     for canonical in keys:
         col = df[key_map[canonical]]
         if pd.api.types.is_numeric_dtype(col):
-            # 2D stores dose as int (1), 3D as float (1.0); format both as "1"
-            col = col.map(lambda v: f"{v:g}")
+            # 2D stores dose as int (1), 3D as float (1.0); format both as "1".
+            # 15 significant digits so distinct values (long IDs, small doses)
+            # are never rounded together, as 6-digit `:g` formatting would.
+            col = col.map(lambda v: format(float(v), ".15g"))
         df[canonical] = col.astype(str).str.strip()
     features = get_feature_columns(df)
     df[features] = df[features].replace([np.inf, -np.inf], np.nan)
@@ -387,7 +447,7 @@ def pair_profiles(
 # Features are z-scored first, which doesn't change MI but keeps the max-norm from being dominated by one large-scale feature.
 # A $10^{-10}$ jitter breaks ties between identical values.
 
-# In[ ]:
+# In[5]:
 
 
 LN2 = np.log(2.0)
@@ -440,10 +500,13 @@ def info_correlation(mi_bits: float) -> float:
 # We simulate data with known canonical correlations and check that the estimator recovers it.
 # The per-feature function defined further down is checked against the same values.
 #
-# KSG is biased **downward** when the MI or the dimension is large relative to $N$. You'll see this in the multi-dimensional case below.
-# So absolute values are lower bounds, and comparisons are fairest between estimates made with the same $c$ and similar $N$.
+# In one dimension the estimates scatter around the true value (at $N = 1000$ the standard deviation is a few hundredths of a bit,
+# at $N = 300$ closer to 0.1 bits, so a single run can land above the truth).
+# In several dimensions KSG is biased **downward** when the MI or the dimension is large relative to $N$; you'll see this in the
+# three-dimensional case below. So multi-dimensional estimates tend to understate the shared information, and comparisons are fairest
+# between estimates made with the same number of principal components $c$ (introduced in Analysis 1) and similar $N$.
 
-# In[ ]:
+# In[6]:
 
 
 def simulate_gaussian(rhos: List[float], n: int, rng: np.random.Generator):
@@ -475,7 +538,8 @@ for rhos in ([0.0], [0.5], [0.9], [0.9, 0.5, 0.0]):
 # $$
 #
 # and we estimate $I(X_c; Y_c)$. Using the same $c$ on both sides also takes care of 2D and 3D having different numbers of features.
-# By the data processing inequality, $I(X_c; Y_c) \le I(X; Y)$, so this is a lower bound on the MI of the full profiles.
+# By the data processing inequality, $I(X_c; Y_c) \le I(X; Y)$: the true MI of the top PCs cannot exceed that of the full profiles.
+# (The *estimate* is not guaranteed to be a lower bound, since it has its own finite-sample bias, and the PCs are fitted on the same samples.)
 # We repeat it for several values of $c$ to check that the conclusions don't hinge on that choice.
 #
 # **Permutation null.** KSG has finite-sample bias, so even independent data give $\hat I$ a little above or below 0.
@@ -487,8 +551,10 @@ for rhos in ([0.0], [0.5], [0.9], [0.9, 0.5, 0.0]):
 # $$
 #
 # $r_I$ is computed from $\hat I_{\text{corrected}}$.
+# When a profile has fewer features or groups than $c$, fewer PCs are used; `n_components` is the requested $c$ and
+# `n_components_2d` / `n_components_3d` are the numbers actually used.
 
-# In[ ]:
+# In[7]:
 
 
 def profile_mi(
@@ -557,14 +623,25 @@ def profile_mi(
 #
 # This is the same formula as above, applied to one feature per side.
 #
-# **Null threshold.** The whole matrix is recomputed with the 3D rows shuffled. The 95th percentile of those null MIs, $\tau_{95}$, is the threshold for "more shared information than chance".
-#
 # **Summary.** For each feature we record its best-matching feature in the other modality, $\max_a M_{ab}$ for a 3D feature $b$ (and $\max_b M_{ab}$ for a 2D feature $a$).
-# A 3D feature is labelled **redundant with 2D** if $\max_a M_{ab} > \tau_{95}$.
+#
+# **Null threshold.** The whole matrix is recomputed with the 3D rows shuffled, giving a null matrix $M^{\text{null}}$.
+# The test statistic is a *maximum* over many candidates, so it must be compared with the null distribution of that maximum,
+# not of a single pair: the best of $p_{2D}$ independent null pairs almost always beats the single-pair 95th percentile
+# (with $p_{2D} = 1000$, the chance is $1 - 0.95^{1000} \approx 1$), which would flag every feature.
+# So for 3D features the threshold is
+# $$
+# \tau^{3D}_{95} = \text{95th percentile over } b \text{ (and permutations) of } \max_a M^{\text{null}}_{ab},
+# $$
+# and likewise $\tau^{2D}_{95}$ from $\max_b M^{\text{null}}_{ab}$. A 3D feature is labelled **redundant with 2D** if $\max_a M_{ab} > \tau^{3D}_{95}$.
+# Pooling the null maxima across features means even one permutation gives $p_{3D}$ (or $p_{2D}$) null values.
+#
+# The best-match MI is inflated by the same selection effect, so `max_mi_corrected_bits` subtracts the mean null maximum
+# (the analogue of the profile-level correction), and `max_info_correlation` is computed from that corrected value.
 # The fraction of redundant 3D features is a feature-level answer to the question of how much of what 3D measures 2D also measures.
 # This is pairwise only: a 3D feature that is predictable from a *combination* of 2D features but not from any single one won't be flagged.
 
-# In[ ]:
+# In[8]:
 
 
 def _feature_mi_rows(z_2d: np.ndarray, z_3d: np.ndarray, k: int) -> np.ndarray:
@@ -637,7 +714,7 @@ assert np.array_equal(
 )
 
 
-# In[ ]:
+# In[9]:
 
 
 def feature_mi_tables(
@@ -652,7 +729,8 @@ def feature_mi_tables(
         n_jobs=N_JOBS,
         desc="Feature MI",
     )
-    null = np.concatenate(
+    # (B, p_2d, p_3d) null matrices with the 3D rows shuffled
+    null = np.stack(
         [
             pairwise_feature_mi(
                 x_2d.values,
@@ -661,11 +739,15 @@ def feature_mi_tables(
                 rng=rng,
                 n_jobs=N_JOBS,
                 desc=f"Feature MI null {i + 1}/{N_FEATURE_NULL_PERMUTATIONS}",
-            ).ravel()
+            )
             for i in range(N_FEATURE_NULL_PERMUTATIONS)
         ]
     )
-    tau_95 = float(np.quantile(null, 0.95))
+    # Null of the best-match statistic: max over the other modality's features,
+    # pooled across this modality's features and permutations
+    null_max_3d = null.max(axis=1).ravel()  # each 3D feature's best null 2D match
+    null_max_2d = null.max(axis=2).ravel()  # each 2D feature's best null 3D match
+    q = 1.0 - REDUNDANCY_ALPHA
 
     names_2d, names_3d = np.array(x_2d.columns), np.array(x_3d.columns)
     long_df = pd.DataFrame(
@@ -692,26 +774,38 @@ def feature_mi_tables(
             "max_mi_bits": mi.max(axis=1),
         }
     )
+    for df_, null_max in ((summary_3d, null_max_3d), (summary_2d, null_max_2d)):
+        df_["null_max_p95_bits"] = float(np.quantile(null_max, q))
+        df_["null_max_mean_bits"] = float(null_max.mean())
     summary = pd.concat([summary_3d, summary_2d], ignore_index=True)
-    summary["null_p95_bits"] = tau_95
-    summary["redundant"] = summary["max_mi_bits"] > tau_95
+    # single-pair null quantile, kept for reference only (not a valid threshold
+    # for a best-match statistic)
+    summary["null_pair_p95_bits"] = float(np.quantile(null, q))
+    summary["redundant"] = summary["max_mi_bits"] > summary["null_max_p95_bits"]
+    summary["max_mi_corrected_bits"] = (
+        summary["max_mi_bits"] - summary["null_max_mean_bits"]
+    ).clip(lower=0.0)
     summary["max_info_correlation"] = [
-        info_correlation(v) for v in summary["max_mi_bits"]
+        info_correlation(v) for v in summary["max_mi_corrected_bits"]
     ]
     return long_df, summary
 
 
 # ## Run all comparisons
 #
-# For each 2D × 3D comparison, the cell below:
+# For each comparison (2D × 3D and controls), the cell below:
 #
 # 1. Pairs the profiles at the aggregated level.
 # 2. Computes the whole-profile MI for each value in `PCA_COMPONENTS`.
 # 3. Computes the per-feature MI matrix and summary.
 #
 # Results are cached the same way as in notebook 6. Comparisons with fewer than 10 paired groups are skipped, because KSG isn't reliable with so few samples.
+# The pairing report printed after the loop lists the join keys, the number of matched groups and the feature counts for every comparison.
+#
+# > The per-feature summary files have a `_v2` suffix: the redundancy threshold changed, so summaries made with the old
+# > single-pair threshold are not reused (`SKIP_EXISTING` would otherwise keep them). Whole-profile results are unaffected and stay cached.
 
-# In[ ]:
+# In[10]:
 
 
 _mi_dir.mkdir(parents=True, exist_ok=True)
@@ -765,6 +859,7 @@ feature_code = _pairing_code + code_text(
     pairwise_feature_mi,
     _feature_mi_rows,
     N_FEATURE_NULL_PERMUTATIONS=N_FEATURE_NULL_PERMUTATIONS,
+    REDUNDANCY_ALPHA=REDUNDANCY_ALPHA,
 )
 
 
@@ -777,7 +872,9 @@ def is_done(step: str, outputs: List[pathlib.Path], inputs, code: str) -> bool:
     return is_fresh(step, results_root, CODE_PATH, outputs, inputs, code)
 
 
-for comp in tqdm(comparisons, desc="Comparisons"):
+for comp in tqdm(
+    comparisons, desc="Comparisons", unit="comp", leave=True, total=len(comparisons)
+):
     inputs = [comp["cfg_2d"]["input"], comp["cfg_3d"]["input"]]
     profile_outputs = [comp["profile_output"]]
     feature_outputs = [comp["feature_output"], comp["feature_summary_output"]]
@@ -796,14 +893,14 @@ for comp in tqdm(comparisons, desc="Comparisons"):
             "n_paired_groups": n_groups,
             "n_features_2d": x_2d.shape[1],
             "n_features_3d": x_3d.shape[1],
+            "skipped": n_groups < MIN_PAIRED_GROUPS,
         }
     )
-    tqdm.write(
-        f"{comp['name']}: {n_groups} paired groups on [{', '.join(keys)}], "
-        f"{x_2d.shape[1]} 2D x {x_3d.shape[1]} 3D features"
-    )
     if n_groups < MIN_PAIRED_GROUPS:
-        tqdm.write("  -> skipped: too few paired groups")
+        tqdm.write(
+            f"Skipped {comp['name']}: {n_groups} paired groups "
+            f"(minimum {MIN_PAIRED_GROUPS})"
+        )
         continue
 
     meta = comparison_meta(comp, x_2d, x_3d)
@@ -855,10 +952,15 @@ for comp in tqdm(comparisons, desc="Comparisons"):
             feature_code,
         )
 
-pd.DataFrame(pairing_report)
+# Pairing report: only comparisons recomputed in this run (cached ones are not
+# re-paired). A low n_paired_groups usually means mismatched key spellings.
+if pairing_report:
+    print(pd.DataFrame(pairing_report).to_string(index=False))
+else:
+    print("Pairing report: all comparisons were cached, nothing was re-paired.")
 
 
-# In[ ]:
+# In[11]:
 
 
 # Combine results across comparisons. Skipped when no per-comparison output
@@ -876,6 +978,14 @@ summary_inputs = [
     if c["feature_summary_output"].exists()
 ]
 combined_inputs = profile_inputs + summary_inputs
+n_missing_profile = len(comparisons) - len(profile_inputs)
+n_missing_feature = len(comparisons) - len(summary_inputs)
+if n_missing_profile or n_missing_feature:
+    print(
+        f"Warning: results missing for {n_missing_profile} profile and "
+        f"{n_missing_feature} feature comparisons (skipped for too few groups, "
+        "or the run above did not finish). The tables below are partial."
+    )
 
 if is_fresh(CACHE_STEP, results_root, CODE_PATH, combined_outputs, combined_inputs):
     print("Using cached result: combined MI tables")
@@ -896,6 +1006,11 @@ else:
         ],
         ignore_index=True,
     )
+    # Tag each row as 2D vs 3D or a control. Done here rather than in the
+    # per-comparison files so their cached results stay valid.
+    comparison_types = {c["name"]: c["comparison_type"] for c in comparisons}
+    for df_ in (profile_results, feature_summaries):
+        df_["comparison_type"] = df_["comparison"].map(comparison_types)
     profile_results.to_parquet(all_profile_path, index=False)
     feature_summaries.to_parquet(all_feature_summary_path, index=False)
     mark_fresh(CACHE_STEP, results_root, CODE_PATH, combined_outputs, combined_inputs)
@@ -910,13 +1025,20 @@ redundancy = (
 )
 
 profile_results.pivot_table(
-    index=["resolution", "stage", "group_label_2d", "group_label_3d", "agg_mode_3d"],
+    index=[
+        "comparison_type",
+        "resolution",
+        "stage",
+        "group_label_2d",
+        "group_label_3d",
+        "agg_mode_3d",
+    ],
     columns="n_components",
     values="info_correlation",
 ).round(3)
 
 
-# In[ ]:
+# In[12]:
 
 
 redundancy.round(3)
@@ -933,8 +1055,12 @@ redundancy.round(3)
 #
 # **Per feature (`all_feature_mi_summary.parquet`)**
 #
-# - `frac_3d_redundant_with_2d`: the fraction of 3D features that have at least one 2D feature sharing more information than chance. The two fractions are asymmetric, as they should be.
+# - `frac_3d_redundant_with_2d`: the fraction of 3D features whose best-matching 2D feature shares more information than the best match
+#   would by chance (`max_mi_bits > null_max_p95_bits`). `frac_2d_redundant_with_3d` is the reverse. The two fractions need not be equal.
 #   A low value means most 3D features capture something no single 2D feature captures.
+#   Under independence about `REDUNDANCY_ALPHA` (5%) of features are flagged anyway, so values near 0.05 mean "no evidence of redundancy".
+# - `max_mi_corrected_bits` / `max_info_correlation`: the strength of each feature's best match after subtracting the mean null best match.
+# - `null_pair_p95_bits` is the single-pair null quantile, kept for reference. It is **not** a valid threshold for a best-match statistic.
 # - The full matrix (`*_feature_mi.parquet`) can be clustered or plotted as a heatmap to see *which* feature groups overlap.
 #
 # **Caveats**
