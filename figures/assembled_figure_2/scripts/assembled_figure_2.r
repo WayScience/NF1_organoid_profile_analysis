@@ -31,8 +31,43 @@ figures_dir <- file.path(root_dir, "figures", "assembled_figure_2", "figures")
 dir.create(figures_dir, recursive = TRUE, showWarnings = FALSE)
 
 panel_a_path <- file.path(figures_dir, "featurization_figure.png")
-panel_c_path <- file.path(root_dir, "2.2d_vs_3d_analysis", "figures", "entropy", "sc_fs_entropy.png")
-panel_d_path <- file.path(root_dir, "2.2d_vs_3d_analysis", "figures", "entropy", "sc_fs_entropy_2D_vs_3D.png")
+analysis_figures_dir <- file.path(root_dir, "2.2d_vs_3d_analysis", "figures")
+panel_c_path <- file.path(analysis_figures_dir, "mutual_information", "sc_mutual_information.pdf")
+panel_c_page <- 3  # single-cell, feature-selected: MI per feature
+panel_d_path <- panel_c_path
+panel_d_page <- 4  # single-cell, feature-selected: fraction of features explained
+PDF_DPI <- 300  # resolution PDF pages are rendered at
+
+read_pdf_page <- function(path, page, dpi = PDF_DPI) {
+    #' Renders one page of a PDF to an image (pdftoppm) and trims its white border.
+    if (!file.exists(path)) {
+        stop("missing ", path, " - run the notebook that saves this figure first.")
+    }
+    png_root <- tempfile()
+    status <- system2(
+        "pdftoppm", c("-f", page, "-l", page, "-r", dpi, "-png", "-singlefile", path, png_root)
+    )
+    if (status != 0) stop("pdftoppm failed with status ", status)
+    on.exit(unlink(paste0(png_root, ".png")), add = TRUE)
+    magick::image_trim(magick::image_read(paste0(png_root, ".png")))
+}
+
+embed_image_panel <- function(img) {
+    #' Wraps a magick image as a patchwork-compatible panel that exactly fills its grid
+    #' cell; distortion-free because each cell is sized to its image's aspect ratio.
+    wrap_elements(
+        full = grid::rasterGrob(
+            as.raster(img), interpolate = TRUE,
+            width = unit(1, "npc"), height = unit(1, "npc")
+        )
+    )
+}
+
+image_aspect <- function(img) {
+    #' Width / height of a magick image.
+    info <- magick::image_info(img)
+    info$width / info$height
+}
 
 embed_png_panel <- function(path) {
     #' Reads a saved PNG, trims its (mostly white) border margin, and wraps
@@ -77,16 +112,18 @@ panel_a <- embed_png_panel(panel_a_path) & theme(
 panel_b <- placeholder_panel(
     "Panel B: Z-sampling influence on feature measurements\n(placeholder)"
 ) + theme(plot.margin = tight_margin)
-panel_c <- embed_png_panel(panel_c_path) & theme(plot.margin = tight_margin)
-panel_d <- embed_png_panel(panel_d_path) & theme(plot.margin = tight_margin)
+img_c <- read_pdf_page(panel_c_path, panel_c_page)
+img_d <- read_pdf_page(panel_d_path, panel_d_page)
+panel_c <- embed_image_panel(img_c) & theme(plot.margin = tight_margin)
+panel_d <- embed_image_panel(img_d) & theme(plot.margin = tight_margin)
 
-# Trimmed aspect ratios (width / height) of each embedded PNG. Panel B is a
+# Trimmed aspect ratios (width / height) of each embedded panel. Panel B is a
 # placeholder; its aspect is matched to Panel A so the two top-row cells read
 # as a balanced pair.
 aspect_a <- 1.847  # featurization_figure.png
 aspect_b <- 1.847  # placeholder (matched to Panel A)
-aspect_c <- 1.171  # sc_fs_entropy.png
-aspect_d <- 0.987  # sc_fs_entropy_2D_vs_3D.png
+aspect_c <- image_aspect(img_c)  # MI per feature (rendered PDF page)
+aspect_d <- image_aspect(img_d)  # fraction of features explained (rendered PDF page)
 
 # 2x2 layout: A and B share row 1, C and D share row 2. Within each row the
 # panel widths are set to their aspect ratios so neither is stretched, and each
