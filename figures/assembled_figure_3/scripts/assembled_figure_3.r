@@ -112,60 +112,53 @@ embed_pdf_page_panel <- function(path, page, target_aspect = NULL, gravity = "ce
     )
 }
 
-# Trimmed aspect ratios (width/height) of each panel's own image.
-aspect_a <- 5884 / 4946  # drug_targets_on_ras_mapk_pi3k_pathway.png (trimmed)
-aspect_counts <- 4665 / 3509  # single_cell_biology.pdf, page 2 (counts by tumor type, trimmed)
-aspect_c <- 3227 / 1480  # 3D_sc_consensus_profile_heatmaps.pdf, page 79 (trimmed)
-aspect_umap_patient <- 3215 / 1547  # umap_image_frame.pdf, page 3 (Patient, closest points; trimmed)
+# Panel aspect ratios (width / height) are measured from the trimmed images, so
+# re-rendered panels never need hand-updated numbers.
+trimmed_aspect <- function(path, page = NULL) {
+    #' Width / height of a PNG, or of one page of a PDF, after trimming its white border.
+    if (is.null(page)) {
+        img <- magick::image_read(path)
+    } else {
+        png_root <- tempfile()
+        system2("pdftoppm", c("-f", page, "-l", page, "-r", "50", "-png", "-singlefile", path, png_root))
+        on.exit(unlink(paste0(png_root, ".png")), add = TRUE)
+        img <- magick::image_read(paste0(png_root, ".png"))
+    }
+    info <- magick::image_info(magick::image_trim(img))
+    info$width / info$height
+}
 
-# 2x2 grid, filled row-major (tags A/B/C/D follow position):
-#   A pathway         | B heatmap
-#   C cell counts     | D UMAP (patient, closest)
-# Unequal columns: a NARROW left column holds the two squarer panels (A pathway,
-# C counts) and a WIDE right column holds the two wide panels (B heatmap,
-# D UMAP). A and C both fill the left column, so they render at the same width;
-# B and D both fill the wide right column, so they expand to the full remaining
-# width. No panel is stretched - each is letterbox-padded with white to its
-# cell's aspect, so leftover space becomes whitespace. Each row's height is set
-# so its right-column panel fills the column width exactly (zero whitespace on
-# B and D); the shorter left panels then sit in that height with a little
-# vertical whitespace.
+pathway_path <- file.path(root_dir, "figures/drugs_figure/figures/drug_targets_on_ras_mapk_pi3k_pathway.png")
+heatmap_path <- file.path(figures_dir, "heatmap_panel.pdf")
+umap_path <- file.path(figures_dir, "umap_image_frame_sc_mip.pdf")
+
+aspect_a <- trimmed_aspect(pathway_path)
+aspect_b <- trimmed_aspect(heatmap_path, page = 1)
+aspect_c <- trimmed_aspect(umap_path, page = 1)
+
+# Layout (tags follow position):
+#   A pathway | B heatmap
+#   C UMAP with 3D crops (full width)
+# A sits in a narrow left column and B in the wide right column; C spans both.
+# Column widths and row heights are set so A and B fill the top row and C the full
+# figure width exactly.
 fig_width <- 20
-# Left column width = the shared rendered width of A and C. Must stay small
-# enough that A still fills it at the top row's height (<= ~7.06 for these
-# aspects), otherwise A would gain side whitespace and read narrower than C.
-left_col_width <- 7.0
+# A and B share the top row: split its width so both fill their cells at the same
+# height (no letterbox padding around A)
+left_col_width <- fig_width * aspect_a / (aspect_a + aspect_b)
 right_col_width <- fig_width - left_col_width
 
-# Row heights derived so the wide right-column panels fill their width exactly.
-row_top_height <- right_col_width / aspect_c              # B heatmap fills width
-row_bottom_height <- right_col_width / aspect_umap_patient  # D UMAP fills width
+row_top_height <- right_col_width / aspect_b
+row_bottom_height <- fig_width / aspect_c
 
-# Per-cell aspects (column width / row height) each panel is padded to.
-a_cell_aspect <- left_col_width / row_top_height
-b_cell_aspect <- right_col_width / row_top_height
-c_cell_aspect <- left_col_width / row_bottom_height
-d_cell_aspect <- right_col_width / row_bottom_height
-
-# Top row.
 panel_a <- embed_png_panel(
-    file.path(root_dir, "figures/drugs_figure/figures/drug_targets_on_ras_mapk_pi3k_pathway.png"),
-    target_aspect = a_cell_aspect, gravity = "west"
+    pathway_path, target_aspect = left_col_width / row_top_height, gravity = "west"
+)
+panel_b <- embed_pdf_page_panel(
+    heatmap_path, page = 1, target_aspect = right_col_width / row_top_height
 )
 panel_c <- embed_pdf_page_panel(
-    file.path(source_panels_dir, "3D_sc_consensus_profile_heatmaps.pdf"),
-    page = 79, target_aspect = b_cell_aspect
-)
-# Bottom row.
-panel_counts <- embed_pdf_page_panel(
-    file.path(root_dir, "1.EDA", "figures", "cell_counts", "single_cell_biology.pdf"),
-    page = 2, target_aspect = c_cell_aspect, gravity = "west"
-)
-# UMAP with example-image crops, patient coloring, closest (k-means) points:
-# page 3 of the single multi-page PDF written by umap_image_frame.ipynb.
-panel_umap_patient <- embed_pdf_page_panel(
-    file.path(figures_dir, "umap_image_frame.pdf"),
-    page = 3, target_aspect = d_cell_aspect
+    umap_path, page = 1, target_aspect = fig_width / row_bottom_height
 )
 
 fig_height <- row_top_height + row_bottom_height
@@ -173,8 +166,9 @@ dims <- set_plot_size(fig_width, fig_height)
 
 assembled_figure <- (
     wrap_plots(
-        panel_a, panel_c, panel_counts, panel_umap_patient,
-        ncol = 2, widths = c(left_col_width, right_col_width),
+        A = panel_a, B = panel_b, C = panel_c,
+        design = "AB\nCC",
+        widths = c(left_col_width, right_col_width),
         heights = c(row_top_height, row_bottom_height)
     )
     + plot_annotation(tag_levels = "A")
