@@ -56,9 +56,9 @@ embed_image_panel <- function(img) {
     #' Wraps a magick image as a patchwork-compatible panel that exactly fills its grid
     #' cell; distortion-free because each cell is sized to its image's aspect ratio.
     wrap_elements(
-        full = grid::rasterGrob(
-            as.raster(img), interpolate = TRUE,
-            width = unit(1, "npc"), height = unit(1, "npc")
+        # the panel area only, so the tag strip above it stays clear
+        panel = grid::rasterGrob(
+            as.raster(img), interpolate = TRUE  # fits its cell, keeping its aspect ratio
         )
     )
 }
@@ -80,9 +80,9 @@ embed_png_panel <- function(path) {
     }
     img <- magick::image_trim(magick::image_read(path))
     wrap_elements(
-        full = grid::rasterGrob(
-            as.raster(img), interpolate = TRUE,
-            width = unit(1, "npc"), height = unit(1, "npc")
+        # the panel area only, so the tag strip above it stays clear
+        panel = grid::rasterGrob(
+            as.raster(img), interpolate = TRUE  # fits its cell, keeping its aspect ratio
         )
     )
 }
@@ -103,12 +103,10 @@ placeholder_panel <- function(label) {
     )
 }
 
-# Panel A carries a larger top-left margin so the bold "A" tag sits in
-# whitespace instead of overlapping the image's own italic "i" sublabel.
+# Panel tags sit in their own margin strip above each panel (see Assemble), so
+# they never overlap panel content
 tight_margin <- margin(2, 2, 2, 2)
-panel_a <- embed_png_panel(panel_a_path) & theme(
-    plot.margin = margin(t = 34, l = 34, r = 2, b = 2)
-)
+panel_a <- embed_png_panel(panel_a_path) & theme(plot.margin = tight_margin)
 panel_b <- placeholder_panel(
     "Panel B: Z-sampling influence on feature measurements\n(placeholder)"
 ) + theme(plot.margin = tight_margin)
@@ -143,7 +141,12 @@ assembled_figure <- (
     (row1 / row2)
     + plot_layout(heights = c(row1_height, row2_height))
     + plot_annotation(tag_levels = "A")
-    & theme(plot.tag = element_text(face = "bold", size = 18))
+    & theme(
+        plot.tag = element_text(face = "bold", size = 18, margin = margin(b = 8)),
+        # tags go in a strip above each panel's top-left corner, outside its content
+        plot.tag.location = "margin",
+        plot.tag.position = "topleft"
+    )
 )
 
 save_ggplot(
